@@ -40,6 +40,9 @@ easily add application-specific back-ends.
 DaBroker's data serialization language is BSON, i.e. binary JSON.
 Other serializers are possible.
 
+DaBroker does not constrain data types beyond what the serializer and the
+database support.
+
 System Layout
 #############
 
@@ -62,7 +65,9 @@ The DaBroker server listens to a RPC-style queue. It exposes methods to
 
   * retrieve "root" objects
 
-  * retrieve data items
+  * call methods on objects
+
+  * retrieve data
 
   * cache data descriptions (if available)
 
@@ -78,6 +83,19 @@ The DaBroker server does not keep persisent state. Clients which update
 objects are expected to supply old field contents for verification that
 they do not update stale values. Serial numbers on objects might be
 supported in a future version.
+
+Access control
+##############
+
+None.
+
+However, you can tell the DaBroker server to only export a single root
+object with an "auth" method, which clients need to call with correct
+parameters in order to get at the actual data.
+
+While the stream of broadcast messages does contain details of obsolete
+objects, actual object references contain a hash value which is required
+for direct access.
 
 Source, Documentation, etc.
 ###########################
