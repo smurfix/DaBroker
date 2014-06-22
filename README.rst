@@ -102,3 +102,15 @@ Source, Documentation, etc.
 
 TBD
 
+License
+#######
+
+DaBroker is Copyright © 2014 by Matthias Urlichs <matthias@urlichs.de>,
+it is licensed under the GPLv3. See the file `LICENSE` for details.
+
+Note that I would have liked to publish this code under the AGPL instead
+(so that everybody will _have_to_ share their extensions and other
+interesting pybble-related code), but life is not perfect, so I'll merely
+state my wish here that you in fact _do_ share your work. Whether you
+ultimately do, or not, is up to you.
+
