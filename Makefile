@@ -3,7 +3,7 @@
 export PYTHONPATH=$(shell pwd)
 
 test:
-	for f in tests/test_*.py ; do \
+	for f in tests/test??_*.py ; do \
 		python $$f ; \
 		python3 $$f ; \
 	done

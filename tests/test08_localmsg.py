@@ -12,35 +12,45 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
+# This test runs the test environment's local queue implementation.
+
 from dabroker import patch; patch()
-
-from dabroker.broker import Broker
-from gevent import spawn,sleep
-
 from dabroker.util.thread import Main
 
-from tests import test_init
-logger = test_init("test.basic")
+from gevent import spawn,sleep
+
+from tests import test_init,LocalQueue
+
+logger = test_init("test.09.localmsg")
+
+counter = 0
+
+def quadrat(msg):
+    return msg*msg
 
 class Broker(Main):
+    def setup(self):
+        self.q = LocalQueue(quadrat)
+        super(Broker,self).setup()
+    def stop(self):
+        self.q.shutdown()
+        super(Broker,self).stop()
+
+    def mult(self,i):
+        global counter
+        res = self.q.send(i)
+        logger.debug("Sent %r, got %r",i,res)
+        counter += res
+        
     def main(self):
-        logger.debug("Startup")
+        for i in range(3):
+            spawn(self.mult,i+1)
         sleep(0.5)
-        logger.error("did not kill me")
-
-
-def killme():
-    logger.debug("started killer task")
-    sleep(0.2)
-    logger.debug("Terminating")
-    b.stop()
-waiter = spawn(killme)
 
 b = Broker()
-b.register_stop(waiter.kill) # not necessary here
 b.register_stop(logger.debug,"shutting down")
 b.run()
+
+assert counter == 1+4+9,counter
+
 logger.debug("Exiting")
-
-
-
