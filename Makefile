@@ -10,4 +10,10 @@ test:
 dtest:
 	export TRACE=1; make test
 
+t%: 
+	python tests/test$(subst t,,$@)_*.py
+	
+d%: 
+	export TRACE=1; python tests/test$(subst d,,$@)_*.py
+	
 .PHONY: test dtest

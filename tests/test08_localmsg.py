@@ -26,26 +26,28 @@ logger = test_init("test.09.localmsg")
 counter = 0
 
 def quadrat(msg):
-    return msg*msg
+	return msg*msg
 
 class Broker(Main):
-    def setup(self):
-        self.q = LocalQueue(quadrat)
-        super(Broker,self).setup()
-    def stop(self):
-        self.q.shutdown()
-        super(Broker,self).stop()
+	def setup(self):
+		self.q = LocalQueue(quadrat)
+		super(Broker,self).setup()
+	def stop(self):
+		self.q.shutdown()
+		super(Broker,self).stop()
 
-    def mult(self,i):
-        global counter
-        res = self.q.send(i)
-        logger.debug("Sent %r, got %r",i,res)
-        counter += res
-        
-    def main(self):
-        for i in range(3):
-            spawn(self.mult,i+1)
-        sleep(0.5)
+	def mult(self,i):
+		global counter
+		res = self.q.send(i)
+		logger.debug("Sent %r, got %r",i,res)
+		counter += res
+		
+	def main(self):
+		jobs = []
+		for i in range(3):
+			jobs.append(spawn(self.mult,i+1))
+		for j in jobs:
+			j.join()
 
 b = Broker()
 b.register_stop(logger.debug,"shutting down")

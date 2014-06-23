@@ -34,6 +34,7 @@ try:
     from queue import Queue
 except ImportError:
     from Queue import Queue
+from traceback import format_exc
 
 class RPCmessage(object):
     msgid = None
@@ -57,7 +58,7 @@ class ServerQueue(object):
         try:
             res = self.worker(msg.msg)
         except Exception as e:
-            res = sys.exc_info()
+            res = {'error':str(e),'tb':format_exc()}
         msg.reply(res)
 
     def _reader(self):

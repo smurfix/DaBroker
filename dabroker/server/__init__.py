@@ -12,17 +12,29 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-# Utility code
+# This is the main code of the broker.
 
-import pytz
-UTC = pytz.UTC
-with open("/etc/localtime", 'rb') as tzfile:
-	TZ = pytz.tzfile.build_tzinfo(str('local'), tzfile)
+from ..util.thread import Main
+from gevent import sleep
 
-# Default timeout for the cache.
-def format_dt(value, format='%Y-%m-%d %H:%M:%S'):
-	try:
-		return value.astimezone(TZ).strftime(format)
-	except ValueError: ## naïve time: assume UTC
-		return value.replace(tzinfo=UTC).astimezone(TZ).strftime(format)
+class BaseBroker(Main):
+    """Base class for the DaBroker server"""
+    queue = None
+    root = None
+    
+    def make_queue(self):
+        raise NotImplementedError("You need to override the queue generator")
+
+    def make_root(self):
+        raise NotImplementedError("You need to override the root object generator")
+
+    def setup(self):
+        self.queue = self.make_queue()
+        self.root = self.make_root()
+
+    def main(self):
+        pass
+        
+class Broker(BaseBroker):
+    pass
 

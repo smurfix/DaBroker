@@ -12,17 +12,10 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-# Utility code
+from ..base import BrokeredBase
 
-import pytz
-UTC = pytz.UTC
-with open("/etc/localtime", 'rb') as tzfile:
-	TZ = pytz.tzfile.build_tzinfo(str('local'), tzfile)
+class Brokered(BrokeredBase):
+    """A broker-enabled client object"""
+    pass
 
-# Default timeout for the cache.
-def format_dt(value, format='%Y-%m-%d %H:%M:%S'):
-	try:
-		return value.astimezone(TZ).strftime(format)
-	except ValueError: ## naïve time: assume UTC
-		return value.replace(tzinfo=UTC).astimezone(TZ).strftime(format)
 

@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, print_function, division, unicode_literals
 ##
@@ -16,51 +17,45 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from dabroker import patch; patch()
 from dabroker.util.thread import Main
+from dabroker.server.service import BrokerServer
+from dabroker.client.service import BrokerClient
 
 from gevent import spawn,sleep
 
 from tests import test_init,LocalQueue
 
-logger = test_init("test.09.localmsg")
-
-counter = 0
-
-def quadrat(msg):
-	logger.debug("Server: got %r",msg)
-	b.q.notify(msg*10)
-	return msg*msg
-
-def hello(msg):
-	global counter
-	logger.debug("Client: got %r",msg)
-	counter += msg
-	
+logger = test_init("test.20.broker")
 
 class Broker(Main):
 	def setup(self):
-		self.q = LocalQueue(quadrat,hello)
+		self.s = BrokerServer()
+		self.q = LocalQueue(self.s.recv)
+		self.c = BrokerClient(self.q.send)
 		super(Broker,self).setup()
 	def stop(self):
 		self.q.shutdown()
 		super(Broker,self).stop()
 
-	def mult(self,i):
-		global counter
-		res = self.q.send(i)
-		logger.debug("Sent %r, got %r",i,res)
-		counter += res
+	def job(self,i):
+		logger.debug("Sending an uninteresting message")
+		msg = {'message':'not interesting'}
+		msg['self referential'] = msg
+		res = self.c.send("echo",msg)
+		logger.debug("recv %r",res)
+		assert res['message'] == "not interesting"
+		assert res['self referential'] is res
+		assert res is not msg
+		assert len(res) == 2
 		
 	def main(self):
 		jobs = []
-		for i in range(3):
-			jobs.append(spawn(self.mult,i+1))
+		for i in range(1): # 3
+			jobs.append(spawn(self.job,i+1))
 		for j in jobs:
 			j.join()
 
 b = Broker()
 b.register_stop(logger.debug,"shutting down")
 b.run()
-
-assert counter == 1+4+9+10+20+30,counter
 
 logger.debug("Exiting")

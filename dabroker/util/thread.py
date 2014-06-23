@@ -74,8 +74,9 @@ class Main(object):
 		else:
 			logger.debug("Main program ended")
 		finally:
+			logger.debug("Cleanup starts")
 			self._cleanup()
-			logger.debug("Cleanup ended")
+			logger.debug("Cleanup ends")
 
 	def end(self):
 		"""Stop the main loop"""
