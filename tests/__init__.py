@@ -50,6 +50,7 @@ class RPCmessage(object):
 class ServerQueue(object):
     def __init__(self,p,worker):
         self.p = p
+        self.next_id = -1
         self.worker = worker
 
     def _worker(self,msg):
@@ -67,15 +68,24 @@ class ServerQueue(object):
             logger.debug("Server: get msg %s",msg.msgid)
             spawn(self._worker,msg)
     
+    def send(self,msg):
+        msg = RPCmessage(self.p,msg)
+        msg.msgid = self.next_id
+        self.next_id -= 1
+        self.p.reply_q.put(msg)
+
 class ClientQueue(object):
-    def __init__(self,p):
+    def __init__(self,p,worker):
         self.p = p
         self.q = {}
         self.next_id = 1
+        self.worker = worker
 
     def _reader(self):
         while True:
             msg = self.p.reply_q.get()
+            if msg.msgid < 0:
+                self.worker(msg.msg)
             r = self.q.pop(msg.msgid,None)
             if r is not None:
                 r.set(msg.msg)
@@ -97,21 +107,24 @@ class ClientQueue(object):
         return res
     
 class LocalQueue(object):
-    def __init__(self,worker):
+    def __init__(self, server_worker, client_worker=None):
         from gevent import spawn
 
-        self.worker = worker
         self.request_q = Queue()
         self.reply_q = Queue()
 
-        sq = ServerQueue(self,self.worker)
-        cq = ClientQueue(self)
+        sq = ServerQueue(self,server_worker)
+        cq = ClientQueue(self,client_worker)
         self.server = spawn(sq._reader)
         self.client = spawn(cq._reader)
         self.cq = cq
+        self.sq = sq
 
     def send(self,msg):
         return self.cq.send(msg)
+
+    def notify(self,msg):
+        return self.sq.send(msg)
 
     def shutdown(self):
         r = self.client; self.client = None
