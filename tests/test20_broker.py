@@ -50,7 +50,7 @@ class Broker(Main):
 		try:
 			res = self.c._send("unknown",msg)
 		except ServerError as e:
-			assert "UnknownCommandError" in str(e)
+			assert "UnknownCommandError" in str(e), str(e)
 		else:
 			assert False,"No error sent"
 			
