@@ -18,43 +18,54 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 from dabroker import patch; patch()
 from dabroker.util.thread import Main
 from dabroker.server.service import BrokerServer
-from dabroker.client.service import BrokerClient, ServerError
+from dabroker.server.loader import add as store_add
+from dabroker.base import BrokeredInfo, Field, BaseObj
+from dabroker.client.service import BrokerClient
 
 from gevent import spawn,sleep
 
 from tests import test_init,LocalQueue
 
-logger = test_init("test.20.broker")
+logger = test_init("test.21.objbase")
+logger_s = test_init("test.21.objbase.server")
+
+rootMeta = BrokeredInfo("rootMeta")
+rootMeta.add(Field("hello"))
+store_add(rootMeta,0,1)
+
+class RootObj(BaseObj):
+	_meta = rootMeta
+	hello = "Hello!"
+
+theRootObj = RootObj()
+store_add(theRootObj,0,2,99)
+
+class TestBrokerServer(BrokerServer):
+	def do_root(self,msg):
+		logger_s.debug("Get root %r",msg)
+		return theRootObj
+	do_root.include = True
 
 class Broker(Main):
+	c = q = s = None
 	def setup(self):
-		self.s = BrokerServer()
+		self.s = TestBrokerServer()
 		self.q = LocalQueue(self.s.recv)
 		self.c = BrokerClient(self.q.send)
 		super(Broker,self).setup()
 	def stop(self):
-		self.q.shutdown()
+		if self.q is not None:
+			self.q.shutdown()
 		super(Broker,self).stop()
 
 	def job(self,i):
-		logger.debug("Sending an uninteresting message")
-		msg = {'message':'not interesting'}
-		msg['self referential'] = msg
-		res = self.c._send("echo",msg)
+		logger.debug("Get the root")
+		res = self.c.root
 		logger.debug("recv %r",res)
-		assert res['message'] == "not interesting"
-		assert res['self referential'] is res
-		assert res is not msg
-		assert len(res) == 2
-		res = self.c._send("echo",msg)
-		try:
-			res = self.c._send("unknown",msg)
-		except ServerError as e:
-			assert "UnknownCommandError" in str(e)
-		else:
-			assert False,"No error sent"
-			
-		
+		assert res.hello == "Hello!"
+		assert res._meta.name == "rootMeta"
+		assert res._meta.name == "rootMeta" # again, to check caching
+
 	def main(self):
 		jobs = []
 		for i in range(1): # 3

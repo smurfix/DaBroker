@@ -14,41 +14,57 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # This implements the main broker server.
 
-from ..base.serial import encode,decode
+from ..base.serial import Codec
+from .loader import get
+from .serial import adapters
 
 from traceback import format_exc
 
 import logging
 logger = logging.getLogger("dabroker.server.service")
 
+class UnknownCommandError(Exception):
+	def __init__(self, cmd):
+		self.cmd = cmd
+	def __repr__(self):
+		return "{}({})".format(self.__class__.__name__,repr(self.cmd))
+	def __str__(self):
+		return "Unknown command: {}".format(repr(self.cmd))
+
 class BrokerServer(object):
-    def __init__(self):
-        pass
+	def __init__(self):
+		self.codec = Codec()
+		self.codec.register(adapters)
 
-    def do_echo(self,msg):
-        logger.debug("Echo %r",msg)
-        return msg
+	def do_echo(self,msg):
+		logger.debug("echo %r",msg)
+		return msg
 
-    def recv(self, msg):
-        """Basic message receiver. Ususally in a separate thread."""
-        logger.debug("recv raw %r",msg)
-        msg = decode(msg)
-        logger.debug("recv dec %r",msg)
-        job = msg.pop('a')
+	def do_get(self, key):
+		key = tuple(key)
+		logger.debug("get %r",key)
+		return get(key)
+	do_get.include = True
+		
+	def recv(self, msg):
+		"""Basic message receiver. Ususally in a separate thread."""
+		logger.debug("recv raw %r",msg)
+		msg = self.codec.decode(msg)
+		logger.debug("recv dec %r",msg)
+		job = msg.pop('a')
+		msg = msg.pop('m',msg)
 
-        try:
-            msg = getattr(self,'do_'+job)(msg)
-            logger.debug("send dec %r",msg)
-            msg = encode(msg)
-            logger.debug("send raw %r",msg)
-            return msg
-        except Exception as e:
-            tb = format_exc()
-            return {'error': str(e), 'trace':tb}
+		try:
+			try:
+				proc = getattr(self,'do_'+job)
+			except AttributeError:
+				raise UnknownCommandError(job)
+			msg = proc(msg)
+			logger.debug("send dec %r",msg)
+			msg = self.codec.encode(msg, include=getattr(proc,'include',False))
+			logger.debug("send raw %r",msg)
+			return msg
+		except Exception as e:
+			tb = format_exc()
+			return {'error': str(e), 'tb':tb}
 
-
-
-        
-
-
-        

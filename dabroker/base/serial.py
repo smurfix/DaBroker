@@ -23,12 +23,10 @@ class SupD(dict):
 			raise KeyError(k)
 		return default
 
-type2cls = SupD() # 
-name2cls = {} # decoder: 
+_basics = []
 def serial_adapter(cls):
 	"""A decorator for an adapter class which translates serializer to whatever."""
-	type2cls[cls.cls.__module__+"."+cls.cls.__name__] = cls
-	name2cls[cls.clsname] = cls
+	_basics.append(cls)
 	return cls
 
 @serial_adapter
@@ -37,7 +35,7 @@ class _datetime(object):
 	clsname = "datetime"
 
 	@staticmethod
-	def encode(obj):
+	def encode(obj, include=False):
 		## the string is purely for human consumption and therefore does not have a time zone
 		return {"t":mktime(obj.timetuple()),"s":format_dt(obj)}
 
@@ -55,7 +53,7 @@ class _timedelta(object):
 	clsname = "timedelta"
 
 	@staticmethod
-	def encode(obj):
+	def encode(obj, include=False):
 		## the string is purely for human consumption and therefore does not have a time zone
 		return {"t":obj.total_seconds(),"s":str(obj)}
 
@@ -69,7 +67,7 @@ class _date(object):
 	clsname = "date"
 
 	@staticmethod
-	def encode(obj):
+	def encode(obj, include=False):
 		return {"d":obj.toordinal(), "s":obj.strftime("%Y-%m-%d")}
 
 	@staticmethod
@@ -85,7 +83,7 @@ class _time(object):
 	clsname = "time"
 
 	@staticmethod
-	def encode(obj):
+	def encode(obj, include=False):
 		ou = obj.replace(tzinfo=UTC)
 		secs = ou.hour*3600+ou.minute*60+ou.second
 		return {"t":secs,"s":"%02d:%02d:%02d" % (ou.hour,ou.minute,ou.second)}
@@ -101,49 +99,56 @@ from six import string_types,integer_types
 for s in string_types+integer_types: scalar_types.add(s)
 scalar_types = tuple(scalar_types)
 
-class Encoder(object):
+class Codec(object):
 	def __init__(self):
-		self.objcache = {}
-
-	def encode(self, data):
+		self.type2cls = SupD() # encoder
+		self.name2cls = {} # decoder 
+		for cls in _basics:
+			self.register(cls)
+	
+	def register(self,cls):
+		if isinstance(cls,(list,tuple)):
+			for c in cls:
+				self.register(c)
+			return
+		self.type2cls[cls.cls.__module__+"."+cls.cls.__name__] = cls
+		self.name2cls[cls.clsname] = cls
+		
+	def _encode(self, data, objcache, include=False):
 		if isinstance(data,scalar_types):
 			return data
 
-		oid = self.objcache.get(id(data),None)
+		if isinstance(data,(list,tuple)):
+			return type(data)(self.encode(x,objcache) for x in data)
+
+		oid = objcache.get(id(data),None)
 		if oid is not None:
 			return {'_or':oid}
-		oid = 1+len(self.objcache)
-		self.objcache[id(data)] = oid
+		oid = 1+len(objcache)
+		objcache[id(data)] = oid
 		
-		if isinstance(data,(list,tuple)):
-			return type(data)(self.encode(x) for x in data)
 		if isinstance(data,dict):
-			res = type(data)()
-			for k,v in data.items():
-				res[k] = self.encode(v)
-			assert '_o' not in res, res
-			assert '_oi' not in res, res
-			if res:
-				res['_oi'] = oid
-			return res
-
-		obj = type2cls.get(type(data),None)
-		if obj is not None:
-			data = obj.encode(data)
+			assert '_o' not in data, data
+			assert '_oi' not in data, data
+		else:
+			obj = self.type2cls.get(type(data),None)
+			if obj is None:
+				raise NotImplementedError("I don't know how to encode %r"%(data,))
+			data = obj.encode(data, include=include)
 			data['_o'] = obj.clsname
-			data['_oi'] = oid
-			return data
-		raise NotImplementedError("I don't know how to encode %r"%(data,))
 
-def encode(data):
-	return Encoder().encode(data)
+		res = type(data)()
+		for k,v in data.items():
+			res[k] = self._encode(v,objcache)
+		if res:
+			res['_oi'] = oid
+		return res
 
-class Decoder(object):
-	def __init__(self):
-		self.objcache = {}
-		self.objtodo = []
+	def encode(self, data, include=False):
+		objcache = {}
+		return self._encode(data, objcache, include=include)
 
-	def _decode(self,data, p=None,off=None):
+	def _decode(self,data, objcache,objtodo, p=None,off=None):
 		if isinstance(data, scalar_types):
 			return data
 
@@ -151,41 +156,44 @@ class Decoder(object):
 			k = 0
 			res = []
 			for v in data:
-				v = self._decode(v,res,k)
+				res.append(self._decode(v,objcache,objtodo, res,k))
 				k += 1
 			return res
 
 		if isinstance(data,dict):
 			res = {}
 			for k,v in data.items():
-				res[k] = self._decode(v,res,k)
+				res[k] = self._decode(v,objcache,objtodo, res,k)
 			
 			oid = res.pop('_oi',None)
 			obj = res.pop('_o',None)
 			if obj is not None:
-				res = name2cls[obj].decode(**res)
+				res = self.name2cls[obj].decode(**res)
 			if oid is not None:
-				self.objcache[oid] = res
+				objcache[oid] = res
 			if obj is None and len(data) == 1:
 				oref = data.pop('_or',None)
 				if oref is not None:
 					assert p is not None
-					self.objtodo.append((oref,p,off))
+					objtodo.append((oref,p,off))
 			return res
 
 		raise NotImplementedError("Don't know how to decode %r"%data)
 	
-	def _cleanup(self):
-		for d,p,k in self.objtodo:
-			p[k] = self.objcache[d]
+	def _cleanup(self, objcache,objtodo):
+		for d,p,k in objtodo:
+			p[k] = objcache[d]
 		
 	def decode(self, data):
-		res = self._decode(data)
-		self._cleanup()
+		objcache = {}
+		objtodo = []
+		res = self._decode(data,objcache,objtodo)
+		self._cleanup(objcache,objtodo)
 		return res
 
+def encode(data, include=False):
+	return Codec().encode(data, include=include)
 	
 def decode(data):
-	d = Decoder()
-	return d.decode(data)
+	return Codec().decode(data)
 

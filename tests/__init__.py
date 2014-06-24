@@ -28,6 +28,12 @@ def test_init(who):
 
     return logger
 
+# reduce cache sizes and timers
+
+from dabroker.client import service as s
+s.RETR_TIMEOUT=1 # except that we want 1000 when debugging
+s.CACHE_SIZE=5
+
 # local queue implementation
 
 try:

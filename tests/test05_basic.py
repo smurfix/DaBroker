@@ -26,23 +26,23 @@ logger = test_init("test.05.basic")
 counter = 0
 
 class Broker(Main):
-    def main(self):
-        global counter
-        logger.debug("Startup")
-        counter += 1
-        sleep(0.5)
-        counter += 2
-        logger.error("did not kill me")
+	def main(self):
+		global counter
+		logger.debug("Startup")
+		counter += 1
+		sleep(0.5)
+		counter += 2
+		logger.error("did not kill me")
 
 
 def killme():
-    global counter
-    logger.debug("started killer task")
-    counter += 4
-    sleep(0.2)
-    counter += 8
-    logger.debug("Terminating")
-    b.stop()
+	global counter
+	logger.debug("started killer task")
+	counter += 4
+	sleep(0.2)
+	counter += 8
+	logger.debug("Terminating")
+	b.stop()
 waiter = spawn(killme)
 
 b = Broker()

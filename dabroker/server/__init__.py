@@ -18,23 +18,23 @@ from ..util.thread import Main
 from gevent import sleep
 
 class BaseBroker(Main):
-    """Base class for the DaBroker server"""
-    queue = None
-    root = None
-    
-    def make_queue(self):
-        raise NotImplementedError("You need to override the queue generator")
+	"""Base class for the DaBroker server"""
+	queue = None
+	root = None
+	
+	def make_queue(self):
+		raise NotImplementedError("You need to override the queue generator")
 
-    def make_root(self):
-        raise NotImplementedError("You need to override the root object generator")
+	def make_root(self):
+		raise NotImplementedError("You need to override the root object generator")
 
-    def setup(self):
-        self.queue = self.make_queue()
-        self.root = self.make_root()
+	def setup(self):
+		self.queue = self.make_queue()
+		self.root = self.make_root()
 
-    def main(self):
-        pass
-        
+	def main(self):
+		pass
+		
 class Broker(BaseBroker):
-    pass
+	pass
 

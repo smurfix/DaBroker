@@ -12,10 +12,4 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-from ..base import BrokeredBase
-
-class Brokered(BrokeredBase):
-    """A broker-enabled client object"""
-    pass
-
 
