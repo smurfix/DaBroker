@@ -75,6 +75,8 @@ class server_InfoObj(server_BaseObj):
 
 	@staticmethod
 	def decode(k=None,f=None,m=None):
+		k = tuple(k)
+		from .loader import get
 		assert f is None
 		return get(k)
 
