@@ -48,6 +48,8 @@ class ClientBrokeredInfo(BrokeredInfo):
 		self._class = loadedObj
 		for k in self.refs.keys():
 			setattr(loadedObj,k,load_related(k))
+		for k in self.calls.keys():
+			setattr(loadedObj,k,call_proc(k))
 		loadedObj.__name__ = str(self.name or "unknownClientType")
 		return loadedObj
 
@@ -76,6 +78,20 @@ class load_related(object):
 			v = s.client.get(k)
 			kv[1] = ref(v)
 		return v
+
+class call_proc(object):
+	def __init__(self, name):
+		self.name = name
+
+	def __get__(self, obj, type=None):
+		if obj is None:
+			return self
+
+		def c(*a,**k):
+			from . import service as s
+			return s.client.call(obj,self.name, a,k)
+		c.__name__ = str(self.name)
+		return c
 
 class ClientBaseObj(BaseObj):
 	def __init__(self):

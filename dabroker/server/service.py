@@ -40,6 +40,13 @@ class BrokerServer(object):
 		logger.debug("echo %r",msg)
 		return msg
 
+	def do_call(self,msg,o=None,a=(),k={}):
+		logger.debug("call %r.%r(*%r, **%r)",o,msg,a,k)
+		assert msg in o._meta.calls,"You cannot call method {} of {}".format(msg,o)
+		res = getattr(o,msg)(*a,**k)
+		logger.debug("call %r.%r(*%r, **%r) = %r",o,msg,a,k, res)
+		return res
+
 	def do_get(self, key):
 		key = tuple(key)
 		logger.debug("get %r",key)

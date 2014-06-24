@@ -19,7 +19,7 @@ from dabroker import patch; patch()
 from dabroker.util.thread import Main
 from dabroker.server.service import BrokerServer
 from dabroker.server.loader import add as store_add
-from dabroker.base import BrokeredInfo, Field, BaseObj
+from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj
 from dabroker.client.service import BrokerClient
 
 from gevent import spawn,sleep
@@ -31,14 +31,30 @@ logger_s = test_init("test.21.objbase.server")
 
 rootMeta = BrokeredInfo("rootMeta")
 rootMeta.add(Field("hello"))
+rootMeta.add(Ref("ops"))
 store_add(rootMeta,0,1)
+
+opsMeta = BrokeredInfo("opsMeta")
+opsMeta.add(Callable("rev"))
+store_add(opsMeta,0,2)
 
 class RootObj(BaseObj):
 	_meta = rootMeta
 	hello = "Hello!"
 
+class OpsObj(BaseObj):
+	_meta = opsMeta
+	def rev(self,s):
+		s = [c for c in s]
+		s.reverse()
+		return "".join(s)
+
 theRootObj = RootObj()
 store_add(theRootObj,0,2,99)
+
+theOpsObj = OpsObj()
+store_add(theOpsObj,0,34)
+theRootObj.ops = theOpsObj
 
 class TestBrokerServer(BrokerServer):
 	def do_root(self,msg):
@@ -65,6 +81,7 @@ class Broker(Main):
 		assert res.hello == "Hello!"
 		assert res._meta.name == "rootMeta"
 		assert res._meta.name == "rootMeta" # again, to check caching
+		assert res.ops.rev("test123") == "321tset"
 
 	def main(self):
 		jobs = []

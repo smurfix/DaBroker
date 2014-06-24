@@ -99,6 +99,9 @@ class BrokerClient(object):
 			self._add_to_cache(obj) # sends to the AsyncResult as a side effect
 			return obj
 		
+	def call(self, obj,name,a,k):
+		return self._send("call",name, o=obj,a=a,k=k)
+		
 	@property
 	def root(self):
 		"""Get the object root. This may or may not be a cacheable object."""
