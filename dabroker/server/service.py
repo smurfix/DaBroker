@@ -51,15 +51,15 @@ class BrokerServer(object):
 		logger.debug("recv raw %r",msg)
 		msg = self.codec.decode(msg)
 		logger.debug("recv dec %r",msg)
-		job = msg.pop('a')
-		msg = msg.pop('m',msg)
+		job = msg.pop('_a')
+		m = msg.pop('_m',msg)
 
 		try:
 			try:
 				proc = getattr(self,'do_'+job)
 			except AttributeError:
 				raise UnknownCommandError(job)
-			msg = proc(msg)
+			msg = proc(m,**msg)
 			logger.debug("send dec %r",msg)
 			msg = self.codec.encode(msg, include=getattr(proc,'include',False))
 			logger.debug("send raw %r",msg)

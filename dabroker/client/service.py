@@ -125,8 +125,8 @@ class BrokerClient(object):
 	def _send(self, action, msg=None, **kw):
 		"""Low-level method for RPCing the server"""
 		logger.debug("send dec %s %r",action,msg)
-		kw['m'] = msg
-		kw['a'] = action
+		kw['_m'] = msg
+		kw['_a'] = action
 		msg = self.codec.encode(kw)
 		logger.debug("send raw %r",msg)
 
