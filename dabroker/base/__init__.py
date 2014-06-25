@@ -30,7 +30,22 @@ class BaseObj(BaseRef):
 		@_meta the BrokeredInfo which describes this element's class
 		@_key the data required to load this element
 		"""
-	pass
+	def _attr_key(self,k):
+		res = getattr(self,k,None)
+		if res is not None:
+			res = res._key
+		return res
+
+	@property
+	def _attrs(self):
+		"""Return a dict with my attributes"""
+		res = {}
+		for k in self._meta.fields:
+			res[k] = getattr(self,k,None)
+		for k in self._meta.refs:
+			if k == "_meta": continue
+			res[k] = self._attr_key(k)
+		return res
 
 class common_BaseRef(object):
 	cls = BaseRef

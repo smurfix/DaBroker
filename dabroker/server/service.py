@@ -73,6 +73,28 @@ class BrokerServer(object):
 		return info.obj_find(_limit=lim,**k)
 	do_find.include = True
 		
+	def deleted(self, obj):
+		"""An object has been deleted."""
+		attrs = dict((k,(v,)) for k,v in obj._attrs.items())
+		self.send("invalid_key",obj._key, m=obj._meta._key, k=attrs)
+
+	def updated(self, obj, old_attrs):
+		"""\
+			An object has been updated. Broadcast.
+		
+			@kw is _attrs from the old object state.
+			"""
+		key = obj._key
+		mkey = obj._meta._key
+		nkw = {}
+		attrs = obj._attrs
+		for k,v in old_attrs.items():
+			ov = attrs.get(k,None)
+			if ov != v:
+				nkw[k] = (ov,v)
+		self.send("invalid_key",key, m=mkey, k=nkw)
+
+		
 	def recv(self, msg):
 		"""Basic message receiver. Ususally in a separate thread."""
 		logger.debug("recv raw %r",msg)

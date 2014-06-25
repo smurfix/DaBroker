@@ -76,7 +76,7 @@ theOpsObj = OpsObj("Oh?")
 store_add(theOpsObj,0,34)
 theRootObj.ops = theOpsObj
 
-for i,n in ((1,"One"),(2,"Two"),(3,"Three")):
+for i,n in ((0,"Zero"),(1,"One"),(2,"Two"),(3,"Three")):
 	o = OpsObj(n)
 	store_add(o,0,10,i)
 	opsMeta.obj_add(o)
@@ -91,6 +91,11 @@ class TestBrokerServer(BrokerServer):
 		if msg == 1:
 			theOpsObj.hell = "Yeah!"
 			self.send("invalid",(theOpsObj._key,(3,4,5))) # the latter is unknown
+		elif msg == 2:
+			obj = opsMeta.objs[2]
+			attrs = obj._attrs
+			obj.hell = "Two2"
+			self.updated(obj,attrs)
 		else:
 			raise RuntimeError(msg)
 	
@@ -120,25 +125,36 @@ class Broker(TestMain):
 		assert res._meta.name == "rootMeta"
 		cid=self.cid
 		assert res._meta.name == "rootMeta" # again, to check caching
-		assert cid==self.cid
+		assert cid==self.cid, (cid,self.cid)
 		assert res.ops.rev("test123") == "321tset"
 		assert res.ops.hell == "Oh?"
 		self.c._send("update",1)
 		assert res.ops.hell == "Yeah!"
 		cid=self.cid
 		assert res.ops.hell == "Yeah!"
-		assert cid==self.cid
+		assert cid==self.cid, (cid,self.cid)
 
 		# Now let's search for something
 		Op = res.ops._meta
 
 		o1 = Op.get(hell="Two")
-		assert o1.hell == "Two"
+		assert o1.hell == "Two", o1
+		os = Op.find(hell="Two2")
+		assert len(os) == 0, os
 
 		cid=self.cid
-		o1 = Op.get(hell="Two")
-		assert o1.hell == "Two"
+		os = Op.find(hell="Two")
+		assert len(os) == 1, os
+		assert os[0] is o1, (os,o1)
 		assert cid==self.cid
+
+		# Now update some stuff.
+		self.c._send("update",2)
+
+		os = Op.find(hell="Two")
+		assert len(os) == 0, os
+		os = Op.find(hell="Two2")
+		assert len(os) == 1, os
 
 	def main(self):
 		jobs = []

@@ -257,10 +257,10 @@ class BrokerClient(object):
 		if res is not None:
 			return res.res
 		
-		kw = {'k':kw}
+		skw = {'k':kw}
 		if _limit is not None:
-			kw['lim'] = _limit
-		res = self._send("find",typ._key, **kw)
+			skw['lim'] = _limit
+		res = self._send("find",typ._key, **skw)
 		ks = KnownSearch(kw,res)
 		typ.searches[kws] = ks
 		self._cache[" ".join(str(x) for x in typ._key)+":"+kws] = ks
@@ -279,6 +279,7 @@ class BrokerClient(object):
 		raise RuntimeError("This can't happen")
 
 	def do_invalid(self,msg):
+		"""Directly invalidate these cache entries."""
 		for k in msg:
 			k = tuple(k)
 			try:
@@ -287,6 +288,45 @@ class BrokerClient(object):
 				logger.debug("inval: not found: %r",k)
 			else:
 				logger.debug("inval: dropped: %r",k)
+
+	def do_invalid_key(self,key, m=None,k={}):
+		"""Invalidate an object, plus whatever might have been used to search for it.
+		
+			@key the object
+			@m the object's metadata key (search results hang off metadata)
+			@k: a key=>(value,…) dict. A search is obsoleted when one
+			                           of the search keys matches one of the values.
+			"""
+		key = tuple(key)
+		logger.debug("inval_key: %r: %r",key,k)
+		obj = self._cache.pop(key,None)
+		if obj is None:
+			logger.debug("not in cache")
+
+		if m is None:
+			logger.warn("no metadata?")
+			return
+		m = tuple(m)
+		obj = self._cache.get(m,None)
+		if obj is None:
+			logger.warn("metadata not found")
+			return
+		obsolete = set()
+
+		# TODO: This loop is inefficient 
+		for ks,s in obj.searches.items():
+			if s.kw:
+				for i,v in k.items():
+					sv = s.kw.get(i,None)
+					if sv is None or sv not in v:
+						continue
+					break
+				else:
+					continue
+			obsolete.add(ks)
+		for ks in obsolete:
+			logger.debug("dropping %s",ks)
+			obj.searches.pop(ks,None)
 
 	@property
 	def root(self):

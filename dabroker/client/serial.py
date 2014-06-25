@@ -110,6 +110,9 @@ class call_proc(object):
 class ClientBaseObj(BaseObj):
 	def __init__(self):
 		self._refs = {}
+	
+	def _attr_key(self,k):
+		return self._refs[k]
 
 @serial_adapter
 class client_baseRef(common_BaseRef):
@@ -127,7 +130,6 @@ class client_BaseObj(common_BaseObj):
 			would be a Bad Idea.
 			"""
 		ref = obj._refs[k]
-		ref = getattr(obj,k)
 		if ref is not None:
 			ref = BaseRef(obj._meta,obj._key)
 		return ref
