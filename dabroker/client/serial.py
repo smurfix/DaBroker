@@ -12,7 +12,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-from weakref import ref
+from weakref import ref,WeakValueDictionary
 from ..base import BaseRef,BaseObj, BrokeredInfo, BrokeredInfoInfo, adapters as baseAdapters, common_BaseObj,common_BaseRef
 import logging
 logger = logging.getLogger("dabroker.client.serial")
@@ -27,6 +27,10 @@ def serial_adapter(cls):
 
 class ClientBrokeredInfo(BrokeredInfo):
 	_class = None
+	def __init__(self,*a,**k):
+		super(ClientBrokeredInfo,self).__init__(*a,**k)
+		self.searches = WeakValueDictionary()
+
 	@property
 	def class_(self):
 		if self._class is not None:

@@ -131,8 +131,14 @@ class Broker(TestMain):
 
 		# Now let's search for something
 		Op = res.ops._meta
+
 		o1 = Op.get(hell="Two")
 		assert o1.hell == "Two"
+
+		cid=self.cid
+		o1 = Op.get(hell="Two")
+		assert o1.hell == "Two"
+		assert cid==self.cid
 
 	def main(self):
 		jobs = []

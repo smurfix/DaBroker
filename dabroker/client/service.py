@@ -26,6 +26,16 @@ logger = logging.getLogger("dabroker.client.service")
 from weakref import WeakValueDictionary,KeyedRef,ref
 from collections import deque
 from gevent.event import AsyncResult
+from heapq import heapify,heappop
+
+def search_key(kw):
+	"""Build a reproducible string from search keywords"""
+	return ",".join("{}:{}".format(k, ".".join(v._key) if hasattr(v,'_key') else v) for k,v in sorted(kw.items()))
+
+class KnownSearch(object):
+	def __init__(self, kw, res):
+		self.kw = kw
+		self.res = res
 
 class ServerError(Exception):
 	"""An encapsulation for a server error (with traceback)"""
@@ -42,15 +52,14 @@ class ServerError(Exception):
 		return r+"\n"+self.tb
 
 class ExtKeyedRef(KeyedRef):
-	"""A KeyedRef which includes an access counter and a 'related' hash."""
+	"""A KeyedRef which includes an access counter."""
 
-	__slots__ = "key","counter","related"
+	__slots__ = "key","counter"
 
 	def __new__(type, ob, callback, key):
 		self = ref.__new__(type, ob, callback)
 		self.key = key
 		self.counter = 0
-		self.related = {}
 		return self
 
 	def __init__(self, ob, callback, key):
@@ -243,10 +252,19 @@ class BrokerClient(object):
 		
 	def find(self, typ, _limit=None, **kw):
 		"""Find objects by keyword"""
+		kws = search_key(kw)
+		res = typ.searches.get(kws,None)
+		if res is not None:
+			return res.res
+		
 		kw = {'k':kw}
 		if _limit is not None:
 			kw['lim'] = _limit
-		return self._send("find",typ._key, **kw)
+		res = self._send("find",typ._key, **kw)
+		ks = KnownSearch(kw,res)
+		typ.searches[kws] = ks
+		self._cache[" ".join(str(x) for x in typ._key)+":"+kws] = ks
+		return res
 
 	def call(self, obj,name,a,k):
 		return self._send("call",name, o=obj,a=a,k=k)
