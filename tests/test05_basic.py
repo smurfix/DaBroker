@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, print_function, division, unicode_literals
 ##
-## This is part of DaBroker, a distributed data access manager.
+## This file is part of DaBroker, a distributed data access manager.
 ##
 ## DaBroker is Copyright © 2014 by Matthias Urlichs <matthias@urlichs.de>,
 ## it is licensed under the GPLv3. See the file `README.rst` for details,
-## including an optimistic statements by the author.
+## including optimistic statements by the author.
 ##
 ## This paragraph is auto-generated and may self-destruct at any time,
 ## courtesy of "make update". The original is in ‘utils/_boilerplate.py’.
@@ -33,7 +33,6 @@ class Broker(TestMain):
 		counter += 2
 		logger.error("did not kill me")
 
-
 def killme():
 	global counter
 	logger.debug("started killer task")
@@ -51,5 +50,4 @@ b.run()
 logger.debug("Exiting")
 
 assert counter == 1+4+8
-
 
