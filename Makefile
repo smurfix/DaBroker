@@ -16,5 +16,8 @@ t%:
 	
 d%: 
 	export TRACE=1; python tests/test$(subst d,,$@)_*.py
+
+update:
+	@sh utils/update_boilerplate
 	
-.PHONY: test dtest
+.PHONY: test dtest update
