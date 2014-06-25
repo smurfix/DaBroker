@@ -112,7 +112,7 @@ class BrokerServer(object):
 			logger.debug("send dec %r",msg)
 			msg = self.codec.encode(msg, include=getattr(proc,'include',False))
 			logger.debug("send raw %r",msg)
-			return msg
+			return {'res':msg}
 		except Exception as e:
 			tb = format_exc()
 			return {'error': str(e), 'tb':tb}

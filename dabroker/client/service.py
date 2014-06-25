@@ -365,9 +365,9 @@ class BrokerClient(object):
 		msg = self.codec.decode(msg)
 		logger.debug("recv dec %r",msg)
 
-		if isinstance(msg,dict) and 'error' in msg:
+		if 'error' in msg:
 			raise ServerError(msg['error'],msg.get('tb',None))
-		return msg
+		return msg['res']
 
 	def _recv(self, msg):
 		"""Process incoming notifications from the server"""

@@ -43,6 +43,7 @@ try:
 except ImportError:
     from Queue import Queue
 from traceback import format_exc
+from bson import BSON
 
 class RPCmessage(object):
     msgid = None
@@ -52,6 +53,7 @@ class RPCmessage(object):
 
     def reply(self,msg):
         logger.debug("Reply to %s with %r", self.msgid,msg)
+        msg = BSON.encode(msg)
         msg = RPCmessage(self.p,msg)
         msg.msgid = self.msgid
         self.p.reply_q.put(msg)
@@ -64,7 +66,9 @@ class ServerQueue(object):
 
     def _worker(self,msg):
         try:
-            res = self.worker(msg.msg)
+            m = msg.msg
+            m = BSON(m).decode()
+            res = self.worker(m)
         except Exception as e:
             res = {'error':str(e),'tb':format_exc()}
         msg.reply(res)
@@ -78,6 +82,7 @@ class ServerQueue(object):
             spawn(self._worker,msg)
     
     def send(self,msg):
+        msg = BSON.encode(msg)
         msg = RPCmessage(self.p,msg)
         msg.msgid = self.next_id
         self.next_id -= 1
@@ -94,14 +99,19 @@ class ClientQueue(object):
         while True:
             msg = self.p.reply_q.get()
             if msg.msgid < 0:
-                self.worker(msg.msg)
-            r = self.q.pop(msg.msgid,None)
-            if r is not None:
-                r.set(msg.msg)
+                m = BSON(msg.msg).decode()
+                self.worker(m)
+            else:
+                r = self.q.pop(msg.msgid,None)
+                if r is not None:
+                    m = msg.msg
+                    m = BSON(m).decode()
+                    r.set(m)
         
     def send(self,msg):
         from gevent.event import AsyncResult
 
+        msg = BSON.encode(msg)
         msg = RPCmessage(self.p,msg)
         msg.msgid = self.next_id
         res = AsyncResult()

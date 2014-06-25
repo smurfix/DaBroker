@@ -25,15 +25,15 @@ logger = test_init("test.09.localmsg")
 counter = 0
 
 def quadrat(msg):
+	msg=msg['m']
 	logger.debug("Server: got %r",msg)
-	b.q.notify(msg*10)
-	return msg*msg
+	b.q.notify({'i':msg*10})
+	return {'r':msg*msg}
 
 def hello(msg):
 	global counter
 	logger.debug("Client: got %r",msg)
-	counter += msg
-	
+	counter += msg['i']
 
 class Broker(TestMain):
 	def setup(self):
@@ -45,9 +45,9 @@ class Broker(TestMain):
 
 	def mult(self,i):
 		global counter
-		res = self.q.send(i)
+		res = self.q.send({'m':i})
 		logger.debug("Sent %r, got %r",i,res)
-		counter += res
+		counter += res['r']
 		
 	def main(self):
 		jobs = []
