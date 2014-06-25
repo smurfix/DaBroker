@@ -15,11 +15,10 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # This test runs the test environment's local queue implementation.
 
 from dabroker import patch; patch()
-from dabroker.util.thread import Main
 
 from gevent import spawn,sleep
 
-from tests import test_init,LocalQueue
+from tests import test_init,LocalQueue,TestMain
 
 logger = test_init("test.09.localmsg")
 
@@ -36,7 +35,7 @@ def hello(msg):
 	counter += msg
 	
 
-class Broker(Main):
+class Broker(TestMain):
 	def setup(self):
 		self.q = LocalQueue(quadrat,hello)
 		super(Broker,self).setup()

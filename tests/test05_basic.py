@@ -15,17 +15,16 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # This is a basic test which shows how to fork and kill threads.
 
 from dabroker import patch; patch()
-from dabroker.util.thread import Main
 
 from gevent import spawn,sleep
 
-from tests import test_init
+from tests import test_init,TestMain
 
 logger = test_init("test.05.basic")
 
 counter = 0
 
-class Broker(Main):
+class Broker(TestMain):
 	def main(self):
 		global counter
 		logger.debug("Startup")

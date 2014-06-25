@@ -16,17 +16,16 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # This test runs the test environment's local queue implementation.
 
 from dabroker import patch; patch()
-from dabroker.util.thread import Main
 from dabroker.server.service import BrokerServer
 from dabroker.client.service import BrokerClient, ServerError
 
 from gevent import spawn,sleep
 
-from tests import test_init,LocalQueue
+from tests import test_init,LocalQueue,TestMain
 
 logger = test_init("test.20.broker")
 
-class Broker(Main):
+class Broker(TestMain):
 	def setup(self):
 		self.s = BrokerServer()
 		self.q = LocalQueue(self.s.recv)
