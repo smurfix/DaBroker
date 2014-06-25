@@ -119,7 +119,8 @@ class Codec(object):
 			return data
 
 		if isinstance(data,(list,tuple)):
-			return type(data)(self.encode(x,objcache) for x in data)
+			# A toplevel list will keep its "include" state
+			return type(data)(self._encode(x,objcache,include) for x in data)
 
 		oid = objcache.get(id(data),None)
 		if oid is not None:

@@ -32,26 +32,44 @@ class ClientBrokeredInfo(BrokeredInfo):
 		if self._class is not None:
 			return self._class
 
-		class loadedObj(ClientBaseObj,ClientBrokeredInfo):
+		class ClientObj(ClientBaseObj,ClientBrokeredInfo):
 			name = None
 			def __init__(self):
 				ClientBaseObj.__init__(self)
 				ClientBrokeredInfo.__init__(self)
 
 			def __repr__(self):
-				if self.name:
-					return "<ClientBrokeredInfo:%s>"%(self.name,)
-				else:
-					return "<ClientBrokeredInfo>"
+				res = "<ClientObj"
+				n = self.__class__.__name__
+				if n != "ClientObj":
+					res += ":"+n
+				n = getattr(self,'_key',None)
+				if n is not None:
+					res += ":"+" ".join(str(x) for x in n)
+				res += ">"
+				return res
 			__str__=__repr__
 
-		self._class = loadedObj
+		self._class = ClientObj
 		for k in self.refs.keys():
-			setattr(loadedObj,k,load_related(k))
+			setattr(ClientObj,k,load_related(k))
 		for k in self.calls.keys():
-			setattr(loadedObj,k,call_proc(k))
-		loadedObj.__name__ = str(self.name or "unknownClientType")
-		return loadedObj
+			setattr(ClientObj,k,call_proc(k))
+		ClientObj.__name__ = str(self.name or "unknownClientType")
+		return ClientObj
+
+	def find(self, **kw):
+		from . import service as s
+		return s.client.find(self,**kw)
+		
+	def get(self, **kw):
+		res = self.find(_limit = 2, **kw)
+		if len(res) == 0:
+			raise NoData
+		elif len(res) == 2:
+			raise ManyData
+		else:
+			return res[0]
 
 class ClientBrokeredInfoInfo(ClientBrokeredInfo,BrokeredInfoInfo):
 	pass

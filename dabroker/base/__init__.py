@@ -109,6 +109,9 @@ class BrokeredInfo(BaseObj):
 		else:
 			raise RuntimeError("I don't know how to add this")
 
+	def obj_find(self, _limit=None, **kw):
+		raise NotImplementedError("Searching these objects is not implemented.")
+
 	def __repr__(self):
 		return "{}({})".format(self.__class__.__name__,repr(self.name))
 

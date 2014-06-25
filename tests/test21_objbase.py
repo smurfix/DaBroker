@@ -28,12 +28,26 @@ from tests import test_init,LocalQueue,TestMain
 logger = test_init("test.21.objbase")
 logger_s = test_init("test.21.objbase.server")
 
+class SearchBrokeredInfo(BrokeredInfo):
+	objs = []
+	def obj_add(self,obj):
+		self.objs.append(obj)
+	def obj_find(self,_limit=None,**kw):
+		res = []
+		for obj in self.objs:
+			for k,v in kw.items():
+				if getattr(obj,k,None) != v:
+					break
+			else:
+				res.append(obj)
+		return res
+
 rootMeta = BrokeredInfo("rootMeta")
 rootMeta.add(Field("hello"))
 rootMeta.add(Ref("ops"))
 store_add(rootMeta,0,1)
 
-opsMeta = BrokeredInfo("opsMeta")
+opsMeta = SearchBrokeredInfo("opsMeta")
 opsMeta.add(Callable("rev"))
 opsMeta.add(Field("hell"))
 store_add(opsMeta,0,2)
@@ -44,18 +58,28 @@ class RootObj(BaseObj):
 
 class OpsObj(BaseObj):
 	_meta = opsMeta
-	hell = "Oh?"
+	def __init__(self, h="Oh?"):
+		self.hell = h
 	def rev(self,s):
 		s = [c for c in s]
 		s.reverse()
 		return "".join(s)
+	def __str__(self):
+		return "OpsObj:%r:%s"%(self._key,self.hell)
+	def __repr__(self):
+		return "<%s>"%self
 
 theRootObj = RootObj()
 store_add(theRootObj,0,2,99)
 
-theOpsObj = OpsObj()
+theOpsObj = OpsObj("Oh?")
 store_add(theOpsObj,0,34)
 theRootObj.ops = theOpsObj
+
+for i,n in ((1,"One"),(2,"Two"),(3,"Three")):
+	o = OpsObj(n)
+	store_add(o,0,10,i)
+	opsMeta.obj_add(o)
 
 class TestBrokerServer(BrokerServer):
 	def do_root(self,msg):
@@ -69,7 +93,7 @@ class TestBrokerServer(BrokerServer):
 			self.send("invalid",(theOpsObj._key,(3,4,5))) # the latter is unknown
 		else:
 			raise RuntimeError(msg)
-
+	
 class Broker(TestMain):
 	c = q = s = None
 	def setup(self):
@@ -96,6 +120,11 @@ class Broker(TestMain):
 		self.c._send("update",1)
 		assert res.ops.hell == "Yeah!"
 		assert res.ops.hell == "Yeah!"
+
+		# Now let's search for something
+		Op = res.ops._meta
+		o1 = Op.get(hell="Two")
+		assert o1.hell == "Two"
 
 	def main(self):
 		jobs = []

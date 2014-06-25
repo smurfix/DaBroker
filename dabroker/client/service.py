@@ -41,19 +41,20 @@ class ServerError(Exception):
 		if self.tb is None: return r
 		return r+"\n"+self.tb
 
-class CountedKeyedRef(KeyedRef):
-	"""A KeyedRef which includes an access counter."""
+class ExtKeyedRef(KeyedRef):
+	"""A KeyedRef which includes an access counter and a 'related' hash."""
 
-	__slots__ = "key","counter",
+	__slots__ = "key","counter","related"
 
 	def __new__(type, ob, callback, key):
 		self = ref.__new__(type, ob, callback)
 		self.key = key
 		self.counter = 0
+		self.related = {}
 		return self
 
 	def __init__(self, ob, callback, key):
-		super(CountedKeyedRef,  self).__init__(ob, callback, key)
+		super(ExtKeyedRef,  self).__init__(ob, callback, key)
 	
 	def __lt__(self,other):
 		return self.counter > other.counter
@@ -99,7 +100,7 @@ class CountedCache(WeakValueDictionary,object):
 		ref = self.data.get(key, None)
 		if ref is not None:
 			ref.counter = -1
-		self.data[key] = CountedKeyedRef(value, self._remove, key)
+		self.data[key] = ExtKeyedRef(value, self._remove, key)
 
 	def setdefault(self, key, default=None):
 		try:
@@ -107,7 +108,7 @@ class CountedCache(WeakValueDictionary,object):
 		except KeyError:
 			if self._pending_removals:
 				self._commit_removals()
-			self.data[key] = CountedKeyedRef(default, self._remove, key)
+			self.data[key] = ExtKeyedRef(default, self._remove, key)
 			return default
 		else:
 			return wr()
@@ -123,7 +124,7 @@ class CountedCache(WeakValueDictionary,object):
 				ref = self.data.get(key, None)
 				if ref is not None:
 					ref.counter = -1
-				d[key] = CountedKeyedRef(o, self._remove, key)
+				d[key] = ExtKeyedRef(o, self._remove, key)
 		if len(kwargs):
 			self.update(kwargs)
 
@@ -240,6 +241,13 @@ class BrokerClient(object):
 			self._add_to_cache(obj) # sends to the AsyncResult as a side effect
 			return obj
 		
+	def find(self, typ, _limit=None, **kw):
+		"""Find objects by keyword"""
+		kw = {'k':kw}
+		if _limit is not None:
+			kw['lim'] = _limit
+		return self._send("find",typ._key, **kw)
+
 	def call(self, obj,name,a,k):
 		return self._send("call",name, o=obj,a=a,k=k)
 		

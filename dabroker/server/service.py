@@ -66,6 +66,13 @@ class BrokerServer(object):
 		return get(key)
 	do_get.include = True
 		
+	def do_find(self, key, lim=None, k={}):
+		logger.debug("find %r %r",key,k)
+		key = tuple(key)
+		info = get(key)
+		return info.obj_find(_limit=lim,**k)
+	do_find.include = True
+		
 	def recv(self, msg):
 		"""Basic message receiver. Ususally in a separate thread."""
 		logger.debug("recv raw %r",msg)
