@@ -19,7 +19,14 @@ yesterday.
 
 Also assume that you don't want to work with stale data.
 
-Last, assume that you will funnel all data updates through DaBroker.
+Last, assume that you can funnel all data updates through DaBroker.
+
+With DaBroker, you can (mostly) forget about network latency or excessive
+memory usage because "hot" data will be cached on the client, dynamically.
+
+The DaBroker server sends "this is no longer valid" broadcasts, so you
+never work with stale data unless you want to (i.e. your data only changes
+when you're not looking).
 
 Design
 ######
