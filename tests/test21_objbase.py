@@ -108,18 +108,26 @@ class Broker(TestMain):
 			self.q.shutdown()
 		super(Broker,self).stop()
 
+	@property
+	def cid(self):
+		return self.q.cq.next_id
+
 	def job(self,i):
 		logger.debug("Get the root")
 		res = self.c.root
 		logger.debug("recv %r",res)
 		assert res.hello == "Hello!"
 		assert res._meta.name == "rootMeta"
+		cid=self.cid
 		assert res._meta.name == "rootMeta" # again, to check caching
+		assert cid==self.cid
 		assert res.ops.rev("test123") == "321tset"
 		assert res.ops.hell == "Oh?"
 		self.c._send("update",1)
 		assert res.ops.hell == "Yeah!"
+		cid=self.cid
 		assert res.ops.hell == "Yeah!"
+		assert cid==self.cid
 
 		# Now let's search for something
 		Op = res.ops._meta
