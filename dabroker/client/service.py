@@ -23,7 +23,7 @@ from .serial import adapters, client_broker_info_meta
 import logging
 logger = logging.getLogger("dabroker.client.service")
 
-from weakref import WeakValueDictionary
+from weakref import WeakValueDictionary,KeyedRef,ref
 from collections import deque
 from gevent.event import AsyncResult
 
@@ -41,6 +41,149 @@ class ServerError(Exception):
 		if self.tb is None: return r
 		return r+"\n"+self.tb
 
+class CountedKeyedRef(KeyedRef):
+	"""A KeyedRef which includes an access counter."""
+
+	__slots__ = "key","counter",
+
+	def __new__(type, ob, callback, key):
+		self = ref.__new__(type, ob, callback)
+		self.key = key
+		self.counter = 0
+		return self
+
+	def __init__(self, ob, callback, key):
+		super(CountedKeyedRef,  self).__init__(ob, callback, key)
+	
+	def __lt__(self,other):
+		return self.counter > other.counter
+		# Yes, this is backwards. That is intentional. See below.
+
+class CountedCache(WeakValueDictionary,object):
+	"""A WeakValueDictionary which counts accesses."""
+	def __init__(self, *args, **kw):
+		super(CountedCache,self).__init__(*args,**kw)
+		def remove(wr, selfref=ref(self)):
+			self = selfref()
+			if self is not None:
+				if self._iterating:
+					self._pending_removals.append(wr.key)
+				else:
+					ref = self.data.pop(wr.key,None)
+					if ref is not None:
+						ref.counter = -1
+		self._remove = remove
+
+	def __getitem__(self, key):
+		r = self.data[key]
+		o = r()
+		if o is None:
+			raise KeyError(key)
+		else:
+			r.counter += 1
+			return o
+
+	def get_ref(self, key, default=None):
+		return self.data.get(key, default)
+
+	def get_counter(self, key):
+		r = self.data.get(key,None)
+		if r is None:
+			return -1
+		return r.count
+
+	def __setitem__(self, key, value):
+		if self._pending_removals:
+			self._commit_removals()
+
+		ref = self.data.get(key, None)
+		if ref is not None:
+			ref.counter = -1
+		self.data[key] = CountedKeyedRef(value, self._remove, key)
+
+	def setdefault(self, key, default=None):
+		try:
+			wr = self.data[key]
+		except KeyError:
+			if self._pending_removals:
+				self._commit_removals()
+			self.data[key] = CountedKeyedRef(default, self._remove, key)
+			return default
+		else:
+			return wr()
+
+	def update(self, dict=None, **kwargs):
+		if self._pending_removals:
+			self._commit_removals()
+		d = self.data
+		if dict is not None:
+			if not hasattr(dict, "items"):
+				dict = type({})(dict)
+			for key, o in dict.items():
+				ref = self.data.get(key, None)
+				if ref is not None:
+					ref.counter = -1
+				d[key] = CountedKeyedRef(o, self._remove, key)
+		if len(kwargs):
+			self.update(kwargs)
+
+class CacheDict(CountedCache):
+	"""\
+		This is a WeakValueDict which keeps the last CACHE_SIZE items pinned.
+
+		.lru is a hash which acts as a FIFO (think collections.deque,
+		except that a deque's length is not mutable).
+
+		Items popping off the FIFO are added to a heap (sized CACHE_SIZE/10
+		by default). The most-used half of these items are re-added to the FIFO, the rest is dropped.
+
+		"""
+	def __init__(self,*a,**k):
+		self.lru = {}
+		self.lru_next = 0
+		self.lru_last = 0
+		self.lru_size = CACHE_SIZE
+
+		self.heap_min = CACHE_SIZE/20
+		self.heap_max = CACHE_SIZE/10
+		self.heap = []
+		super(CacheDict,self).__init__(*a,**k)
+
+	def set(self, key,value):
+		"""Set an item, but bypass the cache"""
+		super(CacheDict,self).__setitem__(key,value)
+		return value
+
+	def __setitem__(self, key, value):
+		super(CacheDict,self).__setitem__(key,value)
+		id = self.lru_next; self.lru_next += 1
+		self.lru[id] = (key,value)
+
+		# Move items from the queue to the heap
+		min_id = id - self.lru_size
+		while self.lru_last < min_id:
+			id = self.lru_last; self.lru_last += 1
+			if id not in self.lru: continue
+			key,value = self.lru[id]
+			ref = self.data.get(key,0)
+			if ref is not None:
+				self.heap.append((ref,key,value))
+
+		# When enough items accumulate on the heap:
+		# Move the most-used items back to the queue
+		# This block should not schedule.
+		if len(self.heap) > self.heap_max:
+			self.heap = [(r,k,v) for r,k,v in self.heap if r.counter >= 0]
+			heapify(self.heap)
+			while len(self.heap) > self.heap_min:
+				ref,key,value = heappop(self.heap)
+				if ref.counter > 1:
+					id = self.lru_next; self.lru_next += 1
+					ref.counter = 0
+					self.lru[id] = (key,value)
+
+			self.heap = [] ## optional
+
 class BrokerClient(object):
 	"""\
 		The basic client implementation. Singleton (for now).
@@ -57,12 +200,9 @@ class BrokerClient(object):
 		self.codec = Codec()
 		self.codec.register(adapters)
 
-		# Basic cache.
-		self._cache = WeakValueDictionary()
-		self._lru = deque(maxlen=CACHE_SIZE)
+		self._cache = CacheDict()
 
 		self._add_to_cache(client_broker_info_meta)
-
 		client = self
 
 	def _add_to_cache(self, obj):
@@ -75,7 +215,7 @@ class BrokerClient(object):
 				return
 		if obj is not None:
 			self._cache[key] = obj
-			self._lru.append(obj)
+
 		if isinstance(old,AsyncResult):
 			old.set(obj)
 
@@ -86,14 +226,15 @@ class BrokerClient(object):
 			if isinstance(obj,AsyncResult):
 				obj = obj.get(timeout=RETR_TIMEOUT)
 			return obj
-		self._cache[key] = ar = AsyncResult()
+
+		ar = self._cache.set(key, AsyncResult())
 		try:
 			obj = self._send("get",key)
 		except Exception as e:
 			# Remove the AsyncResult from cache and forward the excption to any waiters
 			self._cache.pop(key).set_exception(e)
 			del ar # otherwise the optimizer will drop this, and thus
-			       # delete the weakref, _before_ the previous line!
+				   # delete the weakref, _before_ the previous line!
 			raise
 		else:
 			self._add_to_cache(obj) # sends to the AsyncResult as a side effect
@@ -102,6 +243,25 @@ class BrokerClient(object):
 	def call(self, obj,name,a,k):
 		return self._send("call",name, o=obj,a=a,k=k)
 		
+	def do_ping(self,msg):
+		"""The server wants to know who's listening. So tell it."""
+		logger.debug("ping %r",msg)
+		self._send("pong")
+
+	def do_pong(self,msg):
+		# for completeness. The server doesn't send a broadcast on client request.
+		raise RuntimeError("This can't happen")
+
+	def do_invalid(self,msg):
+		for k in msg:
+			k = tuple(k)
+			try:
+				del self._cache[k]
+			except KeyError:
+				logger.debug("inval: not found: %r",k)
+			else:
+				logger.debug("inval: dropped: %r",k)
+
 	@property
 	def root(self):
 		"""Get the object root. This may or may not be a cacheable object."""
@@ -142,5 +302,20 @@ class BrokerClient(object):
 		if isinstance(msg,dict) and 'error' in msg:
 			raise ServerError(msg['error'],msg.get('tb',None))
 		return msg
+
+	def _recv(self, msg):
+		"""Process incoming notifications from the server"""
+		logger.debug("bcast raw %r",msg)
+		msg = self.codec.decode(msg)
+		logger.debug("bcast dec %r",msg)
+		job = msg.pop('_a')
+		m = msg.pop('_m',msg)
+
+		try:
+			proc = getattr(self,'do_'+job)
+		except AttributeError:
+			raise UnknownCommandError(job)
+		proc(m,**msg)
+
 
 client = None

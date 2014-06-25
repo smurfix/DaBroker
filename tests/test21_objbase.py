@@ -16,7 +16,6 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # This test runs the test environment's local queue implementation.
 
 from dabroker import patch; patch()
-from dabroker.util.thread import Main
 from dabroker.server.service import BrokerServer
 from dabroker.server.loader import add as store_add
 from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj
@@ -24,7 +23,7 @@ from dabroker.client.service import BrokerClient
 
 from gevent import spawn,sleep
 
-from tests import test_init,LocalQueue
+from tests import test_init,LocalQueue,TestMain
 
 logger = test_init("test.21.objbase")
 logger_s = test_init("test.21.objbase.server")
@@ -36,6 +35,7 @@ store_add(rootMeta,0,1)
 
 opsMeta = BrokeredInfo("opsMeta")
 opsMeta.add(Callable("rev"))
+opsMeta.add(Field("hell"))
 store_add(opsMeta,0,2)
 
 class RootObj(BaseObj):
@@ -44,6 +44,7 @@ class RootObj(BaseObj):
 
 class OpsObj(BaseObj):
 	_meta = opsMeta
+	hell = "Oh?"
 	def rev(self,s):
 		s = [c for c in s]
 		s.reverse()
@@ -62,12 +63,21 @@ class TestBrokerServer(BrokerServer):
 		return theRootObj
 	do_root.include = True
 
-class Broker(Main):
+	def do_update(self,msg):
+		if msg == 1:
+			theOpsObj.hell = "Yeah!"
+			self.send("invalid",(theOpsObj._key,(3,4,5))) # the latter is unknown
+		else:
+			raise RuntimeError(msg)
+
+class Broker(TestMain):
 	c = q = s = None
 	def setup(self):
 		self.s = TestBrokerServer()
 		self.q = LocalQueue(self.s.recv)
 		self.c = BrokerClient(self.q.send)
+		self.q.set_client_worker(self.c._recv)
+		self.s.sender = self.q.notify
 		super(Broker,self).setup()
 	def stop(self):
 		if self.q is not None:
@@ -82,6 +92,10 @@ class Broker(Main):
 		assert res._meta.name == "rootMeta"
 		assert res._meta.name == "rootMeta" # again, to check caching
 		assert res.ops.rev("test123") == "321tset"
+		assert res.ops.hell == "Oh?"
+		self.c._send("update",1)
+		assert res.ops.hell == "Yeah!"
+		assert res.ops.hell == "Yeah!"
 
 	def main(self):
 		jobs = []

@@ -32,14 +32,27 @@ class UnknownCommandError(Exception):
 		return "Unknown command: {}".format(repr(self.cmd))
 
 class BrokerServer(object):
-	def __init__(self):
+	"""\
+		The main server.
+
+		@sender: code which broadcasts to all clients.
+		"""
+	def __init__(self, sender=None):
+		# the sender might be set later
 		self.codec = Codec()
 		self.codec.register(adapters)
+		self.sender = sender
 
 	def do_echo(self,msg):
 		logger.debug("echo %r",msg)
 		return msg
 
+	def do_ping(self,msg):
+		logger.debug("ping %r",msg)
+		
+	def do_pong(self,msg):
+		logger.debug("pong %r",msg)
+		
 	def do_call(self,msg,o=None,a=(),k={}):
 		logger.debug("call %r.%r(*%r, **%r)",o,msg,a,k)
 		assert msg in o._meta.calls,"You cannot call method {} of {}".format(msg,o)
@@ -74,4 +87,13 @@ class BrokerServer(object):
 		except Exception as e:
 			tb = format_exc()
 			return {'error': str(e), 'tb':tb}
+
+	def send(self, action, msg=None, **kw):
+		"""Basic message broadcaster"""
+		logger.debug("bcast dec %s %r",action,msg)
+		kw['_m'] = msg
+		kw['_a'] = action
+		msg = self.codec.encode(kw)
+		logger.debug("bcast raw %r",msg)
+		self.sender(msg)
 

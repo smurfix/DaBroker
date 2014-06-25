@@ -31,6 +31,8 @@ def test_init(who):
 # reduce cache sizes and timers
 
 from dabroker.client import service as s
+from dabroker.util.thread import Main
+
 s.RETR_TIMEOUT=1 # except that we want 1000 when debugging
 s.CACHE_SIZE=5
 
@@ -127,6 +129,12 @@ class LocalQueue(object):
         self.cq = cq
         self.sq = sq
 
+    def set_client_worker(self,worker):
+        self.cq.worker = worker
+
+    def set_server_worker(self,worker):
+        self.sq.worker = worker
+
     def send(self,msg):
         return self.cq.send(msg)
 
@@ -141,4 +149,19 @@ class LocalQueue(object):
         r = self.server; self.server = None
         if r is not None:
             r.kill()
+
+from gevent import spawn,sleep
+def killer(x,t):
+    sleep(t)
+    x.killer = None
+    x.stop()
+
+class TestMain(Main):
+    def setup(self):
+        super(TestMain,self).setup()
+        self.killer = spawn(killer,self,5)
+    def cleanup(self):
+        super(TestMain,self).cleanup()
+        if self.killer is not None:
+            self.killer.kill()
 
