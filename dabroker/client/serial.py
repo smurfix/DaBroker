@@ -65,19 +65,11 @@ class load_related(object):
 		if obj is None:
 			return self
 
-		kv = obj._refs.get(self.name,None)
-		if kv is None:
-			 obj._refs[self.name] = kv = [None,None]
-		k,v = kv
+		k = obj._refs.get(self.name,None)
 		if k is None:
 			return None
-		if v is not None:
-			v = v()
-		if v is None:
-			from . import service as s
-			v = s.client.get(k)
-			kv[1] = ref(v)
-		return v
+		from . import service as s
+		return s.client.get(k)
 
 class call_proc(object):
 	def __init__(self, name):
@@ -141,7 +133,7 @@ class client_BaseObj(common_BaseObj):
 				setattr(res,k,v)
 		if r:
 			for k,v in r.items():
-				res._refs[k] = [v._key,None]
+				res._refs[k] = v._key
 
 		return res
 
