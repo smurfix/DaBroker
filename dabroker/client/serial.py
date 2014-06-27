@@ -17,6 +17,8 @@ from ..base import BaseRef,BaseObj, BrokeredInfo, BrokeredInfoInfo, adapters as 
 import logging
 logger = logging.getLogger("dabroker.client.serial")
 
+class _NotGiven: pass
+
 # This is the client's storage side.
 
 adapters = baseAdapters[:]
@@ -26,16 +28,15 @@ def serial_adapter(cls):
 	return cls
 
 class ClientBrokeredInfo(BrokeredInfo):
-	_class = None
 	def __init__(self,*a,**k):
 		super(ClientBrokeredInfo,self).__init__(*a,**k)
 		self.searches = WeakValueDictionary()
+		self._class = [None,None]
 
-	@property
-	def class_(self):
-		if self._class is not None:
-			return self._class
-
+	def class_(self,is_meta):
+		cls = self._class[is_meta]
+		if cls is not None:
+			return cls
 		class ClientObj(ClientBaseObj):
 			name = None
 			def __repr__(self):
@@ -50,8 +51,7 @@ class ClientBrokeredInfo(BrokeredInfo):
 				return res
 			__str__=__repr__
 
-		if not self._key:
-			# singleton
+		if is_meta:
 			_ClientObj = ClientObj
 			class ClientObj(_ClientObj,ClientBrokeredInfo):
 				def __init__(self):
@@ -70,9 +70,17 @@ class ClientBrokeredInfo(BrokeredInfo):
 					return res
 				__str__=__repr__
 
-		self._class = ClientObj
-		for k in self.refs.keys():
-			setattr(ClientObj,k,load_related(k))
+		self._class[is_meta] = ClientObj
+		if is_meta:
+			for k in self.refs.keys():
+				if k != '_meta':
+					setattr(ClientObj,k,handle_related(k))
+		else:
+			for k in self.fields.keys():
+				setattr(ClientObj,k,handle_data(k))
+			for k in self.refs.keys():
+				if k != '_meta':
+					setattr(ClientObj,k,handle_ref(k))
 		for k in self.calls.keys():
 			setattr(ClientObj,k,call_proc(k))
 		return ClientObj
@@ -94,7 +102,23 @@ class ClientBrokeredInfoInfo(ClientBrokeredInfo,BrokeredInfoInfo):
 	pass
 client_broker_info_meta = ClientBrokeredInfoInfo()
 
-class load_related(object):
+class handle_data(object):
+	def __init__(self, name):
+		self.name = name
+
+	def __set__(self, obj, val):
+		ov = obj.__dict__.get(self.name,_NotGiven)
+		obj.__dict__[self.name] = val
+		if ov is _NotGiven:
+			return
+		if obj._meta is None:
+			if ov and ov != val:
+				import pdb;pdb.set_trace()
+			assert not ov or ov == val, (self.name,ov,val)
+		else:
+			obj._meta._dab.obj_change(obj, self.name, ov,val)
+
+class handle_related(object):
 	def __init__(self, name):
 		self.name = name
 
@@ -105,8 +129,17 @@ class load_related(object):
 		k = obj._refs.get(self.name,None)
 		if k is None:
 			return None
-		from . import service as s
-		return s.client.get(k)
+		return obj._meta._dab.get(k)
+
+class handle_ref(handle_related):
+	def __set__(self, obj, val):
+		ov = obj._refs.get(self.name,_NotGiven)
+		if val is not None:
+			val = val._key
+		obj._refs[self.name] = val
+		if ov is _NotGiven:
+			return
+		obj._meta._dab.obj_change(obj, self.name, ov,val)
 
 class call_proc(object):
 	def __init__(self, name):
@@ -117,8 +150,7 @@ class call_proc(object):
 			return self
 
 		def c(*a,**k):
-			from . import service as s
-			return s.client.call(obj,self.name, a,k)
+			return obj._meta._dab.call(obj,self.name, a,k)
 		c.__name__ = str(self.name)
 		return c
 
@@ -150,17 +182,16 @@ class client_BaseObj(common_BaseObj):
 		return ref
 	
 
-	@staticmethod
-	def decode(loader, k,f=None,r=None,meta=None):
+	@classmethod
+	def decode(cls, loader, k,f=None,r=None,meta=None, _is_meta=None):
 		"""\
 			Decode a reference.
 			"""
 		k = tuple(k)
 		if meta is not None:
-			res = meta.class_
+			res = meta.class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
 		elif r and '_meta' in r and hasattr(r['_meta'],'_key'):
-			from . import service as s
-			res = s.client.get(r['_meta']._key).class_
+			res = loader.get(r['_meta']._key).class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
 		else:
 			res = ClientBaseObj
 
@@ -172,9 +203,12 @@ class client_BaseObj(common_BaseObj):
 				setattr(res,k,v)
 		if r:
 			for k,v in r.items():
-				res._refs[k] = v._key
+				if k == '_meta':
+					res._meta = loader.get(v._key)
+				else:
+					res._refs[k] = v._key
 
-		return res
+		return loader._add_to_cache(res)
 
 @serial_adapter
 class client_InfoObj(client_BaseObj):
@@ -188,5 +222,5 @@ class client_InfoObj(client_BaseObj):
 			# so we need to go and get the real thing.
 			# NOTE this assumes that the codec doesn't throw away empty lists.
 			return loader.get(tuple(k))
-		return client_BaseObj.decode(loader, k=k,f=f,**kw)
+		return client_BaseObj.decode(loader, _is_meta=True, k=k,f=f,**kw)
 

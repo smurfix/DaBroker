@@ -14,7 +14,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # The sqlalchemy object loader
 
-from ...base import common_BaseRef, BrokeredInfo,BrokeredMeta, Field,Ref,BackRef,Callable
+from ...base import common_BaseRef, BrokeredInfo,BrokeredMeta, Field,Ref,BackRef,Callable, get_attrs
 from . import BaseLoader
 from ..serial import server_BaseObj
 from sqlalchemy.inspection import inspect
@@ -47,6 +47,9 @@ class server_SQLobject(server_BaseObj):
 			return common_BaseRef.encode(obj)
 		return server_BaseObj.encode(obj)
 
+def _get_attrs(obj):
+	return get_attrs(obj, obj._dab._meta)
+
 class SQLInfo(BrokeredInfo):
 	def __new__(cls, loader, model):
 		if hasattr(model,'_dab'):
@@ -70,9 +73,12 @@ class SQLInfo(BrokeredInfo):
 		self.name = i.class_.__name__
 		self._meta = self.loader.model_meta
 		model._dab = self
+		model._attrs = property(_get_attrs)
 		class load_me(server_SQLobject):
 			cls = model
 		load_me.__name__ = str("codec_sql_"+self.name)
+
+		# TODO: this is ugly.
 		loader.loaders.server.codec.register(load_me)
 
 	@with_session
@@ -86,19 +92,29 @@ class SQLInfo(BrokeredInfo):
 		return res
 
 	@with_session
-	def new(self, session,**kw):
-		res = self.model(**kw)
-		session.add(res)
-		session.flush()
-		return self.fixup(res)
-
-	@with_session
 	def get(self, session,*key,**kw):
 		assert len(key) == 1 or kw and not key
 		if key:
 			kw['id'] = key[0]
 		res = session.query(self.model).filter_by(**kw).one()
 		return self.fixup(res)
+
+	@with_session
+	def new(self, session,**kw):
+		res = self.model(**kw)
+		session.add(res)
+		session.flush()
+		self.fixup(res)
+		self.loader.loaders.server.send_created(res)
+		return res
+
+	@with_session
+	def delete(self, session, *obj):
+		for o in obj:
+			session.delete(o)
+		session.flush()
+		for o in obj:
+			self.loader.loaders.server.deleted(o)
 
 	def fixup(self,res):
 		res._meta = self

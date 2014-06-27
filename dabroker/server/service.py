@@ -44,6 +44,8 @@ class BrokerServer(object):
 		self.codec = Codec(self.loader)
 		self.codec.register(adapters)
 
+	# remote calls
+
 	def do_echo(self,msg):
 		logger.debug("echo %r",msg)
 		return msg
@@ -62,26 +64,40 @@ class BrokerServer(object):
 		return res
 
 	def do_get(self, key):
+		"""Fetch an object by ID"""
 		key = tuple(key)
 		logger.debug("get %r",key)
 		return self.loader.get(key)
 	do_get.include = True
 		
 	def do_find(self, key, lim=None, k={}):
+		"""Search for objects"""
 		logger.debug("find %r %r",key,k)
 		key = tuple(key)
 		info = self.loader.get(key)
 		return info.obj_find(_limit=lim,**k)
 	do_find.include = True
 		
-	def deleted(self, obj):
-		"""An object has been deleted."""
+	# Broadcast messages to clients
+
+	def send_ping(self, msg):
+		self.send("ping",msg)
+		
+	# The next three broadcast messages are used for broadcastng object
+	# changes. They will invalidate possibly-matching search results.
+	def send_created(self, obj):
+		"""This object has been created."""
+		attrs = dict((k,(v,)) for k,v in obj._attrs.items())
+		self.send("invalid_key",None, m=obj._meta._key, k=attrs)
+
+	def send_deleted(self, obj):
+		"""This object has been deleted."""
 		attrs = dict((k,(v,)) for k,v in obj._attrs.items())
 		self.send("invalid_key",obj._key, m=obj._meta._key, k=attrs)
 
-	def updated(self, obj, old_attrs):
+	def send_updated(self, obj, old_attrs):
 		"""\
-			An object has been updated. Broadcast.
+			An object has been updated.
 		
 			@kw is _attrs from the old object state.
 			"""

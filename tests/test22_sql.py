@@ -173,7 +173,7 @@ class Broker(TestMain):
 		self.a[1].get()
 		p1 = P.get(name="Fred Flintstone")
 		p1.name="Freddy Firestone"
-		self.c.sync()
+		self.c.commit()
 		self.c._send("update",2)
 
 	def main(self):

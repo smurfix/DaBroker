@@ -98,7 +98,7 @@ class TestBrokerServer(BrokerServer):
 			obj = self.opsMeta.objs[2]
 			attrs = obj._attrs
 			obj.hell = "Two2"
-			self.updated(obj,attrs)
+			self.send_updated(obj,attrs)
 		else:
 			raise RuntimeError(msg)
 	
@@ -125,7 +125,7 @@ class Broker(TestMain):
 		res = self.c.root
 		logger.debug("recv %r",res)
 		assert res.hello == "Hello!"
-		assert res._meta.name == "rootMeta"
+		assert res._meta.name == "rootMeta",(res,res._meta,res._meta.name)
 		cid=self.cid
 		assert res._meta.name == "rootMeta" # again, to check caching
 		assert cid==self.cid, (cid,self.cid)
@@ -139,6 +139,9 @@ class Broker(TestMain):
 
 		# Now let's search for something
 		Op = res.ops._meta
+		assert hasattr(Op,"calls")
+		assert not hasattr(res,"calls"),(res,res.calls)
+		assert not hasattr(res.ops,"calls")
 
 		o1 = Op.get(hell="Two")
 		assert o1.hell == "Two", o1

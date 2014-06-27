@@ -12,6 +12,19 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
+def get_attrs(obj, meta=None):
+	"""Return a dict with my attributes"""
+	if meta is None:
+		meta = obj._meta
+
+	res = {}
+	for k in meta.fields:
+		res[k] = getattr(obj,k,None)
+	for k in meta.refs:
+		if k == "_meta": continue
+		res[k] = obj._attr_key(k)
+	return res
+
 class BaseRef(object):
 	"""\
 		A basic (reference to an) object.
@@ -38,14 +51,7 @@ class BaseObj(BaseRef):
 
 	@property
 	def _attrs(self):
-		"""Return a dict with my attributes"""
-		res = {}
-		for k in self._meta.fields:
-			res[k] = getattr(self,k,None)
-		for k in self._meta.refs:
-			if k == "_meta": continue
-			res[k] = self._attr_key(k)
-		return res
+		return get_attrs(self)
 
 class common_BaseRef(object):
 	cls = BaseRef

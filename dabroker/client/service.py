@@ -28,6 +28,8 @@ from collections import deque
 from gevent.event import AsyncResult
 from heapq import heapify,heappop
 
+class _NotGiven: pass
+
 def search_key(kw):
 	"""Build a reproducible string from search keywords"""
 	return ",".join("{}:{}".format(k, ".".join(v._key) if hasattr(v,'_key') else v) for k,v in sorted(kw.items()))
@@ -194,6 +196,64 @@ class CacheDict(CountedCache):
 
 			self.heap = [] ## optional
 
+class ChangeData(object):
+	"""Some data has been changed locally. Remember which."""
+	def __init__(self,server,obj):
+		self.obj = obj
+		self.old_data = {}
+
+		server.obj_chg[obj._key] = self
+
+	def send_commit(self,server):
+		upd = {}
+		for k in self._meta.fields:
+			try:
+				ov = self.old_data[k]
+			except KeyError:
+				pass
+			else:
+				nv = getattr(self,k)
+				if ov != nv:
+					upd[k] = (ov,nv)
+		for k in self._meta.refs:
+			try:
+				ov = self.old_data[k]
+			except KeyError:
+				pass
+			else:
+				nv = self._refs[k]
+				if ov != nv:
+					upd[k] = (ov,nv)
+		if upd:
+			server.send("update",self.obj._key,upd)
+
+	def send_revert(self,server):
+		for k,v in self.old_data.items():
+			if k in self.obj._meta.fields:
+				setattr(self.obj,k,v)
+			else:
+				self.obj._refs[k] = v
+
+class ChangeNew(ChangeData):
+	def send_revert(self,server):
+		server.send("delete",self.obj._key)
+
+class ChangeDel(ChangeData):
+	@property
+	def obj(self):
+		raise KeyError(self.obj._key)
+	def send_commit(self,server):
+		server._cache.pop(self.obj._key,None)
+		server.send("delete",self.obj._key)
+	def send_revert(self,server):
+		if self.obj not in server._cache:
+			server._add_to_cache(self.obj)
+		super(ChangeDel,self).revert(server)
+
+class ChangeInvalid(ChangeData):
+	def send_commit(self,server):
+		raise RuntimeError("inconsistent data",self.obj,_key)
+
 class BrokerClient(object):
 	"""\
 		The basic client implementation. Singleton (for now).
@@ -212,6 +272,7 @@ class BrokerClient(object):
 		self.codec.register(adapters)
 
 		self._add_to_cache(client_broker_info_meta)
+		self.obj_chg = {}
 		client = self
 
 	def _add_to_cache(self, obj):
@@ -222,13 +283,34 @@ class BrokerClient(object):
 			old = self._cache.get(key, None)
 			if old is obj:
 				return
-		if obj is not None:
-			self._cache[key] = obj
 
-		if isinstance(old,AsyncResult):
+		if old is None:
+			self._cache[key] = obj
+		elif isinstance(old,AsyncResult):
+			self._cache[key] = obj
 			old.set(obj)
+		else:
+			# We get an object we already have. Locally modified?
+			chg = self.obj_chg.get(key,None)
+			if chg is not None:
+				# Ugh. Yes.
+				for k in obj._meta.fields:
+					if k in chg.old_data:
+						# No guarantee that the old data has not been used
+						# to generate the new, so error out.
+						self.obj_chg[key] = ChangeInvalid(chg)
+						return old
+			else:
+				old.__dict__.update(obj.__dict__)
+			return old
+		obj._dab = self
+		return obj
 
 	def get(self, key):
+		chg = self.obj_chg.get(key,None)
+		if chg is not None:
+			return chg.obj
+
 		"""Get an object, from cache or from the server."""
 		obj = self._cache.get(key,None)
 		if obj is not None:
@@ -246,9 +328,40 @@ class BrokerClient(object):
 				   # delete the weakref, _before_ the previous line!
 			raise
 		else:
-			self._add_to_cache(obj) # sends to the AsyncResult as a side effect
+			# The deserializer has already added the object to the cache (or it should have)
 			return obj
 		
+	def obj_new(self,cls,**kw):
+		obj = self.send("new",cls,kw)
+		ChangeNew(self,obj)
+		return obj
+
+	def obj_del(self,obj):
+		ChangeDel(self,obj)
+
+	def obj_change(self,obj,k,ov,nv):
+		if ov == nv: return
+		chg = self.obj_chg.get(obj._key,None)
+		if chg is None:
+			chg = ChangeData(self,obj)
+		chg.old_data.setdefault(k,ov)
+	
+	def commit(self):
+		chg = self.obj_chg; self.obj_chg = {}
+		try:
+			for v in chg.values():
+				v.send_commit(self)
+		except:
+			self._rollback(chg)
+			raise
+	def _rollback(self,chg):
+		for v in chg.values():
+			v.send_revert(self)
+		
+	def rollback(self):
+		chg = self.obj_chg; self.obj_chg = {}
+		self._rollback(chg)
+	
 	def find(self, typ, _limit=None, **kw):
 		"""Find objects by keyword"""
 		kws = search_key(kw)
@@ -291,16 +404,19 @@ class BrokerClient(object):
 	def do_invalid_key(self,key, m=None,k={}):
 		"""Invalidate an object, plus whatever might have been used to search for it.
 		
-			@key the object
+			@key the object (or None if the object is new)
 			@m the object's metadata key (search results hang off metadata)
 			@k: a key=>(value,…) dict. A search is obsoleted when one
 			                           of the search keys matches one of the values.
 			"""
-		key = tuple(key)
-		logger.debug("inval_key: %r: %r",key,k)
-		obj = self._cache.pop(key,None)
-		if obj is None:
-			logger.debug("not in cache")
+		if key is not None:
+			key = tuple(key)
+			logger.debug("inval_key: %r: %r",key,k)
+			obj = self._cache.pop(key,None)
+			if obj is None:
+				logger.debug("not in cache")
+		else:
+			logger.debug("no key")
 
 		if m is None:
 			logger.warn("no metadata?")
@@ -312,17 +428,28 @@ class BrokerClient(object):
 			return
 		obsolete = set()
 
-		# TODO: This loop is inefficient 
+		# What this does: a search checks a number of keys for specific
+		# values. So the search is affected when all of these values 
+		# match our update set.
+		# A search is also affected when none of the values match, but only
+		# if it's not an update.
+		# TODO: This loop is somewhat inefficient.
 		for ks,s in obj.searches.items():
-			if s.kw:
-				for i,v in k.items():
-					sv = s.kw.get(i,None)
-					if sv is None or sv not in v:
-						continue
-					break
-				else:
+			keymatches = False
+			mismatches = False
+			is_update = False
+			for i,v in k.items():
+				if len(v) > 1:
+					is_update = True
+				sv = s.kw.get(i,_NotGiven)
+				if sv is _NotGiven:
 					continue
-			obsolete.add(ks)
+				keymatches = True
+				if sv not in v:
+					mismatches = True
+					break
+			if not mismatches if keymatches else not is_update:
+				obsolete.add(ks)
 		for ks in obsolete:
 			logger.debug("dropping %s",ks)
 			obj.searches.pop(ks,None)
