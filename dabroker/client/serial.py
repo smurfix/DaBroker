@@ -62,6 +62,10 @@ class ClientBrokeredInfo(BrokeredInfo):
 					n = getattr(self,'name',None)
 					if n is not None:
 						res += ":"+n
+					else:
+						n = getattr(self,'_key',None)
+						if n is not None:
+							res += ":"+" ".join(str(x) for x in n)
 					res += ">"
 					return res
 				__str__=__repr__
@@ -71,7 +75,6 @@ class ClientBrokeredInfo(BrokeredInfo):
 			setattr(ClientObj,k,load_related(k))
 		for k in self.calls.keys():
 			setattr(ClientObj,k,call_proc(k))
-		ClientObj.__name__ = str(self.name or "unknownClientType")
 		return ClientObj
 
 	def find(self, **kw):
@@ -179,7 +182,11 @@ class client_InfoObj(client_BaseObj):
 	clsname = "Info"
 		
 	@staticmethod
-	def decode(loader, k=None,f=None):
-		res = client_BaseObj.decode(loader, k=k,f=f,meta=client_broker_info_meta)
-		return res
+	def decode(loader, k=None,f=None, **kw):
+		if f is None:
+			# We always need the data, but this is something like a ref
+			# so we need to go and get the real thing.
+			# NOTE this assumes that the codec doesn't throw away empty lists.
+			return loader.get(tuple(k))
+		return client_BaseObj.decode(loader, k=k,f=f,**kw)
 

@@ -58,7 +58,7 @@ class Loaders(object):
 		return obj
 
 class BaseLoader(object):
-	def __init__(self, id):
+	def __init__(self, loaders=None, id=0):
 		self.id = id
 
 	def get(self,*key):
@@ -66,6 +66,8 @@ class BaseLoader(object):
 
 	def set_key(self, obj, *key):
 		"""sets an object's lookup key."""
+		if obj is broker_info_meta:
+			return
 		k = getattr(obj,'_key',None)
 		if k:
 			assert k[0] == id
@@ -76,9 +78,9 @@ class BaseLoader(object):
 
 class StaticLoader(BaseLoader):
 	"""A simple 'loader' which serves static objects"""
-	def __init__(self, id=0):
+	def __init__(self, loaders=None, id='static'):
 		self.objects = {}
-		super(StaticLoader,self).__init__(id=id)
+		super(StaticLoader,self).__init__(id=id, loaders=loaders)
 
 	def get(self,*key):
 		return self.objects[key]

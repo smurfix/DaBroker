@@ -64,18 +64,8 @@ class server_InfoObj(server_BaseObj):
 	clsname = "Info"
 
 	@staticmethod
-	def encode(obj, include=False):
-		res = {"k":obj._key}
-		if include:
-			res['f'] = f = dict()
-			for k in obj._meta.fields.keys():
-				f[k] = getattr(obj,k)
-		return res
-
-	@staticmethod
 	def decode(loader, k=None,f=None,m=None):
 		k = tuple(k)
-		from .loader import get
 		assert f is None
-		return get(k)
+		return loader.get(k)
 

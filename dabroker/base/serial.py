@@ -120,8 +120,10 @@ class Codec(object):
 			for c in cls:
 				self.register(c)
 			return
-		self.type2cls[cls.cls.__module__+"."+cls.cls.__name__] = cls
-		self.name2cls[cls.clsname] = cls
+		if cls.cls is not None:
+			self.type2cls[cls.cls.__module__+"."+cls.cls.__name__] = cls
+		if cls.clsname is not None:
+			self.name2cls[cls.clsname] = cls
 		
 	def _encode(self, data, objcache, include=False):
 		if isinstance(data,scalar_types):

@@ -97,6 +97,7 @@ class BrokeredInfo(BaseObj):
 		It is immutable on the client.
 		"""
 	name = None
+	_meta = None
 
 	def __init__(self,name=None):
 		super(BrokeredInfo,self).__init__()
@@ -107,10 +108,6 @@ class BrokeredInfo(BaseObj):
 		self.calls = dict()
 
 		self.add(Ref("_meta"))
-
-	@property
-	def _meta(self):
-		return broker_info_meta
 
 	def add(self, f):
 		if isinstance(f,Field):
@@ -186,17 +183,22 @@ class CallableAdapter(AttrAdapter):
 	cls = Callable
 	clsname = "_C"
 
-class BrokeredInfoInfo(BrokeredInfo):
-	"""This singleton is used for metadata about BrokeredInfo objects."""
+class BrokeredMeta(BrokeredInfo):
 	class_ = BrokeredInfo
-	def __init__(self):
-		super(BrokeredInfoInfo,self).__init__("BrokeredInfoInfo Singleton")
+	def __init__(self,name):
+		super(BrokeredMeta,self).__init__(name)
 		self.add(Field("name"))
 		self.add(Field("fields"))
 		self.add(Field("refs"))
 		self.add(Field("backrefs"))
 		self.add(Field("calls"))
+
+class BrokeredInfoInfo(BrokeredMeta):
+	"""This singleton is used for metadata about BrokeredInfo objects."""
+	def __init__(self):
+		super(BrokeredInfoInfo,self).__init__("BrokeredInfoInfo Singleton")
 		self._key = ()
 
 broker_info_meta = BrokeredInfoInfo()
+BrokeredInfo._meta = broker_info_meta
 
