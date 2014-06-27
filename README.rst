@@ -57,8 +57,8 @@ Storage
 -------
 
 You need at least one persistent storage system. For instance, a SQL or
-NoSQL database. You have, or can generate, introspection data (which
-tables exist, column names, default values, foreign keys, …).
+NoSQL database. You need introspection data (which tables exist, column
+names, default values, foreign keys, …).
 
 Message passing
 ---------------
@@ -68,7 +68,7 @@ You need a 0MQ server. DaBroker has been tested with RabbitMQ.
 Server
 ------
 
-The DaBroker server listens to a RPC-style queue. It exposes methods to
+The DaBroker server listens to a RPC message queue. It exposes methods to
 
   * retrieve "root" objects
 
@@ -90,6 +90,37 @@ The DaBroker server does not keep persisent state. Clients which update
 objects are expected to supply old field contents for verification that
 they do not update stale values. Serial numbers on objects might be
 supported in a future version.
+
+This means that you can easily run more than one server concurrently.
+
+Client
+------
+
+The DaBroker client asks the server for a root object. It then accesses
+other objects by simply reading the appropriate attributes. This works much
+like accessing one-to-many or many-to-one references in SQLAlchemy, except
+that the server can export method calls, as well as objects which are not a
+row in a table. The server operator selects what to export. By default, no
+method calls and all attributes and relationships are exposed.
+
+The client also, of course, listens for the server's invalidation requests
+and other broadcast messages.
+
+The client uses a caching system. It makes sure that each object with a
+given key exists exactly once.
+
+The client is thread-safe in the sense that you can run any number of
+greenlets which do whatever you like to your data.
+
+The client is not thread-safe in the sense that changed attributes will be
+immediately visible to other threads in our client, but not to anything
+else in the system. Changes are batched and sent to the server when you
+tell the DaBroker code to do so.
+
+DaBroker verifies that the attributes of the objects you update have not
+been modified. In that case, the update is reverted.
+
+When in doubt, use multiple processes.
 
 Access control
 ##############
