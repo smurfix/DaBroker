@@ -36,12 +36,8 @@ class ClientBrokeredInfo(BrokeredInfo):
 		if self._class is not None:
 			return self._class
 
-		class ClientObj(ClientBaseObj,ClientBrokeredInfo):
+		class ClientObj(ClientBaseObj):
 			name = None
-			def __init__(self):
-				ClientBaseObj.__init__(self)
-				ClientBrokeredInfo.__init__(self)
-
 			def __repr__(self):
 				res = "<ClientObj"
 				n = self.__class__.__name__
@@ -53,6 +49,22 @@ class ClientBrokeredInfo(BrokeredInfo):
 				res += ">"
 				return res
 			__str__=__repr__
+
+		if not self._key:
+			# singleton
+			_ClientObj = ClientObj
+			class ClientObj(_ClientObj,ClientBrokeredInfo):
+				def __init__(self):
+					_ClientObj.__init__(self)
+					ClientBrokeredInfo.__init__(self)
+				def __repr__(self):
+					res = "<ClientInfo"
+					n = getattr(self,'name',None)
+					if n is not None:
+						res += ":"+n
+					res += ">"
+					return res
+				__str__=__repr__
 
 		self._class = ClientObj
 		for k in self.refs.keys():
