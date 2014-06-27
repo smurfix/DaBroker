@@ -16,7 +16,6 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from dabroker import patch; patch()
 from dabroker.server.service import BrokerServer
-from dabroker.server.loader import add as store_add
 from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj
 from dabroker.client.service import BrokerClient
 
@@ -41,57 +40,62 @@ class SearchBrokeredInfo(BrokeredInfo):
 				res.append(obj)
 		return res
 
-rootMeta = BrokeredInfo("rootMeta")
-rootMeta.add(Field("hello"))
-rootMeta.add(Ref("ops"))
-store_add(rootMeta,0,1)
-
-opsMeta = SearchBrokeredInfo("opsMeta")
-opsMeta.add(Callable("rev"))
-opsMeta.add(Field("hell"))
-store_add(opsMeta,0,2)
-
-class RootObj(BaseObj):
-	_meta = rootMeta
-	hello = "Hello!"
-
-class OpsObj(BaseObj):
-	_meta = opsMeta
-	def __init__(self, h="Oh?"):
-		self.hell = h
-	def rev(self,s):
-		s = [c for c in s]
-		s.reverse()
-		return "".join(s)
-	def __str__(self):
-		return "OpsObj:%r:%s"%(self._key,self.hell)
-	def __repr__(self):
-		return "<%s>"%self
-
-theRootObj = RootObj()
-store_add(theRootObj,0,2,99)
-
-theOpsObj = OpsObj("Oh?")
-store_add(theOpsObj,0,34)
-theRootObj.ops = theOpsObj
-
-for i,n in ((0,"Zero"),(1,"One"),(2,"Two"),(3,"Three")):
-	o = OpsObj(n)
-	store_add(o,0,10,i)
-	opsMeta.obj_add(o)
-
 class TestBrokerServer(BrokerServer):
+	def __init__(self,sender=None):
+		super(TestBrokerServer,self).__init__(sender=sender)
+
+		rootMeta = BrokeredInfo("rootMeta")
+		rootMeta.add(Field("hello"))
+		rootMeta.add(Ref("ops"))
+		self.loader.static.add(rootMeta,0,1)
+
+		opsMeta = SearchBrokeredInfo("opsMeta")
+		opsMeta.add(Callable("rev"))
+		opsMeta.add(Field("hell"))
+		self.loader.static.add(opsMeta,0,2)
+
+		class RootObj(BaseObj):
+			_meta = rootMeta
+			hello = "Hello!"
+
+		class OpsObj(BaseObj):
+			_meta = opsMeta
+			def __init__(self, h="Oh?"):
+				self.hell = h
+			def rev(self,s):
+				s = [c for c in s]
+				s.reverse()
+				return "".join(s)
+			def __str__(self):
+				return "OpsObj:%r:%s"%(self._key,self.hell)
+			def __repr__(self):
+				return "<%s>"%self
+
+		self.theRootObj = RootObj()
+		self.loader.static.add(self.theRootObj,0,2,99)
+
+		theOpsObj = OpsObj("Oh?")
+		self.loader.static.add(theOpsObj,0,34)
+		self.theRootObj.ops = theOpsObj
+
+		for i,n in ((0,"Zero"),(1,"One"),(2,"Two"),(3,"Three")):
+			o = OpsObj(n)
+			self.loader.static.add(o,0,10,i)
+			opsMeta.obj_add(o)
+
+		self.opsMeta = opsMeta
+
 	def do_root(self,msg):
 		logger_s.debug("Get root %r",msg)
-		return theRootObj
+		return self.theRootObj
 	do_root.include = True
 
 	def do_update(self,msg):
 		if msg == 1:
-			theOpsObj.hell = "Yeah!"
-			self.send("invalid",(theOpsObj._key,(3,4,5))) # the latter is unknown
+			self.theRootObj.ops.hell = "Yeah!"
+			self.send("invalid",(self.theRootObj.ops._key,(3,4,5))) # the latter is unknown
 		elif msg == 2:
-			obj = opsMeta.objs[2]
+			obj = self.opsMeta.objs[2]
 			attrs = obj._attrs
 			obj.hell = "Two2"
 			self.updated(obj,attrs)

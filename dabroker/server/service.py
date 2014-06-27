@@ -15,7 +15,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # This implements the main broker server.
 
 from ..base.serial import Codec
-from .loader import get
+from .loader import Loaders
 from .serial import adapters
 
 from traceback import format_exc
@@ -39,9 +39,10 @@ class BrokerServer(object):
 		"""
 	def __init__(self, sender=None):
 		# the sender might be set later
-		self.codec = Codec()
-		self.codec.register(adapters)
 		self.sender = sender
+		self.loader = Loaders(server=self)
+		self.codec = Codec(self.loader)
+		self.codec.register(adapters)
 
 	def do_echo(self,msg):
 		logger.debug("echo %r",msg)
@@ -63,13 +64,13 @@ class BrokerServer(object):
 	def do_get(self, key):
 		key = tuple(key)
 		logger.debug("get %r",key)
-		return get(key)
+		return self.loader.get(key)
 	do_get.include = True
 		
 	def do_find(self, key, lim=None, k={}):
 		logger.debug("find %r %r",key,k)
 		key = tuple(key)
-		info = get(key)
+		info = self.loader.get(key)
 		return info.obj_find(_limit=lim,**k)
 	do_find.include = True
 		

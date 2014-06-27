@@ -163,7 +163,7 @@ class AttrAdapter(object):
 	def encode(obj, include=False):
 		return obj.__dict__.copy()
 	@classmethod
-	def decode(cls,**attr):
+	def decode(cls,loader,**attr):
 		return cls.cls(**attr)
 
 @serial_adapter

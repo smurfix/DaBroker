@@ -207,7 +207,7 @@ class BrokerClient(object):
 		assert client is None
 
 		self.server = server
-		self.codec = Codec()
+		self.codec = Codec(None)
 		self.codec.register(adapters)
 
 		self._cache = CacheDict()

@@ -40,7 +40,7 @@ class _datetime(object):
 		return {"t":mktime(obj.timetuple()),"s":format_dt(obj)}
 
 	@staticmethod
-	def decode(t=None,s=None,a=None,k=None,**_):
+	def decode(loader, t=None,s=None,a=None,k=None,**_):
 		if t:
 			return dt.datetime.utcfromtimestamp(t).replace(tzinfo=UTC).astimezone(TZ)
 		else: ## historic
@@ -58,7 +58,7 @@ class _timedelta(object):
 		return {"t":obj.total_seconds(),"s":str(obj)}
 
 	@staticmethod
-	def decode(t,s=None,**_):
+	def decode(loader, t,s=None,**_):
 		return dt.timedelta(0,t)
 
 @serial_adapter
@@ -71,7 +71,7 @@ class _date(object):
 		return {"d":obj.toordinal(), "s":obj.strftime("%Y-%m-%d")}
 
 	@staticmethod
-	def decode(d=None,s=None,a=None,**_):
+	def decode(loader, d=None,s=None,a=None,**_):
 		if d:
 			return dt.date.fromordinal(d)
 		## historic
@@ -89,7 +89,7 @@ class _time(object):
 		return {"t":secs,"s":"%02d:%02d:%02d" % (ou.hour,ou.minute,ou.second)}
 
 	@staticmethod
-	def decode(t=None,s=None,a=None,k=None,**_):
+	def decode(loader, t=None,s=None,a=None,k=None,**_):
 		if t:
 			return dt.datetime.utcfromtimestamp(t).time()
 		return dt.time(*a)
@@ -100,7 +100,16 @@ for s in string_types+integer_types: scalar_types.add(s)
 scalar_types = tuple(scalar_types)
 
 class Codec(object):
-	def __init__(self):
+	"""\
+		Serialize my object structure to something dict/list-based and
+		non-self-referential, suitable for JSON/BSON/XML/whatever-ization.
+
+		@loader is something with a .get method, for the decoder to call
+		with a key.
+		"""
+	def __init__(self,loader):
+		super(Codec,self).__init__()
+		self.loader = loader
 		self.type2cls = SupD() # encoder
 		self.name2cls = {} # decoder 
 		for cls in _basics:
@@ -169,7 +178,7 @@ class Codec(object):
 			oid = res.pop('_oi',None)
 			obj = res.pop('_o',None)
 			if obj is not None:
-				res = self.name2cls[obj].decode(**res)
+				res = self.name2cls[obj].decode(self.loader, **res)
 			if oid is not None:
 				objcache[oid] = res
 			if obj is None and len(data) == 1:

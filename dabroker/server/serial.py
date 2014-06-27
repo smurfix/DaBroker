@@ -25,9 +25,8 @@ def serial_adapter(cls):
 @serial_adapter
 class server_BaseObj(common_BaseObj):
 	@staticmethod
-	def decode(k=None,f=None,r=None):
-		from .loader import get
-		res = get(k)
+	def decode(loader, k=None,f=None,r=None):
+		res = loader.get(tuple(k))
 		if f:
 			for k,v in f.items():
 				if getattr(res,k) != v:
@@ -52,7 +51,7 @@ class server_BaseRef(common_BaseRef):
 		return common_BaseRef.encode(obj)
 
 	@staticmethod
-	def decode(k=None,m=None):
+	def decode(loader, k=None,m=None):
 		from .loader import get
 		res = get(k)
 		if m:
@@ -74,7 +73,7 @@ class server_InfoObj(server_BaseObj):
 		return res
 
 	@staticmethod
-	def decode(k=None,f=None,m=None):
+	def decode(loader, k=None,f=None,m=None):
 		k = tuple(k)
 		from .loader import get
 		assert f is None

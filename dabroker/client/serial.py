@@ -129,7 +129,7 @@ class ClientBaseObj(BaseObj):
 @serial_adapter
 class client_baseRef(common_BaseRef):
 	@staticmethod
-	def decode(k):
+	def decode(loader, k):
 		return BaseRef(key=tuple(k))
 
 @serial_adapter
@@ -148,7 +148,7 @@ class client_BaseObj(common_BaseObj):
 	
 
 	@staticmethod
-	def decode(k,f=None,r=None,meta=None):
+	def decode(loader, k,f=None,r=None,meta=None):
 		"""\
 			Decode a reference.
 			"""
@@ -179,7 +179,7 @@ class client_InfoObj(client_BaseObj):
 	clsname = "Info"
 		
 	@staticmethod
-	def decode(k=None,f=None):
-		res = client_BaseObj.decode(k=k,f=f,meta=client_broker_info_meta)
+	def decode(loader, k=None,f=None):
+		res = client_BaseObj.decode(loader, k=k,f=f,meta=client_broker_info_meta)
 		return res
 

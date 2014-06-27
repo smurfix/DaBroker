@@ -12,39 +12,67 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-# Object loaders. The static loader is defined here
+# Object loaders. The static loader is defined here.
 
 from ...base import broker_info_meta
 
-loaders = {}
-def get(key):
-	assert isinstance(key,tuple),key
-	obj = loaders[key[0]].get(*key[1:])
-	k = getattr(obj,'_key',None)
-	if k is None:
-		obj._key = key
-	else:
-		assert obj._key == key, (obj._key,key)
-	return obj
+class Loaders(object):
+	"""\
+		The keeper of all of a server's objects.
 
-def add(obj, *key):
-	"""Add an object to the store and set its lookup key."""
-	if not key:
-		key = obj._key
-	elif len(key) == 1:
-		key = key+obj._key
-	loaders[key[0]].add(obj, *key[1:])
-	obj._key = key
-	
+		Object keys are tuples; their members can be integes or strings.
+		Nested tuples are not supported.
+
+		There is no automatic key assignment anywhere in the
+		system. This is no accident. You do not want your keys to change
+		when the server needs to be restarted for any reason.
+		"""
+
+	def __init__(self,server=None,**k):
+		super(Loaders,self).__init__(**k)
+		self.server = server # cyclic ref, but long-lived, so it doesn't matter
+
+		self.loaders = {} # first key component => actual loader
+
+		self.static = StaticLoader(0)
+		self.add_loader(self.static)
+		self.static.add(broker_info_meta)
+
+	def add_loader(self,loader):
+		"""Register a loader."""
+		id = loader.id
+		assert id not in self.loaders
+		self.loaders[id] = loader
+
+	def get(self,key):
+		"""\
+			Get an object by key.
+			"""
+		assert isinstance(key,tuple),key
+		obj = self.loaders[key[0]].get(*key[1:])
+		k = getattr(obj,'_key',None)
+		if k is None:
+			obj._key = key
+		else:
+			assert obj._key == key, (obj._key,key)
+		return obj
 
 class BaseLoader(object):
 	def __init__(self, id):
-		assert id not in loaders
 		self.id = id
-		loaders[id] = self
 
 	def get(self,*key):
 		raise NotImplementedError("You need to override {}.get()".format(self.__class__.__name__))
+
+	def set_key(self, obj, *key):
+		"""sets an object's lookup key."""
+		k = getattr(obj,'_key',None)
+		if k:
+			assert k[0] == id
+			if key:
+				assert k[1:] == key
+		else:
+			obj._key = (self.id,)+key
 
 class StaticLoader(BaseLoader):
 	"""A simple 'loader' which serves static objects"""
@@ -56,12 +84,8 @@ class StaticLoader(BaseLoader):
 		return self.objects[key]
 
 	def add(self,obj,*key):
-		assert key not in self.objects
-		self.objects[key] = obj
+		assert key not in self.objects,(key,self.objects)
+		self.set_key(obj,*key)
+		self.objects[obj._key[1:]] = obj
 
-# Static loader, used for metadata
-# The info_meta must have the same key on the client!
-
-static = StaticLoader(0)
-static.add(broker_info_meta)
 
