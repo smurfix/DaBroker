@@ -479,17 +479,17 @@ class BrokerClient(object):
 
 	def _send(self, action, msg=None, **kw):
 		"""Low-level method for RPCing the server"""
-		logger.debug("send dec %s %r",action,msg)
+		logger.debug("send %s %r",action,msg)
 		kw['_m'] = msg
 		kw['_a'] = action
 		msg = self.codec.encode(kw)
-		logger.debug("send raw %r",msg)
+		#logger.debug("send raw %r",msg)
 
 		msg = self.server(msg)
 
-		logger.debug("recv raw %r",msg)
+		#logger.debug("recv raw %r",msg)
 		msg = self.codec.decode(msg)
-		logger.debug("recv dec %r",msg)
+		logger.debug("recv %r",msg)
 
 		if 'error' in msg:
 			raise ServerError(msg['error'],msg.get('tb',None))
@@ -497,9 +497,9 @@ class BrokerClient(object):
 
 	def _recv(self, msg):
 		"""Process incoming notifications from the server"""
-		logger.debug("bcast raw %r",msg)
+		#logger.debug("bcast raw %r",msg)
 		msg = self.codec.decode(msg)
-		logger.debug("bcast dec %r",msg)
+		logger.debug("bcast %r",msg)
 		job = msg.pop('_a')
 		m = msg.pop('_m',msg)
 

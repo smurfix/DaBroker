@@ -14,6 +14,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # generic test setup
 
+from pprint import pformat
 import logging,sys,os
 logger = logging.getLogger("tests")
 
@@ -36,6 +37,30 @@ from dabroker.util.thread import Main
 s.RETR_TIMEOUT=1 # except that we want 1000 when debugging
 s.CACHE_SIZE=5
 
+# prettyprint
+
+def _p_filter(m,mids):
+    if isinstance(m,dict):
+        if m.get('_oi',0) not in mids:
+            del m['_oi']
+        for v in m.values():
+            _p_filter(v,mids)
+    elif isinstance(m,(tuple,list)):
+        for v in m:
+            _p_filter(v,mids)
+def _p_find(m,mids):
+    if isinstance(m,dict):
+        mids.add(m.get('_or',0))
+        for v in m.values():
+            _p_find(v,mids)
+    elif isinstance(m,(tuple,list)):
+        for v in m:
+            _p_find(v,mids)
+def pf(m):
+    mids = set()
+    _p_find(m,mids)
+    _p_filter(m,mids)
+    return pformat(m)
 # local queue implementation
 
 try:
@@ -52,7 +77,7 @@ class RPCmessage(object):
         self.msg = msg
 
     def reply(self,msg):
-        logger.debug("Reply to %s with %r", self.msgid,msg)
+        logger.debug("Reply to %s:\n%s", self.msgid,pf(msg))
         msg = BSON.encode(msg)
         msg = RPCmessage(self.p,msg)
         msg.msgid = self.msgid
@@ -68,6 +93,7 @@ class ServerQueue(object):
         try:
             m = msg.msg
             m = BSON(m).decode()
+            logger.debug("Server: get msg %s",msg.msgid)
             res = self.worker(m)
         except Exception as e:
             res = {'error':str(e),'tb':format_exc()}
@@ -75,17 +101,18 @@ class ServerQueue(object):
 
     def _reader(self):
         from gevent import spawn
+        logger.debug("Server: wait for messages")
         while True:
-            logger.debug("Server: wait for message")
             msg = self.p.request_q.get()
-            logger.debug("Server: get msg %s",msg.msgid)
             spawn(self._worker,msg)
     
     def send(self,msg):
+        m = msg
         msg = BSON.encode(msg)
         msg = RPCmessage(self.p,msg)
         msg.msgid = self.next_id
         self.next_id -= 1
+        logger.debug("Server: send msg %s:\n%s",msg.msgid,pf(m))
         self.p.reply_q.put(msg)
 
 class ClientQueue(object):
@@ -100,17 +127,20 @@ class ClientQueue(object):
             msg = self.p.reply_q.get()
             if msg.msgid < 0:
                 m = BSON(msg.msg).decode()
+                logger.debug("Client: get msg %s",msg.msgid)
                 self.worker(m)
             else:
                 r = self.q.pop(msg.msgid,None)
                 if r is not None:
                     m = msg.msg
                     m = BSON(m).decode()
+                    logger.debug("Client: get msg %s",msg.msgid)
                     r.set(m)
         
     def send(self,msg):
         from gevent.event import AsyncResult
 
+        m = msg
         msg = BSON.encode(msg)
         msg = RPCmessage(self.p,msg)
         msg.msgid = self.next_id
@@ -118,6 +148,7 @@ class ClientQueue(object):
         self.q[self.next_id] = res
         self.next_id += 1
 
+        logger.debug("Client: send msg %s:\n%s",msg.msgid,pf(m))
         self.p.request_q.put(msg)
         res = res.get()
         return res
