@@ -70,7 +70,7 @@ class BaseLoader(object):
 			return
 		k = getattr(obj,'_key',None)
 		if k:
-			assert k[0] == id
+			assert k[0] == self.id, (k,self.id)
 			if key:
 				assert k[1:] == key
 		else:
