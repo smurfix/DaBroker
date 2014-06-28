@@ -206,26 +206,21 @@ class ChangeData(object):
 
 	def send_commit(self,server):
 		upd = {}
-		for k in self._meta.fields:
-			try:
-				ov = self.old_data[k]
-			except KeyError:
-				pass
+		obj = self.obj
+		meta = obj._meta
+		for k,ov in self.old_data.items():
+			if k in meta.fields:
+				nv = getattr(obj,k)
+			elif k in meta.refs:
+				ov = BaseRef(ov)
+				nv = BaseRef(obj._refs[k])
 			else:
-				nv = getattr(self,k)
-				if ov != nv:
-					upd[k] = (ov,nv)
-		for k in self._meta.refs:
-			try:
-				ov = self.old_data[k]
-			except KeyError:
-				pass
-			else:
-				nv = self._refs[k]
-				if ov != nv:
-					upd[k] = (ov,nv)
-		if upd:
-			server.send("update",self.obj._key,upd)
+				raise RuntimeError(k)
+			if ov != nv:
+				upd[k] = (ov,nv)
+		if not upd:
+			return None
+		return server._send("update",self.obj._key,k=upd)
 
 	def send_revert(self,server):
 		for k,v in self.old_data.items():
@@ -236,7 +231,7 @@ class ChangeData(object):
 
 class ChangeNew(ChangeData):
 	def send_revert(self,server):
-		server.send("delete",self.obj._key)
+		return server._send("delete",self.obj._key)
 
 class ChangeDel(ChangeData):
 	@property
@@ -244,7 +239,7 @@ class ChangeDel(ChangeData):
 		raise KeyError(self.obj._key)
 	def send_commit(self,server):
 		server._cache.pop(self.obj._key,None)
-		server.send("delete",self.obj._key)
+		return server._send("delete",self.obj._key)
 	def send_revert(self,server):
 		if self.obj not in server._cache:
 			server._add_to_cache(self.obj)
@@ -320,7 +315,7 @@ class BrokerClient(object):
 
 		ar = self._cache.set(key, AsyncResult())
 		try:
-			obj = self._send("get",key)
+			obj = self.send("get",key)
 		except Exception as e:
 			# Remove the AsyncResult from cache and forward the excption to any waiters
 			self._cache.pop(key).set_exception(e)
@@ -349,14 +344,24 @@ class BrokerClient(object):
 	def commit(self):
 		chg = self.obj_chg; self.obj_chg = {}
 		try:
+			res = []
 			for v in chg.values():
-				v.send_commit(self)
+				r = v.send_commit(self)
+				if isinstance(r,AsyncResult):
+					res.append(r)
+			for r in res:
+				r.get(timeout=RETR_TIMEOUT)
 		except:
 			self._rollback(chg)
 			raise
 	def _rollback(self,chg):
+		res = []
 		for v in chg.values():
-			v.send_revert(self)
+			r = v.send_revert(self)
+			if isinstance(r,AsyncResult):
+				res.append(r)
+		for r in res:
+			r.get(RETR_TIMEOUT)
 		
 	def rollback(self):
 		chg = self.obj_chg; self.obj_chg = {}
@@ -372,19 +377,20 @@ class BrokerClient(object):
 		skw = {'k':kw}
 		if _limit is not None:
 			skw['lim'] = _limit
-		res = self._send("find",typ._key, **skw)
+		res = self.send("find",typ._key, **skw)
 		ks = KnownSearch(kw,res)
 		typ.searches[kws] = ks
 		self._cache[" ".join(str(x) for x in typ._key)+":"+kws] = ks
 		return res
 
 	def call(self, obj,name,a,k):
-		return self._send("call",name, o=obj,a=a,k=k)
+		res = self.send("call",name, o=obj,a=a,k=k)
+		return res
 		
 	def do_ping(self,msg):
 		"""The server wants to know who's listening. So tell it."""
 		logger.debug("ping %r",msg)
-		self._send("pong")
+		self.send("pong")
 
 	def do_pong(self,msg):
 		# for completeness. The server doesn't send a broadcast on client request.
@@ -465,7 +471,7 @@ class BrokerClient(object):
 
 		self.root_key = rk = AsyncResult()
 		try:
-			obj = self._send("root")
+			obj = self.send("root")
 		except Exception as e:
 			self.root_key = None
 			rk.set_exception(e)
@@ -494,6 +500,12 @@ class BrokerClient(object):
 		if 'error' in msg:
 			raise ServerError(msg['error'],msg.get('tb',None))
 		return msg['res']
+	
+	def send(self,*a,**k):
+		res = self._send(*a,**k)
+		if isinstance(res,AsyncResult):
+			res = res.get(timeout=RETR_TIMEOUT)
+		return res
 
 	def _recv(self, msg):
 		"""Process incoming notifications from the server"""

@@ -61,11 +61,12 @@ try:
 	os.unlink('/tmp/test22.db')
 except EnvironmentError:
 	pass
-engine = create_engine('sqlite:////tmp/test22.db', echo=True)
+engine = create_engine('sqlite:////tmp/test22.db', echo=(True if os.environ.get('TRACE',False) else False))
 Base.metadata.create_all(engine)
 
 DBSession = sessionmaker(bind=engine)
-session = DBSession()
+
+done = 0
 
 class SearchBrokeredInfo(BrokeredInfo):
 	objs = []
@@ -87,7 +88,9 @@ class TestBrokerClient(BrokerClient):
 		super(TestBrokerClient,self).__init__(*a)
 
 	def do_trigger(self,msg):
-		self.q.a[msg].set(msg)
+		ar = self.q.a[msg]
+		self.q.a[msg] = AsyncResult()
+		ar.set(None)
 	
 class TestBrokerServer(BrokerServer):
 	def __init__(self,sender=None):
@@ -115,22 +118,36 @@ class TestBrokerServer(BrokerServer):
 		return self.theRootObj
 	do_root.include = True
 
-	def do_update(self,msg):
-		if msg == 1:
-			self.send("trigger",msg)
-		else:
-			raise RuntimeError(msg)
+	def do_trigger(self,msg):
+		self.send("trigger",msg)
 	
 class Broker(TestMain):
 	c = q = s = None
 	def setup(self):
-		self.a = [None,AsyncResult(),AsyncResult()]
+		self.a = [None]
+		for i in range(3):
+			self.a.append(AsyncResult())
 		self.s = TestBrokerServer()
 		self.q = LocalQueue(self.s.recv)
 		self.c = TestBrokerClient(self,self.q.send)
 		self.q.set_client_worker(self.c._recv)
 		self.s.sender = self.q.notify
 		super(Broker,self).setup()
+
+	def jump(self,i,n):
+		if i and n:
+			logger.debug("GOTO {} to {}".format(i,n))
+		elif n:
+			logger.debug("GOTO trigger {}".format(n))
+		elif i:
+			logger.debug("GOTO {} waits".format(i))
+
+		if n:
+			self.c.send("trigger",n)
+		if i:
+			self.a[i].get()
+			logger.debug("GOTO {} runs".format(i))
+
 	def stop(self):
 		if self.q is not None:
 			self.q.shutdown()
@@ -147,43 +164,91 @@ class Broker(TestMain):
 		return self.q.cq.next_id
 
 	def job1(self):
+		self.jump(1,0)
 		logger.debug("Get the root")
 		res = self.c.root
 		logger.debug("recv %r",res)
 		assert res.hello == "Hello!"
-		print(res._meta)
-		print(res._meta._meta)
 		P = res.data['Person']
 		assert P.name == 'Person',P.name
 		r = P.find()
 		assert len(r) == 0, r
 
+		# A: create
 		p1 = P.new(name="Fred Flintstone")
 		p1r = self.ref(p1)
-		self.c._send("update",1)
-		self.a[2].get()
+		self.c.commit()
+
+		self.jump(1,2) # goto B
+
+		# D: check
 		p1 = p1r()
 		assert p1.name == "Freddy Firestone", p1.name
+
+		self.jump(0,2) # goto E
+
+		global done
+		done |= 1
 
 	def job2(self):
 		logger.debug("Get the root 2")
 		res = self.c.root
 		logger.debug("recv %r",res)
 		P = res.data['Person']
-		self.a[1].get()
+		
+		self.jump(2,0)
+
+		# B: check+modify
 		p1 = P.get(name="Fred Flintstone")
 		p1.name="Freddy Firestone"
 		self.c.commit()
-		self.c._send("update",2)
+
+		self.jump(2,3) # goto C
+
+		# E: delete
+		P.delete(p1)
+		self.c.commit()
+
+		self.jump(0,3) # goto F
+
+		global done
+		done |= 2
+	
+	def job3(self):
+		self.jump(3,0)
+
+		# C: check
+		session = DBSession()
+		res = list(session.query(Person))
+		assert len(res)==1
+		res = res[0]
+		assert res.name=="Freddy Firestone",res.name
+		del session
+
+		self.jump(3,1) # goto D
+
+		# F: check
+		session = DBSession()
+		res = list(session.query(Person))
+		assert len(res)==0
+
+		global done
+		done |= 4
 
 	def main(self):
 		j1 = spawn(self.job1)
 		j2 = spawn(self.job2)
+		j3 = spawn(self.job3)
+		self.jump(0,1)
 		j1.join()
 		j2.join()
+		j3.join()
+
+		
 
 b = Broker()
 b.register_stop(logger.debug,"shutting down")
 b.run()
+assert done==7,done
 
 logger.debug("Exiting")

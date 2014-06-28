@@ -38,15 +38,15 @@ class Broker(TestMain):
 		logger.debug("Sending an uninteresting message")
 		msg = {'message':'not interesting'}
 		msg['self referential'] = msg
-		res = self.c._send("echo",msg)
+		res = self.c.send("echo",msg)
 		logger.debug("recv %r",res)
 		assert res['message'] == "not interesting"
 		assert res['self referential'] is res
 		assert res is not msg
 		assert len(res) == 2
-		res = self.c._send("echo",msg)
+		res = self.c.send("echo",msg)
 		try:
-			res = self.c._send("unknown",msg)
+			res = self.c.send("unknown",msg)
 		except ServerError as e:
 			assert "UnknownCommandError" in str(e), str(e)
 		else:

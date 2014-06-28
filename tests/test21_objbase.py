@@ -90,18 +90,21 @@ class TestBrokerServer(BrokerServer):
 		return self.theRootObj
 	do_root.include = True
 
-	def do_update(self,msg):
+	def do_trigger(self,msg):
 		if msg == 1:
 			self.theRootObj.ops.hell = "Yeah!"
 			self.send("invalid",(self.theRootObj.ops._key,(3,4,5))) # the latter is unknown
 		elif msg == 2:
 			obj = self.opsMeta.objs[2]
-			attrs = obj._attrs
-			obj.hell = "Two2"
+			ov = obj.hell
+			obj.hell = nv = "Two2"
+			attrs = {'hell': (ov,nv)}
 			self.send_updated(obj,attrs)
 		else:
 			raise RuntimeError(msg)
 	
+done=0
+
 class Broker(TestMain):
 	c = q = s = None
 	def setup(self):
@@ -120,7 +123,7 @@ class Broker(TestMain):
 	def cid(self):
 		return self.q.cq.next_id
 
-	def job(self,i):
+	def job(self):
 		logger.debug("Get the root")
 		res = self.c.root
 		logger.debug("recv %r",res)
@@ -131,7 +134,7 @@ class Broker(TestMain):
 		assert cid==self.cid, (cid,self.cid)
 		assert res.ops.rev("test123") == "321tset"
 		assert res.ops.hell == "Oh?"
-		self.c._send("update",1)
+		self.c.send("trigger",1)
 		assert res.ops.hell == "Yeah!"
 		cid=self.cid
 		assert res.ops.hell == "Yeah!"
@@ -155,22 +158,23 @@ class Broker(TestMain):
 		assert cid==self.cid
 
 		# Now update some stuff.
-		self.c._send("update",2)
+		self.c.send("trigger",2)
 
 		os = Op.find(hell="Two")
 		assert len(os) == 0, os
 		os = Op.find(hell="Two2")
 		assert len(os) == 1, os
 
+		global done
+		done = 1
+
 	def main(self):
-		jobs = []
-		for i in range(1): # 3
-			jobs.append(spawn(self.job,i+1))
-		for j in jobs:
-			j.join()
+		j = spawn(self.job)
+		j.join()
 
 b = Broker()
 b.register_stop(logger.debug,"shutting down")
 b.run()
+assert done==1, done
 
 logger.debug("Exiting")

@@ -84,7 +84,7 @@ class common_BaseObj(object):
 	@classmethod
 	def encode(cls, obj, include=False):
 		if not include:
-			return common_BaseRef.encode(obj)
+			return common_BaseRef.encode(obj, include=False)
 			
 		res = {"k":obj._key}
 		res['f'] = f = dict()

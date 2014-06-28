@@ -56,13 +56,6 @@ class BrokerServer(object):
 	def do_pong(self,msg):
 		logger.debug("pong %r",msg)
 		
-	def do_call(self,msg,o=None,a=(),k={}):
-		logger.debug("call %r.%r(*%r, **%r)",o,msg,a,k)
-		assert msg in o._meta.calls,"You cannot call method {} of {}".format(msg,o)
-		res = getattr(o,msg)(*a,**k)
-		logger.debug("call %r.%r(*%r, **%r) = %r",o,msg,a,k, res)
-		return res
-
 	def do_get(self, key):
 		"""Fetch an object by ID"""
 		key = tuple(key)
@@ -70,6 +63,12 @@ class BrokerServer(object):
 		return self.loader.get(key)
 	do_get.include = True
 		
+	def do_update(self,key,k={}):
+		logger.debug("update %r %r",key,k)
+		key = tuple(key)
+		obj = self.loader.get(key)
+		return obj._meta.update(obj,**k)
+
 	def do_find(self, key, lim=None, k={}):
 		"""Search for objects"""
 		logger.debug("find %r %r",key,k)
@@ -95,7 +94,7 @@ class BrokerServer(object):
 		attrs = dict((k,(v,)) for k,v in obj._attrs.items())
 		self.send("invalid_key",obj._key, m=obj._meta._key, k=attrs)
 
-	def send_updated(self, obj, old_attrs):
+	def send_updated(self, obj, attrs):
 		"""\
 			An object has been updated.
 		
@@ -103,32 +102,42 @@ class BrokerServer(object):
 			"""
 		key = obj._key
 		mkey = obj._meta._key
-		nkw = {}
-		attrs = obj._attrs
-		for k,v in old_attrs.items():
-			ov = attrs.get(k,None)
-			if ov != v:
-				nkw[k] = (ov,v)
-		self.send("invalid_key",key, m=mkey, k=nkw)
-
+		refs = obj._meta.refs
+		for k,on in attrs.items():
+			if k in refs:
+				ov,nv = on
+				if ov is not None: ov = ov._key
+				if nv is not None: nv = nv._key
+				attrs[k] = (ov,nv)
+		self.send("invalid_key",key, m=mkey, k=attrs)
 		
 	def recv(self, msg):
-		"""Basic message receiver. Ususally in a separate thread."""
-		logger.debug("recv raw %r",msg)
+		"""Basic message receiver. Usually called from a separate thread."""
+		#logger.debug("recv raw %r",msg)
 		msg = self.codec.decode(msg)
-		logger.debug("recv dec %r",msg)
+		logger.debug("recv %r",msg)
 		job = msg.pop('_a')
 		m = msg.pop('_m',msg)
 
 		try:
 			try:
-				proc = getattr(self,'do_'+job)
+				if job == "call":
+					# unwrap it so we can get at the proc's attributes
+					a = msg.get('a',())
+					k = msg.get('k',{})
+					o = msg['o']
+					assert m in o._meta.calls,"You cannot call method {} of {}".format(msg,o)
+					proc = getattr(o,m)
+				else:
+					a = (m,)
+					k = msg
+					proc = getattr(self,'do_'+job)
 			except AttributeError:
 				raise UnknownCommandError(job)
-			msg = proc(m,**msg)
-			logger.debug("send dec %r",msg)
+			msg = proc(*a,**k)
+			logger.debug("reply %r",msg)
 			msg = self.codec.encode(msg, include=getattr(proc,'include',False))
-			logger.debug("send raw %r",msg)
+			#logger.debug("send raw %r",msg)
 			return {'res':msg}
 		except Exception as e:
 			tb = format_exc()
@@ -136,10 +145,10 @@ class BrokerServer(object):
 
 	def send(self, action, msg=None, **kw):
 		"""Basic message broadcaster"""
-		logger.debug("bcast dec %s %r",action,msg)
+		logger.debug("bcast %s %r",action,msg)
 		kw['_m'] = msg
 		kw['_a'] = action
 		msg = self.codec.encode(kw)
-		logger.debug("bcast raw %r",msg)
+		#logger.debug("bcast raw %r",msg)
 		self.sender(msg)
 

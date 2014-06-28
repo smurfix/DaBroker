@@ -43,12 +43,10 @@ class server_SQLobject(server_BaseObj):
 	def encode(obj, include=False):
 		if not hasattr(obj,'_key'):
 			obj.__class__._dab.fixup(obj)
-		if not include:
-			return common_BaseRef.encode(obj)
-		return server_BaseObj.encode(obj)
+		return server_BaseObj.encode(obj, include=include)
 
 def _get_attrs(obj):
-	return get_attrs(obj, obj._dab._meta)
+	return get_attrs(obj, obj._dab)
 
 class SQLInfo(BrokeredInfo):
 	def __new__(cls, loader, model):
@@ -90,6 +88,7 @@ class SQLInfo(BrokeredInfo):
 		for r in res:
 			self.fixup(r)
 		return res
+	find.include = True
 
 	@with_session
 	def get(self, session,*key,**kw):
@@ -98,6 +97,7 @@ class SQLInfo(BrokeredInfo):
 			kw['id'] = key[0]
 		res = session.query(self.model).filter_by(**kw).one()
 		return self.fixup(res)
+	get.include = True
 
 	@with_session
 	def new(self, session,**kw):
@@ -107,18 +107,36 @@ class SQLInfo(BrokeredInfo):
 		self.fixup(res)
 		self.loader.loaders.server.send_created(res)
 		return res
+	new.include = True
+
+	@with_session
+	def update(self, session,obj,**kw):
+		obj = session.merge(obj, load=False)
+		for k,on in kw.items():
+			assert k in self.fields or k in self.refs
+			ov,nv = on
+			assert getattr(obj,k) == ov, (k,getattr(obj,k),nv)
+			setattr(obj,k,nv)
+		session.flush()
+
+		self.fixup(obj)
+		self.loader.loaders.server.send_updated(obj,kw)
 
 	@with_session
 	def delete(self, session, *obj):
+		res = []
 		for o in obj:
+			self.fixup(o)
+			o = session.merge(o, load=False)
 			session.delete(o)
 		session.flush()
 		for o in obj:
-			self.loader.loaders.server.deleted(o)
+			self.loader.loaders.server.send_deleted(o)
 
 	def fixup(self,res):
+		i=inspect(res)
 		res._meta = self
-		self.loader.set_key(res,res.id)
+		self.loader.set_key(res,i.class_.__name__,res.id)
 		return res
 
 class SQLLoader(BaseLoader):
@@ -131,6 +149,7 @@ class SQLLoader(BaseLoader):
 		self.model_meta.add(Callable("new"))
 		self.model_meta.add(Callable("get"))
 		self.model_meta.add(Callable("find"))
+		self.model_meta.add(Callable("delete"))
 		self.session = session
 		self.loaders = loaders
 		loaders.static.add(self.model_meta,"sql")
@@ -148,6 +167,6 @@ class SQLLoader(BaseLoader):
 		m = self.tables[key[0]]
 		if len(key) == 1:
 			return m
-		return m.obj_get(*key[1:])
+		return m.get(*key[1:])
 
 
