@@ -118,11 +118,8 @@ class ClientQueue(object):
         self.q[self.next_id] = res
         self.next_id += 1
 
-        logger.debug("Client: send %s with %r",msg.msgid,msg.msg)
         self.p.request_q.put(msg)
-        logger.debug("Client: wait for %s",msg.msgid)
         res = res.get()
-        logger.debug("Client: get %s with %r",msg.msgid,msg.msg)
         return res
     
 class LocalQueue(object):
