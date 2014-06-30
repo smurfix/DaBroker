@@ -37,7 +37,7 @@ class Main(object):
 	_plinker = None
 	_sigINT = None
 	_main = None
-	_stops = []
+	_stops = None
 	_stopping = False
 
 	### Methods you override
@@ -58,7 +58,7 @@ class Main(object):
 	
 	### Public methods
 	def __init__(self):
-		self.stops = []
+		self._stops = []
 
 	def run(self):
 		"""Start the main loop"""
@@ -110,7 +110,7 @@ class Main(object):
 		if self._stopping:
 			if self._stopping == gevent.getcurrent():
 				try:
-					raise RuntimeError()
+					raise RuntimeError("Cleanup entered from cleanup task.")
 				except RuntimeError:
 					logger.exception("Cleanup entered from cleanup task.")
 				return

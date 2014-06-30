@@ -4,8 +4,11 @@
 from __future__ import print_function,absolute_import
 import sys
 from time import mktime
-from ..util import TZ,UTC, format_dt
+from ...util import TZ,UTC, format_dt
+from ..config import default_config
 import datetime as dt
+
+from traceback import format_tb
 
 class _notGiven: pass
 
@@ -23,13 +26,27 @@ class SupD(dict):
 			raise KeyError(k)
 		return default
 
+class ServerError(Exception):
+	"""An encapsulation for a server error (with traceback)"""
+	def __init__(self,err,tb):
+		self.err = err
+		self.tb = tb
+
+	def __repr__(self):
+		return "ServerError({})".format(repr(self.err))
+
+	def __str__(self):
+		r = repr(self)
+		if self.tb is None: return r
+		return r+"\n"+"".join(self.tb)
+
 _basics = []
-def serial_adapter(cls):
+def codec_adapter(cls):
 	"""A decorator for an adapter class which translates serializer to whatever."""
 	_basics.append(cls)
 	return cls
 
-@serial_adapter
+@codec_adapter
 class _datetime(object):
 	cls = dt.datetime
 	clsname = "datetime"
@@ -47,7 +64,7 @@ class _datetime(object):
 			assert a
 			return dt.datetime(*a).replace(tzinfo=TZ)
 
-@serial_adapter
+@codec_adapter
 class _timedelta(object):
 	cls = dt.timedelta
 	clsname = "timedelta"
@@ -61,7 +78,7 @@ class _timedelta(object):
 	def decode(loader, t,s=None,**_):
 		return dt.timedelta(0,t)
 
-@serial_adapter
+@codec_adapter
 class _date(object):
 	cls = dt.date
 	clsname = "date"
@@ -77,7 +94,7 @@ class _date(object):
 		## historic
 		return dt.date(*a)
 
-@serial_adapter
+@codec_adapter
 class _time(object):
 	cls = dt.time
 	clsname = "time"
@@ -99,21 +116,23 @@ from six import string_types,integer_types
 for s in string_types+integer_types: scalar_types.add(s)
 scalar_types = tuple(scalar_types)
 
-class Codec(object):
+class BaseCodec(object):
 	"""\
 		Serialize my object structure to something dict/list-based and
 		non-self-referential, suitable for JSON/BSON/XML/whatever-ization.
 
-		@loader is something with a .get method, for the decoder to call
-		with a key.
+		@loader is something with a .get method. The resolving code will,
+		call that with an object key if it needs to refer to an object.
 		"""
-	def __init__(self,loader):
-		super(Codec,self).__init__()
+	def __init__(self,loader,adapters=(), cfg={}):
+		super(BaseCodec,self).__init__()
 		self.loader = loader
+		self.cfg = default_config.copy()
+		self.cfg.update(cfg)
 		self.type2cls = SupD() # encoder
 		self.name2cls = {} # decoder 
-		for cls in _basics:
-			self.register(cls)
+		self.register(_basics)
+		self.register(adapters)
 	
 	def register(self,cls):
 		if isinstance(cls,(list,tuple)):
@@ -159,6 +178,17 @@ class Codec(object):
 	def encode(self, data, include=False):
 		objcache = {}
 		return self._encode(data, objcache, include=include)
+	
+	def encode_error(self, err, tb=None):
+		if not hasattr(err,'swapcase'): # it's a string
+			err = str(err)
+		res = {'_error':err }
+
+		if tb is not None:
+			if hasattr(tb,'tb_frame'):
+				tb = format_tb(tb)
+			res['tb'] = tb
+		return res
 
 	def _decode(self,data, objcache,objtodo, p=None,off=None):
 		if isinstance(data, scalar_types):
@@ -201,11 +231,7 @@ class Codec(object):
 		objtodo = []
 		res = self._decode(data,objcache,objtodo)
 		self._cleanup(objcache,objtodo)
+		if isinstance(res,dict) and '_error' in res:
+			raise ServerError(res['_error'],res.get('tb',None))
 		return res
-
-def encode(data, include=False):
-	return Codec().encode(data, include=include)
-	
-def decode(data):
-	return Codec().decode(data)
 

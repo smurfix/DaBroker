@@ -17,8 +17,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 RETR_TIMEOUT = 10
 CACHE_SIZE=10000
 
-from ..base.serial import Codec
-from .serial import adapters, client_broker_info_meta
+from .codec import adapters, client_broker_info_meta
 
 import logging
 logger = logging.getLogger("dabroker.client.service")
@@ -38,20 +37,6 @@ class KnownSearch(object):
 	def __init__(self, kw, res):
 		self.kw = kw
 		self.res = res
-
-class ServerError(Exception):
-	"""An encapsulation for a server error (with traceback)"""
-	def __init__(self,err,tb):
-		self.err = err
-		self.tb = tb
-
-	def __repr__(self):
-		return "ServerError({})".format(repr(self.err))
-
-	def __str__(self):
-		r = repr(self)
-		if self.tb is None: return r
-		return r+"\n"+self.tb
 
 class ExtKeyedRef(KeyedRef):
 	"""A KeyedRef which includes an access counter."""
@@ -257,14 +242,14 @@ class BrokerClient(object):
 		"""
 	root_key = None
 
-	def __init__(self, server):
+	def __init__(self, callbacks, cfg={}):
 		global client
 		assert client is None
 
-		self.server = server
+		self.cfg = cfg
 		self._cache = CacheDict()
-		self.codec = Codec(self)
-		self.codec.register(adapters)
+		self.callbacks = callbacks
+		self.callbacks.register_codec(adapters)
 
 		self._add_to_cache(client_broker_info_meta)
 		self.obj_chg = {}
@@ -483,42 +468,27 @@ class BrokerClient(object):
 			rk.set(obj)
 			return obj
 
-	def _send(self, action, msg=None, **kw):
+	def send(self, action, msg=None, **kw):
 		"""Low-level method for RPCing the server"""
-		logger.debug("send %s %r",action,msg)
+		logger.debug("send %s %r %r",action,msg,kw)
 		kw['_m'] = msg
 		kw['_a'] = action
-		msg = self.codec.encode(kw)
-		#logger.debug("send raw %r",msg)
-
-		msg = self.server(msg)
-
-		#logger.debug("recv raw %r",msg)
-		msg = self.codec.decode(msg)
+		msg = self.callbacks.send(kw)
 		logger.debug("recv %r",msg)
-
-		if 'error' in msg:
-			raise ServerError(msg['error'],msg.get('tb',None))
-		return msg['res']
+		return msg
 	
-	def send(self,*a,**k):
-		res = self._send(*a,**k)
-		if isinstance(res,AsyncResult):
-			res = res.get(timeout=RETR_TIMEOUT)
-		return res
-
-	def _recv(self, msg):
+	def recv(self, msg):
 		"""Process incoming notifications from the server"""
 		#logger.debug("bcast raw %r",msg)
-		msg = self.codec.decode(msg)
 		logger.debug("bcast %r",msg)
-		job = msg.pop('_a')
-		m = msg.pop('_m',msg)
+		m = msg.pop('_m')
+		a = msg.pop('_a',[])
+		k = msg.pop('_k',{})
 
 		try:
-			proc = getattr(self,'do_'+job)
+			proc = getattr(self,'do_'+m)
 		except AttributeError:
-			raise UnknownCommandError(job)
-		proc(m,**msg)
+			raise UnknownCommandError(m)
+		proc(*a,**k)
 
 client = None

@@ -15,24 +15,32 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # generic test setup
 
 from pprint import pformat
+from gevent.event import AsyncResult
+from gevent import spawn,sleep
+from weakref import ref, WeakValueDictionary
+
 import logging,sys,os
 logger = logging.getLogger("tests")
 
 def test_init(who):
-    if os.environ.get("TRACE","0") == '1':
-        level = logging.DEBUG
-    else:
-        level = logging.WARN
+	if os.environ.get("TRACE","0") == '1':
+		level = logging.DEBUG
+	else:
+		level = logging.WARN
 
-    logger = logging.getLogger(who)
-    logging.basicConfig(stream=sys.stderr,level=level)
+	logger = logging.getLogger(who)
+	logging.basicConfig(stream=sys.stderr,level=level)
 
-    return logger
+	return logger
 
 # reduce cache sizes and timers
 
-from dabroker.client import service as s
+from dabroker.base import BaseObj,BrokeredInfo, Field,Ref,Callable
+from dabroker.base.transport import BaseTransport
 from dabroker.util.thread import Main
+from dabroker.client import ClientMain, service as s
+from dabroker.server.service import BrokerServer
+from dabroker.server import BrokerMain
 
 s.RETR_TIMEOUT=1 # except that we want 1000 when debugging
 s.CACHE_SIZE=5
@@ -40,166 +48,232 @@ s.CACHE_SIZE=5
 # prettyprint
 
 def _p_filter(m,mids):
-    if isinstance(m,dict):
-        if m.get('_oi',0) not in mids:
-            del m['_oi']
-        for v in m.values():
-            _p_filter(v,mids)
-    elif isinstance(m,(tuple,list)):
-        for v in m:
-            _p_filter(v,mids)
+	if isinstance(m,dict):
+		if m.get('_oi',0) not in mids:
+			del m['_oi']
+		for v in m.values():
+			_p_filter(v,mids)
+	elif isinstance(m,(tuple,list)):
+		for v in m:
+			_p_filter(v,mids)
 def _p_find(m,mids):
-    if isinstance(m,dict):
-        mids.add(m.get('_or',0))
-        for v in m.values():
-            _p_find(v,mids)
-    elif isinstance(m,(tuple,list)):
-        for v in m:
-            _p_find(v,mids)
+	if isinstance(m,dict):
+		mids.add(m.get('_or',0))
+		for v in m.values():
+			_p_find(v,mids)
+	elif isinstance(m,(tuple,list)):
+		for v in m:
+			_p_find(v,mids)
 def pf(m):
-    mids = set()
-    _p_find(m,mids)
-    _p_filter(m,mids)
-    return pformat(m)
+	mids = set()
+	_p_find(m,mids)
+	_p_filter(m,mids)
+	return pformat(m)
 # local queue implementation
 
 try:
-    from queue import Queue
+	from queue import Queue
 except ImportError:
-    from Queue import Queue
+	from Queue import Queue
 from traceback import format_exc
 from bson import BSON
 
+test_cfg = dict(userid='test', password='test', virtual_host='test', codec="null") 
+
+test_cfg_s = dict(transport="tests.ServerQueue")
+test_cfg_c = dict(transport="tests.ClientQueue")
+
 class RPCmessage(object):
-    msgid = None
-    def __init__(self,p,msg):
-        self.p = p
-        self.msg = msg
+	msgid = None
+	def __init__(self,msg,q=None):
+		self.msg = msg
+		self.q = q
 
-    def reply(self,msg):
-        logger.debug("Reply to %s:\n%s", self.msgid,pf(msg))
-        msg = BSON.encode(msg)
-        msg = RPCmessage(self.p,msg)
-        msg.msgid = self.msgid
-        self.p.reply_q.put(msg)
-        
-class ServerQueue(object):
-    def __init__(self,p,worker):
-        self.p = p
-        self.next_id = -1
-        self.worker = worker
+	def reply(self,msg):
+		logger.debug("Reply to %s:\n%s", self.msgid,pf(msg))
+		msg = type(self)(msg,None)
+		msg.msgid = self.msgid
+		self.q.put(msg)
 
-    def _worker(self,msg):
-        try:
-            m = msg.msg
-            m = BSON(m).decode()
-            logger.debug("Server: get msg %s",msg.msgid)
-            res = self.worker(m)
-        except Exception as e:
-            res = {'error':str(e),'tb':format_exc()}
-        msg.reply(res)
+class ServerQueue(BaseTransport):
+	"""Server side of the LocalQueue transport"""
+	def __init__(self,callbacks,cfg):
+		self.callbacks = callbacks
+		self.p = cfg['_p'] # the LocalQueue instance
+		self.p.server = ref(self) # for clients to find me
+		self.clients = WeakValueDictionary() # clients add themselves here
+		self.next_id = -1
 
-    def _reader(self):
-        from gevent import spawn
-        logger.debug("Server: wait for messages")
-        while True:
-            msg = self.p.request_q.get()
-            spawn(self._worker,msg)
-    
-    def send(self,msg):
-        m = msg
-        msg = BSON.encode(msg)
-        msg = RPCmessage(self.p,msg)
-        msg.msgid = self.next_id
-        self.next_id -= 1
-        logger.debug("Server: send msg %s:\n%s",msg.msgid,pf(m))
-        self.p.reply_q.put(msg)
+	def _process(self,msg):
+		m = self.callbacks.recv(msg.msg)
+		msg.reply(m)
 
-class ClientQueue(object):
-    def __init__(self,p,worker):
-        self.p = p
-        self.q = {}
-        self.next_id = 1
-        self.worker = worker
+	def run(self):
+		logger.debug("Server: wait for messages")
+		while True:
+			msg = self.p.request_q.get()
+			spawn(self._process,msg)
 
-    def _reader(self):
-        while True:
-            msg = self.p.reply_q.get()
-            if msg.msgid < 0:
-                m = BSON(msg.msg).decode()
-                logger.debug("Client: get msg %s",msg.msgid)
-                self.worker(m)
-            else:
-                r = self.q.pop(msg.msgid,None)
-                if r is not None:
-                    m = msg.msg
-                    m = BSON(m).decode()
-                    logger.debug("Client: get msg %s",msg.msgid)
-                    r.set(m)
-        
-    def send(self,msg):
-        from gevent.event import AsyncResult
+	def send(self,msg):
+		m = msg
+		msg = RPCmessage(msg)
+		msg.msgid = self.next_id
+		self.next_id -= 1
+		logger.debug("Server: send msg %s:\n%s",msg.msgid,pf(m))
+		for c in self.clients.values():
+			c.reply_q.put(msg)
 
-        m = msg
-        msg = BSON.encode(msg)
-        msg = RPCmessage(self.p,msg)
-        msg.msgid = self.next_id
-        res = AsyncResult()
-        self.q[self.next_id] = res
-        self.next_id += 1
+global client_id
+client_id = 0
 
-        logger.debug("Client: send msg %s:\n%s",msg.msgid,pf(m))
-        self.p.request_q.put(msg)
-        res = res.get()
-        return res
-    
+class ClientQueue(BaseTransport):
+	def __init__(self,callbacks,cfg):
+		self.callbacks = callbacks
+		self.p = cfg['_p']
+
+		self.reply_q = Queue()
+		self.q = {} # msgid => AsyncResult for the answer
+		self.next_id = 1
+
+		global client_id
+		client_id += 1
+		self.client_id = client_id
+
+	def connect(self):
+		self.p.server().clients[self.client_id] = self
+		super(ClientQueue,self).connect()
+
+	def disconnect(self):
+		s = self.p.server
+		if s:
+			s = s()
+			if s: 
+				del s.clients[self.client_id]
+		super(ClientQueue,self).disconnect()
+
+	def run(self):
+		while self.p.server is not None and self.p.server() is not None:
+			msg = self.reply_q.get()
+			if msg.msgid < 0:
+				logger.debug("Client: get msg %s",msg.msgid)
+				spawn(self.callbacks.recv,msg.msg)
+			else:
+				r = self.q.pop(msg.msgid,None)
+				if r is not None:
+					m = msg.msg
+					logger.debug("Client: get msg %s",msg.msgid)
+					r.set(m)
+		
+	def send(self,msg):
+		m = msg
+		msg = RPCmessage(msg,self.reply_q)
+		res = AsyncResult()
+
+		msg.msgid = self.next_id
+		msg.q = self.reply_q
+		self.q[self.next_id] = res
+		self.next_id += 1
+
+		logger.debug("Client: send msg %s:\n%s",msg.msgid,pf(m))
+		self.p.request_q.put(msg)
+		res = res.get()
+		return res
+
+class TestClient(ClientMain):
+	"""This is a do-almost-nothing server. Override run()"""
+	pass
+	
+rootMeta = BrokeredInfo("rootMeta")
+rootMeta.add(Field("hello"))
+rootMeta.add(Field("data"))
+rootMeta.add(Ref("more"))
+rootMeta.add(Callable("callme"))
+
+class TestRoot(BaseObj):
+	_meta = rootMeta
+	hello = "Hello!"
+	data = {}
+	more = None
+	def callme(self,msg):
+		logger.debug("Called")
+		return msg
+
 class LocalQueue(object):
-    def __init__(self, server_worker, client_worker=None):
-        from gevent import spawn
+	"""\
+		Queue manager for transferring data between a server and a couple
+		of receivers within the same process.
+	
+		Passing this object to the client's and server's transport is achieved by 
+		insertion into the confg dict, instead of copying it.
 
-        self.request_q = Queue()
-        self.reply_q = Queue()
+		You need to instantiate the server first.
+		"""
+	def __init__(self, cfg):
+		self.request_q = Queue()
+		self.server = None
+		cfg['_p'] = self
 
-        sq = ServerQueue(self,server_worker)
-        cq = ClientQueue(self,client_worker)
-        self.server = spawn(sq._reader)
-        self.client = spawn(cq._reader)
-        self.cq = cq
-        self.sq = sq
-
-    def set_client_worker(self,worker):
-        self.cq.worker = worker
-
-    def set_server_worker(self,worker):
-        self.sq.worker = worker
-
-    def send(self,msg):
-        return self.cq.send(msg)
-
-    def notify(self,msg):
-        return self.sq.send(msg)
-
-    def shutdown(self):
-        r = self.client; self.client = None
-        if r is not None:
-            r.kill()
-
-        r = self.server; self.server = None
-        if r is not None:
-            r.kill()
-
-from gevent import spawn,sleep
 def killer(x,t):
-    sleep(t)
-    x.killer = None
-    x.stop()
+	sleep(t)
+	x.killer = None
+	x.stop()
 
-class TestMain(Main):
-    def setup(self):
-        super(TestMain,self).setup()
-        self.killer = spawn(killer,self,5)
-    def cleanup(self):
-        super(TestMain,self).cleanup()
-        if self.killer is not None:
-            self.killer.kill()
+class TestMain(BrokerMain):
+	_client = None
+	client_factory = TestClient
+
+	def __init__(self,cfg={}):
+		in_cfg = cfg
+		cfg = test_cfg.copy()
+		cfg.update(test_cfg_s)
+		cfg.update(in_cfg)
+		self.q = LocalQueue(cfg)
+
+		ready = AsyncResult()
+		super(TestMain,self).__init__(cfg,ready)
+		self._ready = ready
+
+		self.client_cfg = test_cfg.copy()
+		self.client_cfg.update(test_cfg_c)
+		self.client_cfg.update(in_cfg)
+		self.client_cfg['_p'] = cfg['_p']
+
+	def setup(self):
+		super(TestMain,self).setup()
+		
+		self.killer = spawn(killer,self,5)
+		self.client = spawn(self.run_client)
+
+	def run_client(self):
+		try:
+			logger.debug("Waiting for server to be ready before client start")
+			self._ready.get()
+			self._client = self.client_factory(cfg=self.client_cfg)
+			logger.debug("Running the client")
+			self._client.run()
+		except Exception:
+			logger.exception("run client")
+		finally:
+			logger.debug("Client stopped, terminating the server")
+			self.end()
+			logger.debug("Stopped.")
+
+	def cleanup(self):
+		c,self._client = self._client,None
+		if c is not None:
+			c.end()
+		super(TestMain,self).cleanup()
+		if self.killer is not None:
+			self.killer.kill()
+		if self.client is not None:
+			self.client.kill()
+
+class TestBasicMain(Main):
+	def setup(self):
+		super(TestBasicMain,self).setup()
+		self.killer = spawn(killer,self,5)
+	def cleanup(self):
+		super(TestBasicMain,self).cleanup()
+		if self.killer is not None:
+			self.killer.kill()
 

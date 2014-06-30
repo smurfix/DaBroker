@@ -14,9 +14,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # This implements the main broker server.
 
-from ..base.serial import Codec
 from .loader import Loaders
-from .serial import adapters
+from .codec import adapters as default_adapters
 
 from traceback import format_exc
 
@@ -37,14 +36,27 @@ class BrokerServer(object):
 
 		@sender: code which broadcasts to all clients.
 		"""
-	def __init__(self, sender=None):
+	def __init__(self, server, loader=None, adapters=None):
 		# the sender might be set later
-		self.sender = sender
-		self.loader = Loaders(server=self)
-		self.codec = Codec(self.loader)
-		self.codec.register(adapters)
+		self.server = server
+		if loader is None:
+			loader = Loaders(server=self)
+		self.loader = loader
+		if adapters is None:
+			adapters = default_adapters
+		self.server.register_codec(adapters)
 
 	# remote calls
+
+	def do_root(self,msg):
+		logger.debug("Get root %r",msg)
+		res = self.server.root
+		if not hasattr(res,'_key'):
+			self.loader.static.add(res,'root')
+		if not hasattr(res._meta,'_key'):
+			self.loader.static.add(res._meta,'root','meta')
+		return res
+	do_root.include = True
 
 	def do_echo(self,msg):
 		logger.debug("echo %r",msg)
@@ -52,17 +64,17 @@ class BrokerServer(object):
 
 	def do_ping(self,msg):
 		logger.debug("ping %r",msg)
-		
+
 	def do_pong(self,msg):
 		logger.debug("pong %r",msg)
-		
+
 	def do_get(self, key):
 		"""Fetch an object by ID"""
 		key = tuple(key)
 		logger.debug("get %r",key)
 		return self.loader.get(key)
 	do_get.include = True
-		
+
 	def do_update(self,key,k={}):
 		logger.debug("update %r %r",key,k)
 		key = tuple(key)
@@ -114,41 +126,32 @@ class BrokerServer(object):
 	def recv(self, msg):
 		"""Basic message receiver. Usually called from a separate thread."""
 		#logger.debug("recv raw %r",msg)
-		msg = self.codec.decode(msg)
 		logger.debug("recv %r",msg)
 		job = msg.pop('_a')
 		m = msg.pop('_m',msg)
 
 		try:
-			try:
-				if job == "call":
-					# unwrap it so we can get at the proc's attributes
-					a = msg.get('a',())
-					k = msg.get('k',{})
-					o = msg['o']
-					assert m in o._meta.calls,"You cannot call method {} of {}".format(msg,o)
-					proc = getattr(o,m)
-				else:
-					a = (m,)
-					k = msg
-					proc = getattr(self,'do_'+job)
-			except AttributeError:
-				raise UnknownCommandError(job)
-			msg = proc(*a,**k)
-			logger.debug("reply %r",msg)
-			msg = self.codec.encode(msg, include=getattr(proc,'include',False))
-			#logger.debug("send raw %r",msg)
-			return {'res':msg}
-		except Exception as e:
-			tb = format_exc()
-			return {'error': str(e), 'tb':tb}
+			if job == "call":
+				# unwrap it so we can get at the proc's attributes
+				a = msg.get('a',())
+				k = msg.get('k',{})
+				o = msg['o']
+				assert m in o._meta.calls,"You cannot call method {} of {}".format(msg,o)
+				proc = getattr(o,m)
+			else:
+				a = (m,)
+				k = msg
+				proc = getattr(self,'do_'+job)
+		except AttributeError:
+			raise UnknownCommandError(job)
+		msg = proc(*a,**k)
+		logger.debug("reply %r",msg)
+		attrs = {'include':getattr(proc,'include',False)}
+		return msg,attrs
 
-	def send(self, action, msg=None, **kw):
+	def send(self, action, *a, **k):
 		"""Basic message broadcaster"""
-		logger.debug("bcast %s %r",action,msg)
-		kw['_m'] = msg
-		kw['_a'] = action
-		msg = self.codec.encode(kw)
-		#logger.debug("bcast raw %r",msg)
-		self.sender(msg)
+		logger.debug("bcast %s %r %r",action,a,k)
+		msg = {'_m':action,'_a':a,'_k':k}
+		self.server.send(msg)
 

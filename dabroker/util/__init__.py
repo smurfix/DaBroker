@@ -14,6 +14,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # Utility code
 
+from importlib import import_module
+
 import pytz
 UTC = pytz.UTC
 with open("/etc/localtime", 'rb') as tzfile:
@@ -25,4 +27,15 @@ def format_dt(value, format='%Y-%m-%d %H:%M:%S'):
 		return value.astimezone(TZ).strftime(format)
 	except ValueError: ## naïve time: assume UTC
 		return value.replace(tzinfo=UTC).astimezone(TZ).strftime(format)
+
+def import_string(name):
+	"""Import a module, or resolve an attribute of a module."""
+	name = str(name)
+	try:
+		return import_module(name)
+	except ImportError:
+		if '.' not in name:
+			raise
+		module, obj = name.rsplit('.', 1)
+		return getattr(import_string(module),obj)
 

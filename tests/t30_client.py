@@ -16,107 +16,26 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 import os
 import sys
-from dabroker import patch; patch()
-from dabroker.server.service import BrokerServer
-from dabroker.server.loader.sqlalchemy import SQLLoader
-from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj
 from dabroker.client.service import BrokerClient
 
-from gevent import spawn,sleep
+from gevent import spawn
 from gevent.event import AsyncResult
 
-from tests import test_init,LocalQueue,TestMain
+logger = test_init("test.30.sql")
+logger_s = test_init("test.30.sql.server")
 
-logger = test_init("test.22.sql")
-logger_s = test_init("test.22.sql.server")
-
-from sqlalchemy import Column, ForeignKey, Integer, String
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
-from sqlalchemy import create_engine
- 
-Base = declarative_base()
- 
-# Standard SQLAlchemy example
-
-class Person(Base):
-	__tablename__ = 'person'
-	# Here we define columns for the table person
-	# Notice that each column is also a normal Python instance attribute.
-	id = Column(Integer, primary_key=True)
-	name = Column(String(250), nullable=False)
- 
-class Address(Base):
-	__tablename__ = 'address'
-	# Here we define columns for the table address.
-	# Notice that each column is also a normal Python instance attribute.
-	id = Column(Integer, primary_key=True)
-	street_name = Column(String(250))
-	street_number = Column(String(250))
-	post_code = Column(String(250), nullable=False)
-	person_id = Column(Integer, ForeignKey('person.id'))
-	person = relationship(Person,backref='addrs')
-
-try:
-	os.unlink('/tmp/test22.db')
-except EnvironmentError:
-	pass
-engine = create_engine('sqlite:////tmp/test22.db', echo=(True if os.environ.get('TRACE',False) else False))
-Base.metadata.create_all(engine)
-
-DBSession = sessionmaker(bind=engine)
-
-done = 0
-
-class TestBrokerClient(BrokerClient):
-	def __init__(self,q,*a):
-		self.q = q
-		super(TestBrokerClient,self).__init__(*a)
+class TestClient(BrokerClient):
 
 	def do_trigger(self,msg):
 		ar = self.q.a[msg]
 		self.q.a[msg] = AsyncResult()
 		ar.set(None)
 	
-class TestBrokerServer(BrokerServer):
-	def __init__(self,sender=None):
-		super(TestBrokerServer,self).__init__(sender=sender)
-		rootMeta = BrokeredInfo("rootMeta")
-		rootMeta.add(Field("hello"))
-		rootMeta.add(Field("data"))
-		self.loader.static.add(rootMeta,1)
+	def main(self):
 
-		class RootObj(BaseObj):
-			_meta = rootMeta
-			hello = "Hello!"
-			data = {}
-
-		self.theRootObj = RootObj()
-		self.loader.static.add(self.theRootObj,2,99)
-
-		sql = SQLLoader(DBSession,self.loader)
-		sql.add_model(Person,self.theRootObj.data)
-		sql.add_model(Address)
-		self.loader.add_loader(sql)
-
-	def do_root(self,msg):
-		logger_s.debug("Get root %r",msg)
-		return self.theRootObj
-	do_root.include = True
-
-	def do_trigger(self,msg):
-		self.send("trigger",msg)
-	
-class Broker(TestMain):
-	c = q = s = None
-	def setup(self):
 		self.a = [None]
 		for i in range(3):
 			self.a.append(AsyncResult())
-		self.s = TestBrokerServer()
-		self.q = LocalQueue(self.s.recv)
-		self.c = TestBrokerClient(self,self.q.send)
-		self.q.set_client_worker(self.c._recv)
 		self.s.sender = self.q.notify
 		super(Broker,self).setup()
 

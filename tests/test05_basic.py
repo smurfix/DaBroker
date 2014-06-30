@@ -18,13 +18,13 @@ from dabroker import patch; patch()
 
 from gevent import spawn,sleep
 
-from tests import test_init,TestMain
+from tests import test_init,TestBasicMain
 
 logger = test_init("test.05.basic")
 
 counter = 0
 
-class Broker(TestMain):
+class Broker(TestBasicMain):
 	def main(self):
 		global counter
 		logger.debug("Startup")
@@ -49,5 +49,5 @@ b.register_stop(logger.debug,"shutting down")
 b.run()
 logger.debug("Exiting")
 
-assert counter == 1+4+8
+assert counter == 1+4+8,counter
 

@@ -12,43 +12,29 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-# This test runs the test environment's local queue implementation.
+# This test runs the test environment's notification system.
 
 from dabroker import patch; patch()
 
 from gevent import spawn,sleep
 
-from tests import test_init,LocalQueue,TestMain
+from tests import test_init,LocalQueue,TestMain,TestRoot,TestClient
+from dabroker.client.service import BrokerClient
 
 logger = test_init("test.09.localmsg")
 
 counter = 0
 
-def quadrat(msg):
-	msg=msg['m']
-	logger.debug("Server: got %r",msg)
-	b.q.notify({'i':msg*10})
-	return {'r':msg*msg}
+# Server's root object
+class Test09_root(TestRoot):
+	def __init__(self,server):
+		self._server = server
+		super(Test09_root,self).__init__()
+	def callme(self,msg):
+		self._server.send("more",msg*10)
+		return msg*msg
 
-def hello(msg):
-	global counter
-	logger.debug("Client: got %r",msg)
-	counter += msg['i']
-
-class Broker(TestMain):
-	def setup(self):
-		self.q = LocalQueue(quadrat,hello)
-		super(Broker,self).setup()
-	def stop(self):
-		self.q.shutdown()
-		super(Broker,self).stop()
-
-	def mult(self,i):
-		global counter
-		res = self.q.send({'m':i})
-		logger.debug("Sent %r, got %r",i,res)
-		counter += res['r']
-		
+class Test09_client(TestClient):
 	def main(self):
 		jobs = []
 		for i in range(3):
@@ -56,6 +42,27 @@ class Broker(TestMain):
 		for j in jobs:
 			j.join()
 
+	def mult(self,i):
+		global counter
+		res = self.root.callme(i)
+		logger.debug("Sent %r, got %r",i,res)
+		counter += res
+	
+	def make_client(self):
+		return Test09_clientbroker(self)
+
+class Test09_clientbroker(BrokerClient):
+	def do_more(self,msg):
+		global counter
+		logger.debug("more %s",msg)
+		counter += msg
+
+class Broker(TestMain):
+	client_factory = Test09_client
+	@property
+	def root(self):
+		return Test09_root(self.server)
+		
 b = Broker()
 b.register_stop(logger.debug,"shutting down")
 b.run()

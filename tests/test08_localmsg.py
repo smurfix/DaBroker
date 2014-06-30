@@ -18,30 +18,18 @@ from dabroker import patch; patch()
 
 from gevent import spawn,sleep
 
-from tests import test_init,LocalQueue,TestMain
+from tests import test_init,LocalQueue,TestMain,TestRoot,TestClient
 
-logger = test_init("test.09.localmsg")
+logger = test_init("test.08.localmsg")
 
 counter = 0
 
-def quadrat(msg):
-	msg = msg['m']
-	return {'r':msg*msg}
+# Server's root object
+class Test08_root(TestRoot):
+	def callme(self,msg):
+		return msg*msg
 
-class Broker(TestMain):
-	def setup(self):
-		self.q = LocalQueue(quadrat)
-		super(Broker,self).setup()
-	def stop(self):
-		self.q.shutdown()
-		super(Broker,self).stop()
-
-	def mult(self,i):
-		global counter
-		res = self.q.send({'m':i})
-		logger.debug("Sent %r, got %r",i,res)
-		counter += res['r']
-		
+class Test08_client(TestClient):
 	def main(self):
 		jobs = []
 		for i in range(3):
@@ -49,6 +37,18 @@ class Broker(TestMain):
 		for j in jobs:
 			j.join()
 
+	def mult(self,i):
+		global counter
+		res = self.root.callme(i)
+		logger.debug("Sent %r, got %r",i,res)
+		counter += res
+
+class Broker(TestMain):
+	client_factory = Test08_client
+	@property
+	def root(self):
+		return Test08_root()
+		
 b = Broker()
 b.register_stop(logger.debug,"shutting down")
 b.run()

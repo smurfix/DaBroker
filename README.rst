@@ -65,33 +65,38 @@ Message passing
 
 You need a 0MQ server. DaBroker has been tested with RabbitMQ.
 
+The DaBroker tests use a RabbitMQ test vhost.
+
+    rabbitmqctl add_vhost test
+    rabbitmqctl add_user test test
+    rabbitmqctl set_permissions -p test test ".*"  ".*"  ".*"
+
+Message passing overhead, on a reasonably current server, is on the order
+of 1 millisecond per RPC call.
+
 Server
 ------
 
-The DaBroker server listens to a RPC message queue. It exposes methods to
+The DaBroker server listens to an RPC message queue. It exposes methods to
 
   * retrieve "root" objects
 
   * call methods on objects
-
-  * retrieve data
-
-  * cache data descriptions (if available)
 
   * retrieve related objects
 
   * create, update and delete objects
 
 The server also broadcasts information about new / updated / deleted
-objects to a publish-only queue. Clients which cache objects listen to that
-queue and invalidate their cached copies.
+objects to a separate queue.
 
-The DaBroker server does not keep persisent state. Clients which update
-objects are expected to supply old field contents for verification that
-they do not update stale values. Serial numbers on objects might be
-supported in a future version.
+The DaBroker server itself does not keep persistent state. Clients which
+update objects are expected to supply old field contents for verification
+that they do not update stale values.
 
-This means that you can easily run more than one server concurrently.
+This means that, assuming that your server code uses a shared-state
+back-end (an SQL database, NoSQL storage), you can easily run more
+than one server in parallel if one should be too slow.
 
 Client
 ------

@@ -157,7 +157,7 @@ class Callable(_attr):
 
 adapters = []
 
-def serial_adapter(cls):
+def codec_adapter(cls):
 	adapters.append(cls)
 	return cls
 
@@ -169,22 +169,22 @@ class AttrAdapter(object):
 	def decode(cls,loader,**attr):
 		return cls.cls(**attr)
 
-@serial_adapter
+@codec_adapter
 class FieldAdapter(AttrAdapter):
 	cls = Field
 	clsname = "_F"
 
-@serial_adapter
+@codec_adapter
 class RefAdapter(AttrAdapter):
 	cls = Ref
 	clsname = "_R"
 
-@serial_adapter
+@codec_adapter
 class BackrefAdapter(AttrAdapter):
 	cls = BackRef
 	clsname = "_B"
 
-@serial_adapter
+@codec_adapter
 class CallableAdapter(AttrAdapter):
 	cls = Callable
 	clsname = "_C"

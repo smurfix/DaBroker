@@ -23,7 +23,7 @@ class _NotGiven: pass
 
 adapters = baseAdapters[:]
 
-def serial_adapter(cls):
+def codec_adapter(cls):
 	adapters.append(cls)
 	return cls
 
@@ -161,13 +161,13 @@ class ClientBaseObj(BaseObj):
 	def _attr_key(self,k):
 		return self._refs[k]
 
-@serial_adapter
+@codec_adapter
 class client_baseRef(common_BaseRef):
 	@staticmethod
 	def decode(loader, k):
 		return BaseRef(key=tuple(k))
 
-@serial_adapter
+@codec_adapter
 class client_BaseObj(common_BaseObj):
 
 	@classmethod
@@ -206,11 +206,11 @@ class client_BaseObj(common_BaseObj):
 				if k == '_meta':
 					res._meta = loader.get(v._key)
 				else:
-					res._refs[k] = v._key
+					res._refs[k] = v._key if v is not None else None
 
 		return loader._add_to_cache(res)
 
-@serial_adapter
+@codec_adapter
 class client_InfoObj(client_BaseObj):
 	cls = ClientBrokeredInfo
 	clsname = "Info"

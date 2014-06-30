@@ -16,7 +16,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from ...base import common_BaseRef, BrokeredInfo,BrokeredMeta, Field,Ref,BackRef,Callable, get_attrs
 from . import BaseLoader
-from ..serial import server_BaseObj
+from ..codec import server_BaseObj
 from sqlalchemy.inspection import inspect
 from functools import wraps
 

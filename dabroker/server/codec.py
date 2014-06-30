@@ -18,11 +18,11 @@ from ..base import BaseRef,BaseObj,BrokeredInfo, adapters as baseAdapters, commo
 
 adapters = baseAdapters[:]
 
-def serial_adapter(cls):
+def codec_adapter(cls):
 	adapters.append(cls)
 	return cls
 
-@serial_adapter
+@codec_adapter
 class server_BaseObj(common_BaseObj):
 	@staticmethod
 	def decode(loader, k=None,f=None,r=None):
@@ -37,7 +37,7 @@ class server_BaseObj(common_BaseObj):
 					raise NotImplementedError("Update: {} {} {} {}".format(res,k,getattr(res,k),v))
 		return res
 
-@serial_adapter
+@codec_adapter
 class server_BaseRef(common_BaseRef):
 	cls = BaseRef
 	clsname = "Ref"
@@ -58,7 +58,7 @@ class server_BaseRef(common_BaseRef):
 			assert m is res._meta,(m,res._meta)
 		return res
 
-@serial_adapter
+@codec_adapter
 class server_InfoObj(server_BaseObj):
 	cls = BrokeredInfo
 	clsname = "Info"
