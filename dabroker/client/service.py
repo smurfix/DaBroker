@@ -17,6 +17,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 RETR_TIMEOUT = 10
 CACHE_SIZE=10000
 
+from ..base import UnknownCommandError
 from .codec import adapters, client_broker_info_meta
 
 import logging

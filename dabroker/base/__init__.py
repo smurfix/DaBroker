@@ -12,6 +12,14 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
+class UnknownCommandError(Exception):
+	def __init__(self, cmd):
+		self.cmd = cmd
+	def __repr__(self):
+		return "{}({})".format(self.__class__.__name__,repr(self.cmd))
+	def __str__(self):
+		return "Unknown command: {}".format(repr(self.cmd))
+
 def get_attrs(obj, meta=None):
 	"""Return a dict with my attributes"""
 	if meta is None:

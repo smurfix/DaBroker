@@ -15,20 +15,13 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # This implements the main broker server.
 
 from .loader import Loaders
+from ..base import UnknownCommandError
 from .codec import adapters as default_adapters
 
 from traceback import format_exc
 
 import logging
 logger = logging.getLogger("dabroker.server.service")
-
-class UnknownCommandError(Exception):
-	def __init__(self, cmd):
-		self.cmd = cmd
-	def __repr__(self):
-		return "{}({})".format(self.__class__.__name__,repr(self.cmd))
-	def __str__(self):
-		return "Unknown command: {}".format(repr(self.cmd))
 
 class BrokerServer(object):
 	"""\
