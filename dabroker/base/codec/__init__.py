@@ -9,6 +9,8 @@ from ..config import default_config
 import datetime as dt
 
 from traceback import format_tb
+import logging
+logger = logging.getLogger("dabroker.base.codec")
 
 class _notGiven: pass
 
@@ -148,31 +150,33 @@ class BaseCodec(object):
 		if isinstance(data,scalar_types):
 			return data
 
-		if isinstance(data,(list,tuple)):
-			# A toplevel list will keep its "include" state
-			return type(data)(self._encode(x,objcache,include) for x in data)
-
 		oid = objcache.get(id(data),None)
 		if oid is not None:
 			return {'_or':oid}
 		oid = 1+len(objcache)
 		objcache[id(data)] = oid
 		
-		if isinstance(data,dict):
-			assert '_o' not in data, data
-			assert '_oi' not in data, data
-		else:
+		if isinstance(data,(list,tuple)):
+			# A toplevel list will keep its "include" state
+			return { '_o':'LIST','_oi':oid,'_d':type(data)(self._encode(x,objcache,include) for x in data) }
+
+		odata = data
+		if not isinstance(data,dict):
 			obj = self.type2cls.get(type(data),None)
 			if obj is None:
 				raise NotImplementedError("I don't know how to encode %r"%(data,))
 			data = obj.encode(data, include=include)
-			data['_o'] = obj.clsname
 
 		res = type(data)()
 		for k,v in data.items():
-			res[k] = self._encode(v,objcache)
-		if res:
-			res['_oi'] = oid
+			if k.startswith('_o'):
+				nk = '_o_'+k[2:]
+			else:
+				nk = k
+			res[nk] = self._encode(v,objcache)
+		if not isinstance(odata,dict):
+			res['_o'] = obj.clsname
+		res['_oi'] = oid
 		return res
 
 	def encode(self, data, include=False):
@@ -195,29 +199,37 @@ class BaseCodec(object):
 			return data
 
 		if isinstance(data,(list,tuple)):
-			k = 0
-			res = []
-			for v in data:
-				res.append(self._decode(v,objcache,objtodo, res,k))
-				k += 1
-			return res
-
+			return type(data)(self._decode(v,objcache,objtodo) for v in data)
 		if isinstance(data,dict):
+			oid = data.pop('_oi',None)
+			obj = data.pop('_o',None)
+			objref = data.pop('_or',None)
+			if objref is not None:
+				objtodo.append((objref,p,off))
+				return
+
+			if obj == 'LIST':
+				res = []
+				if oid is not None:
+					objcache[oid] = res
+				k = 0
+				for v in data['_d']:
+					res.append(self._decode(v,objcache,objtodo, res,k))
+					k += 1
+				return res
+			
 			res = {}
 			for k,v in data.items():
-				res[k] = self._decode(v,objcache,objtodo, res,k)
-			
-			oid = res.pop('_oi',None)
-			obj = res.pop('_o',None)
+				if k.startswith("_o"):
+					nk = '_o'+k[3:]
+				else:
+					nk = k
+				res[nk] = self._decode(v,objcache,objtodo, res,k)
+
 			if obj is not None:
 				res = self.name2cls[obj].decode(self.loader, **res)
 			if oid is not None:
 				objcache[oid] = res
-			if obj is None and len(data) == 1:
-				oref = data.pop('_or',None)
-				if oref is not None:
-					assert p is not None
-					objtodo.append((oref,p,off))
 			return res
 
 		raise NotImplementedError("Don't know how to decode %r"%data)
