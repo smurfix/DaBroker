@@ -16,7 +16,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from pprint import pformat
 from gevent.event import AsyncResult
-from gevent import spawn,sleep
+from gevent import spawn,sleep,GreenletExit
 from weakref import ref, WeakValueDictionary
 
 import logging,sys,os
@@ -38,12 +38,12 @@ def test_init(who):
 from dabroker.base import BaseObj,BrokeredInfo, Field,Ref,Callable
 from dabroker.base.transport import BaseTransport
 from dabroker.util.thread import Main
-from dabroker.client import ClientMain, service as s
-from dabroker.server.service import BrokerServer
-from dabroker.server import BrokerMain
+from dabroker.client import BrokerClient
+from dabroker.client import service as cs
+from dabroker.server import BrokerServer
 
-s.RETR_TIMEOUT=1 # except that we want 1000 when debugging
-s.CACHE_SIZE=5
+cs.RETR_TIMEOUT=1 # except that we want 1000 when debugging
+cs.CACHE_SIZE=5
 
 # prettyprint
 
@@ -111,8 +111,12 @@ class ServerQueue(BaseTransport):
 	def run(self):
 		logger.debug("Server: wait for messages")
 		while True:
-			msg = self.p.request_q.get()
-			spawn(self._process,msg)
+			try:
+				msg = self.p.request_q.get()
+			except GreenletExit:
+				return
+			else:
+				spawn(self._process,msg)
 
 	def send(self,msg):
 		m = msg
@@ -148,22 +152,25 @@ class ClientQueue(BaseTransport):
 		if s:
 			s = s()
 			if s: 
-				del s.clients[self.client_id]
+				s.clients.pop(self.client_id,None)
 		super(ClientQueue,self).disconnect()
 
 	def run(self):
-		while self.p.server is not None and self.p.server() is not None:
-			msg = self.reply_q.get()
-			if msg.msgid < 0:
-				logger.debug("Client: get msg %s",msg.msgid)
-				spawn(self.callbacks.recv,msg.msg)
-			else:
-				r = self.q.pop(msg.msgid,None)
-				if r is not None:
-					m = msg.msg
+		try:
+			while self.p.server is not None and self.p.server() is not None:
+				msg = self.reply_q.get()
+				if msg.msgid < 0:
 					logger.debug("Client: get msg %s",msg.msgid)
-					r.set(m)
-		
+					spawn(self.callbacks.recv,msg.msg)
+				else:
+					r = self.q.pop(msg.msgid,None)
+					if r is not None:
+						m = msg.msg
+						logger.debug("Client: get msg %s",msg.msgid)
+						r.set(m)
+		except GreenletExit:
+			pass
+			
 	def send(self,msg):
 		m = msg
 		msg = RPCmessage(msg,self.reply_q)
@@ -178,25 +185,6 @@ class ClientQueue(BaseTransport):
 		self.p.request_q.put(msg)
 		res = res.get()
 		return res
-
-class TestClient(ClientMain):
-	"""This is a do-almost-nothing server. Override run()"""
-	pass
-	
-rootMeta = BrokeredInfo("rootMeta")
-rootMeta.add(Field("hello"))
-rootMeta.add(Field("data"))
-rootMeta.add(Ref("more"))
-rootMeta.add(Callable("callme"))
-
-class TestRoot(BaseObj):
-	_meta = rootMeta
-	hello = "Hello!"
-	data = {}
-	more = None
-	def callme(self,msg):
-		logger.debug("Called")
-		return msg
 
 class LocalQueue(object):
 	"""\
@@ -218,55 +206,86 @@ def killer(x,t):
 	x.killer = None
 	x.stop()
 
-class TestMain(BrokerMain):
-	_client = None
+rootMeta = BrokeredInfo("rootMeta")
+rootMeta.add(Field("hello"))
+rootMeta.add(Field("data"))
+rootMeta.add(Ref("more"))
+rootMeta.add(Callable("callme"))
+
+class TestRoot(BaseObj):
+	_meta = rootMeta
+	hello = "Hello!"
+	data = {}
+	more = None
+	def callme(self,msg):
+		logger.debug("Called")
+		return msg
+
+class TestServer(BrokerServer):
+	root_factory = TestRoot
+
+	@property
+	def root(self):
+		return self.root_factory()
+	def start(self):
+		if self.root is None:
+			self.root = self.make_root()
+		return super(TestServer,self).start()
+
+class TestClient(BrokerClient):
+	def main(self):
+		raise NotImplementedError("You need to override {}.main!".format(self.__class__.__name__))
+
+class TestMain(Main):
+	server_factory = TestServer
 	client_factory = TestClient
+	client = None
+	server = None
 
 	def __init__(self,cfg={}):
 		in_cfg = cfg
-		cfg = test_cfg.copy()
-		cfg.update(test_cfg_s)
-		cfg.update(in_cfg)
-		self.q = LocalQueue(cfg)
+		self.cfg = test_cfg.copy()
+		self.cfg.update(test_cfg_s)
+		self.cfg.update(in_cfg)
+		self.q = LocalQueue(self.cfg)
 
-		ready = AsyncResult()
-		super(TestMain,self).__init__(cfg,ready)
-		self._ready = ready
+		super(TestMain,self).__init__()
 
 		self.client_cfg = test_cfg.copy()
 		self.client_cfg.update(test_cfg_c)
 		self.client_cfg.update(in_cfg)
-		self.client_cfg['_p'] = cfg['_p']
+		self.client_cfg['_p'] = self.cfg['_p']
 
 	def setup(self):
+		assert self.server is None
+		assert self.client is None
+
 		super(TestMain,self).setup()
 		
 		self.killer = spawn(killer,self,5)
-		self.client = spawn(self.run_client)
+		self.server = self.server_factory(cfg=self.cfg)
+		self.server.start()
 
-	def run_client(self):
+	def main(self):
+		assert self.client is None
 		try:
-			logger.debug("Waiting for server to be ready before client start")
-			self._ready.get()
-			self._client = self.client_factory(cfg=self.client_cfg)
-			logger.debug("Running the client")
-			self._client.run()
-		except Exception:
-			logger.exception("run client")
+			self.client = self.client_factory(cfg=self.client_cfg)
+			self.client.start()
+			self.client.main()
 		finally:
-			logger.debug("Client stopped, terminating the server")
-			self.end()
-			logger.debug("Stopped.")
+			c,self.client = self.client,None
+			if c is not None:
+				c.stop()
 
 	def cleanup(self):
-		c,self._client = self._client,None
-		if c is not None:
-			c.end()
+		s,self.server = self.server,None
+		if s is not None:
+			s.stop()
+
 		super(TestMain,self).cleanup()
-		if self.killer is not None:
-			self.killer.kill()
-		if self.client is not None:
-			self.client.kill()
+		k,self.killer = self.killer,None
+		if k is not None:
+			k.kill()
 
 class TestBasicMain(Main):
 	def setup(self):

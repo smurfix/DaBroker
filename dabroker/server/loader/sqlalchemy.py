@@ -23,7 +23,7 @@ from functools import wraps
 def with_session(fn):
 	@wraps(fn)
 	def wrapper(self,*a,**k):
-		s = self.loader.session()
+		s = self._meta.session()
 		try:
 			return fn(self,s, *a,**k)
 		except:
@@ -49,11 +49,11 @@ def _get_attrs(obj):
 	return get_attrs(obj, obj._dab)
 
 class SQLInfo(BrokeredInfo):
-	def __new__(cls, loader, model):
+	def __new__(cls, server, meta, model, loader):
 		if hasattr(model,'_dab'):
 			return model._dab
 		return object.__new__(cls)
-	def __init__(self, loader, model):
+	def __init__(self, server, meta, model, loader):
 		if hasattr(model,'_dab'):
 			return model._dab
 		super(SQLInfo,self).__init__()
@@ -69,15 +69,15 @@ class SQLInfo(BrokeredInfo):
 		self.model = model
 		self.loader = loader
 		self.name = i.class_.__name__
-		self._meta = self.loader.model_meta
+		self.server = server
+		self._meta = meta
 		model._dab = self
 		model._attrs = property(_get_attrs)
 		class load_me(server_SQLobject):
 			cls = model
 		load_me.__name__ = str("codec_sql_"+self.name)
 
-		# TODO: this is ugly.
-		loader.loaders.server.codec.register(load_me)
+		server.codec.register(load_me)
 
 	@with_session
 	def find(self,session,_limit=None,**kw):
@@ -105,7 +105,7 @@ class SQLInfo(BrokeredInfo):
 		session.add(res)
 		session.flush()
 		self.fixup(res)
-		self.loader.loaders.server.send_created(res)
+		self.server.send_created(res)
 		return res
 	new.include = True
 
@@ -120,7 +120,7 @@ class SQLInfo(BrokeredInfo):
 		session.flush()
 
 		self.fixup(obj)
-		self.loader.loaders.server.send_updated(obj,kw)
+		self.server.send_updated(obj,kw)
 
 	@with_session
 	def delete(self, session, *obj):
@@ -131,7 +131,7 @@ class SQLInfo(BrokeredInfo):
 			session.delete(o)
 		session.flush()
 		for o in obj:
-			self.loader.loaders.server.send_deleted(o)
+			self.server.send_deleted(o)
 
 	def fixup(self,res):
 		i=inspect(res)
@@ -141,21 +141,23 @@ class SQLInfo(BrokeredInfo):
 
 class SQLLoader(BaseLoader):
 	"""A loader which reads from SQL"""
-	def __init__(self, session, loaders,id='sql'):
+	def __init__(self, session, server,id='sql'):
 		self.tables = {}
-		super(SQLLoader,self).__init__(id=id,loaders=loaders)
+		super(SQLLoader,self).__init__(id=id,loaders=server.loader)
 
 		self.model_meta = BrokeredMeta("sql")
 		self.model_meta.add(Callable("new"))
 		self.model_meta.add(Callable("get"))
 		self.model_meta.add(Callable("find"))
 		self.model_meta.add(Callable("delete"))
+		self.model_meta.session = session
 		self.session = session
-		self.loaders = loaders
-		loaders.static.add(self.model_meta,"sql")
+		self.server = server
+		self.loaders = server.loader
+		self.loaders.static.add(self.model_meta,"sql")
 
 	def add_model(self, model, root=None):
-		r = SQLInfo(loader=self, model=model)
+		r = SQLInfo(server=self.server, meta=self.model_meta, model=model, loader=self)
 		if root is not None:
 			root[r.name] = r
 

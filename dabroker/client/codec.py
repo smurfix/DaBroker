@@ -86,8 +86,7 @@ class ClientBrokeredInfo(BrokeredInfo):
 		return ClientObj
 
 	def find(self, **kw):
-		from . import service as s
-		return s.client.find(self,**kw)
+		return self.client.find(self,**kw)
 		
 	def get(self, **kw):
 		res = self.find(_limit = 2, **kw)
@@ -222,5 +221,7 @@ class client_InfoObj(client_BaseObj):
 			# so we need to go and get the real thing.
 			# NOTE this assumes that the codec doesn't throw away empty lists.
 			return loader.get(tuple(k))
-		return client_BaseObj.decode(loader, _is_meta=True, k=k,f=f,**kw)
+		res = client_BaseObj.decode(loader, _is_meta=True, k=k,f=f,**kw)
+		res.client = loader
+		return res
 

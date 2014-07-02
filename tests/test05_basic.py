@@ -24,7 +24,7 @@ logger = test_init("test.05.basic")
 
 counter = 0
 
-class Broker(TestBasicMain):
+class Tester(TestBasicMain):
 	def main(self):
 		global counter
 		logger.debug("Startup")
@@ -40,13 +40,13 @@ def killme():
 	sleep(0.2)
 	counter += 8
 	logger.debug("Terminating")
-	b.stop()
+	t.stop()
 waiter = spawn(killme)
 
-b = Broker()
-b.register_stop(waiter.kill) # not necessary here
-b.register_stop(logger.debug,"shutting down")
-b.run()
+t = Tester()
+t.register_stop(waiter.kill) # not necessary here
+t.register_stop(logger.debug,"shutting down")
+t.run()
 logger.debug("Exiting")
 
 assert counter == 1+4+8,counter

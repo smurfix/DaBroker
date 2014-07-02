@@ -18,7 +18,7 @@ from dabroker import patch; patch()
 
 from gevent import spawn,sleep
 
-from tests import test_init,LocalQueue,TestMain,TestRoot,TestClient
+from tests import test_init,LocalQueue,TestMain,TestRoot,TestClient,TestServer
 from dabroker.client.service import BrokerClient
 
 logger = test_init("test.10.selfref")
@@ -86,25 +86,24 @@ class Test10_client(TestClient):
 		assert msg is not res
 		counter += 1
 	
-	def make_client(self):
-		return Test10_clientbroker(self)
-
-class Test10_clientbroker(BrokerClient):
 	def do_note(self,msg):
 		global counter
 		logger.debug("more %s",msg)
 		check_message(msg['note'])
 		counter += 1
 
-class Broker(TestMain):
-	client_factory = Test10_client
+class Test10_server(TestServer):
 	@property
 	def root(self):
-		return Test10_root(self.server)
-		
-b = Broker()
-b.register_stop(logger.debug,"shutting down")
-b.run()
+		return Test10_root(self)
+
+class Tester(TestMain):
+	client_factory = Test10_client
+	server_factory = Test10_server
+
+t = Tester()
+t.register_stop(logger.debug,"shutting down")
+t.run()
 
 assert counter == 6,counter
 

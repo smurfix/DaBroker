@@ -21,7 +21,7 @@ from dabroker.client.service import BrokerClient
 
 from gevent import spawn,sleep
 
-from tests import test_init,LocalQueue,TestMain
+from tests import test_init,LocalQueue,TestMain,TestClient,TestServer
 
 logger = test_init("test.21.objbase")
 logger_s = test_init("test.21.objbase.server")
@@ -40,10 +40,8 @@ class SearchBrokeredInfo(BrokeredInfo):
 				res.append(obj)
 		return res
 
-class TestBrokerServer(BrokerServer):
-	def __init__(self,sender=None):
-		super(TestBrokerServer,self).__init__(sender=sender)
-
+class Test21_server(TestServer):
+	def make_root(self):
 		rootMeta = BrokeredInfo("rootMeta")
 		rootMeta.add(Field("hello"))
 		rootMeta.add(Ref("ops"))
@@ -71,31 +69,28 @@ class TestBrokerServer(BrokerServer):
 			def __repr__(self):
 				return "<%s>"%self
 
-		self.theRootObj = RootObj()
-		self.loader.static.add(self.theRootObj,0,2,99)
+		root = RootObj()
+		self.loader.static.add(root,0,2,99)
 
 		theOpsObj = OpsObj("Oh?")
 		self.loader.static.add(theOpsObj,0,34)
-		self.theRootObj.ops = theOpsObj
+		root.ops = theOpsObj
 
 		for i,n in ((0,"Zero"),(1,"One"),(2,"Two"),(3,"Three")):
 			o = OpsObj(n)
 			self.loader.static.add(o,0,10,i)
 			opsMeta.obj_add(o)
-
-		self.opsMeta = opsMeta
-
-	def do_root(self,msg):
-		logger_s.debug("Get root %r",msg)
-		return self.theRootObj
-	do_root.include = True
+		
+		self._root = root
+		self._ops_meta = opsMeta
+		return root
 
 	def do_trigger(self,msg):
 		if msg == 1:
-			self.theRootObj.ops.hell = "Yeah!"
-			self.send("invalid",(self.theRootObj.ops._key,(3,4,5))) # the latter is unknown
+			self._root.ops.hell = "Yeah!"
+			self.send("invalid",(self._root.ops._key,(3,4,5))) # the latter is unknown
 		elif msg == 2:
-			obj = self.opsMeta.objs[2]
+			obj = self._ops_meta.objs[2]
 			ov = obj.hell
 			obj.hell = nv = "Two2"
 			attrs = {'hell': (ov,nv)}
@@ -105,27 +100,14 @@ class TestBrokerServer(BrokerServer):
 	
 done=0
 
-class Broker(TestMain):
-	c = q = s = None
-	def setup(self):
-		self.s = TestBrokerServer()
-		self.q = LocalQueue(self.s.recv)
-		self.c = BrokerClient(self.q.send)
-		self.q.set_client_worker(self.c._recv)
-		self.s.sender = self.q.notify
-		super(Broker,self).setup()
-	def stop(self):
-		if self.q is not None:
-			self.q.shutdown()
-		super(Broker,self).stop()
-
+class Test21_client(TestClient):
 	@property
 	def cid(self):
-		return self.q.cq.next_id
+		return self.transport.next_id
 
-	def job(self):
+	def main(self):
 		logger.debug("Get the root")
-		res = self.c.root
+		res = self.root
 		logger.debug("recv %r",res)
 		assert res.hello == "Hello!"
 		assert res._meta.name == "rootMeta",(res,res._meta,res._meta.name)
@@ -134,7 +116,7 @@ class Broker(TestMain):
 		assert cid==self.cid, (cid,self.cid)
 		assert res.ops.rev("test123") == "321tset"
 		assert res.ops.hell == "Oh?"
-		self.c.send("trigger",1)
+		self.send("trigger",1)
 		assert res.ops.hell == "Yeah!"
 		cid=self.cid
 		assert res.ops.hell == "Yeah!"
@@ -158,7 +140,7 @@ class Broker(TestMain):
 		assert cid==self.cid
 
 		# Now update some stuff.
-		self.c.send("trigger",2)
+		self.send("trigger",2)
 
 		os = Op.find(hell="Two")
 		assert len(os) == 0, os
@@ -168,13 +150,14 @@ class Broker(TestMain):
 		global done
 		done = 1
 
-	def main(self):
-		j = spawn(self.job)
-		j.join()
+class Tester(TestMain):
+	client_factory = Test21_client
+	server_factory = Test21_server
 
-b = Broker()
-b.register_stop(logger.debug,"shutting down")
-b.run()
+t = Tester()
+t.register_stop(logger.debug,"shutting down")
+t.run()
+
 assert done==1, done
 
 logger.debug("Exiting")

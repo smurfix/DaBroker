@@ -18,8 +18,7 @@ from dabroker import patch; patch()
 
 from gevent import spawn,sleep
 
-from tests import test_init,LocalQueue,TestMain,TestRoot,TestClient
-from dabroker.client.service import BrokerClient
+from tests import test_init,LocalQueue,TestMain,TestRoot,TestClient,TestServer
 
 logger = test_init("test.09.localmsg")
 
@@ -51,21 +50,22 @@ class Test09_client(TestClient):
 	def make_client(self):
 		return Test09_clientbroker(self)
 
-class Test09_clientbroker(BrokerClient):
 	def do_more(self,msg):
 		global counter
 		logger.debug("more %s",msg)
 		counter += msg
 
-class Broker(TestMain):
-	client_factory = Test09_client
-	@property
-	def root(self):
-		return Test09_root(self.server)
+class Test09_server(TestServer):
+	def make_root(self):
+		return Test09_root(self)
 		
-b = Broker()
-b.register_stop(logger.debug,"shutting down")
-b.run()
+class Tester(TestMain):
+	client_factory = Test09_client
+	server_factory = Test09_server
+
+t = Tester()
+t.register_stop(logger.debug,"shutting down")
+t.run()
 
 assert counter == 1+4+9+10+20+30,counter
 

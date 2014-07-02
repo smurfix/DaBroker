@@ -16,34 +16,68 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from .loader import Loaders
 from ..base import UnknownCommandError
+from ..util import import_string
+from ..base.config import default_config
+from ..base.transport import BaseCallbacks
 from .codec import adapters as default_adapters
 
+import sys
 from traceback import format_exc
 
 import logging
 logger = logging.getLogger("dabroker.server.service")
 
-class BrokerServer(object):
+class BrokerServer(BaseCallbacks):
 	"""\
 		The main server.
 
-		@sender: code which broadcasts to all clients.
 		"""
-	def __init__(self, server, loader=None, adapters=None):
+	root = None
+
+	def __init__(self, cfg={}, loader=None, adapters=()):
 		# the sender might be set later
-		self.server = server
+		logger.debug("Setting up")
+		self.cfg = default_config.copy()
+		self.cfg.update(cfg)
+
 		if loader is None:
 			loader = Loaders(server=self)
 		self.loader = loader
-		if adapters is None:
-			adapters = default_adapters
-		self.server.register_codec(adapters)
+		self.codec = self.make_codec(default_adapters)
+		self.transport = self.make_transport()
+		self.register_codec(adapters)
+		super(BrokerServer,self).__init__()
+
+	def make_loader(self):
+		from .loader import Loaders
+		return Loaders()
+
+	def make_transport(self):
+		name = self.cfg['transport']
+		if '.' not in name:
+			name = "dabroker.server.transport."+name+".Transport"
+		return import_string(name)(cfg=self.cfg, callbacks=self)
+
+	def make_codec(self, adapters):
+		name = self.cfg['codec']
+		if '.' not in name:
+			name = "dabroker.base.codec."+name+".Codec"
+		return import_string(name)(loader=self.loader, adapters=adapters, cfg=self.cfg)
+
+	def register_codec(self,adapter):
+		self.codec.register(adapter)
+
+	def start(self):
+		self.transport.connect()
+
+	def stop(self):
+		self.transport.disconnect()
 
 	# remote calls
 
 	def do_root(self,msg):
 		logger.debug("Get root %r",msg)
-		res = self.server.root
+		res = self.root
 		if not hasattr(res,'_key'):
 			self.loader.static.add(res,'root')
 		if not hasattr(res._meta,'_key'):
@@ -62,13 +96,17 @@ class BrokerServer(object):
 		logger.debug("pong %r",msg)
 
 	def do_get(self, key):
-		"""Fetch an object by ID"""
+		"""Fetch an object by its key"""
 		key = tuple(key)
 		logger.debug("get %r",key)
 		return self.loader.get(key)
 	do_get.include = True
 
 	def do_update(self,key,k={}):
+		"""Update an object.
+		
+			@k: A map of key => (old_value,new_value)
+			"""
 		logger.debug("update %r %r",key,k)
 		key = tuple(key)
 		obj = self.loader.get(key)
@@ -103,48 +141,61 @@ class BrokerServer(object):
 		"""\
 			An object has been updated.
 		
-			@kw is _attrs from the old object state.
+			@attrs is the object change map.
 			"""
 		key = obj._key
 		mkey = obj._meta._key
 		refs = obj._meta.refs
 		for k,on in attrs.items():
+			ov,nv = on
 			if k in refs:
-				ov,nv = on
 				if ov is not None: ov = ov._key
 				if nv is not None: nv = nv._key
+			if ov != nv:
 				attrs[k] = (ov,nv)
 		self.send("invalid_key",key, m=mkey, k=attrs)
 		
-	def recv(self, msg):
-		"""Basic message receiver. Usually called from a separate thread."""
-		#logger.debug("recv raw %r",msg)
-		logger.debug("recv %r",msg)
-		job = msg.pop('_a')
-		m = msg.pop('_m',msg)
+	# Basic transport handling
 
+	def recv(self, msg):
+		"""Receive a message. Usually called from a separate thread."""
+		#logger.debug("recv raw %r",msg)
 		try:
-			if job == "call":
-				# unwrap it so we can get at the proc's attributes
-				a = msg.get('a',())
-				k = msg.get('k',{})
-				o = msg['o']
-				assert m in o._meta.calls,"You cannot call method {} of {}".format(msg,o)
-				proc = getattr(o,m)
-			else:
-				a = (m,)
-				k = msg
-				proc = getattr(self,'do_'+job)
-		except AttributeError:
-			raise UnknownCommandError(job)
-		msg = proc(*a,**k)
-		logger.debug("reply %r",msg)
-		attrs = {'include':getattr(proc,'include',False)}
-		return msg,attrs
+			msg = self.codec.decode(msg)
+
+			logger.debug("recv %r",msg)
+			job = msg.pop('_a')
+			m = msg.pop('_m',msg)
+
+			try:
+				if job == "call":
+					# unwrap it so we can get at the proc's attributes
+					a = msg.get('a',())
+					k = msg.get('k',{})
+					o = msg['o']
+					assert m in o._meta.calls,"You cannot call method {} of {}".format(msg,o)
+					proc = getattr(o,m)
+				else:
+					a = (m,)
+					k = msg
+					proc = getattr(self,'do_'+job)
+			except AttributeError:
+				raise UnknownCommandError(job)
+			msg = proc(*a,**k)
+			logger.debug("reply %r",msg)
+			attrs = {'include':getattr(proc,'include',False)}
+			msg = self.codec.encode(msg, include=attrs.get('include',False))
+			return msg
+
+		except BaseException as e:
+			return self.codec.encode_error(e, sys.exc_info()[2])
 
 	def send(self, action, *a, **k):
-		"""Basic message broadcaster"""
+		"""Broadcast a message to all clients"""
 		logger.debug("bcast %s %r %r",action,a,k)
 		msg = {'_m':action,'_a':a,'_k':k}
-		self.server.send(msg)
+
+		msg = self.codec.encode(msg)
+		self.transport.send(msg)
+
 

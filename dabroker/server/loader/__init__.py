@@ -86,7 +86,7 @@ class StaticLoader(BaseLoader):
 		return self.objects[key]
 
 	def add(self,obj,*key):
-		assert key not in self.objects,(key,self.objects)
+		assert key not in self.objects or self.objects[key] is obj,(key, obj, self.objects[key])
 		self.set_key(obj,*key)
 		self.objects[obj._key[1:]] = obj
 

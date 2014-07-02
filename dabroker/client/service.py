@@ -18,6 +18,9 @@ RETR_TIMEOUT = 10
 CACHE_SIZE=10000
 
 from ..base import UnknownCommandError
+from ..base.transport import BaseCallbacks
+from ..base.config import default_config
+from ..util import import_string
 from .codec import adapters, client_broker_info_meta
 
 import logging
@@ -206,7 +209,7 @@ class ChangeData(object):
 				upd[k] = (ov,nv)
 		if not upd:
 			return None
-		return server._send("update",self.obj._key,k=upd)
+		return server.send("update",self.obj._key,k=upd)
 
 	def send_revert(self,server):
 		for k,v in self.old_data.items():
@@ -235,26 +238,53 @@ class ChangeInvalid(ChangeData):
 	def send_commit(self,server):
 		raise RuntimeError("inconsistent data",self.obj,_key)
 
-class BrokerClient(object):
+class BrokerClient(BaseCallbacks):
 	"""\
-		The basic client implementation. Singleton (for now).
-
-		@server: a callable which sends a message to the server (and returns a reply)
+		The basic client implementation.
 		"""
 	root_key = None
 
-	def __init__(self, callbacks, cfg={}):
+	def __init__(self, cfg={}):
 		global client
 		assert client is None
 
-		self.cfg = cfg
+		self.cfg = default_config.copy()
+		self.cfg.update(cfg)
+
 		self._cache = CacheDict()
-		self.callbacks = callbacks
-		self.callbacks.register_codec(adapters)
+		self.codec = self.make_codec()
+		self.transport = self.make_transport()
 
 		self._add_to_cache(client_broker_info_meta)
 		self.obj_chg = {}
-		client = self
+
+		self.register_codec(adapters)
+
+	def start(self):
+		self.transport.connect()
+	
+	def stop(self):
+		self.transport.disconnect()
+
+	def make_transport(self):
+		name = self.cfg['transport']
+		if '.' not in name:
+			name = "dabroker.server.transport."+name+".Transport"
+		return import_string(name)(cfg=self.cfg, callbacks=self)
+
+	def make_codec(self, adapters=()):
+		name = self.cfg['codec']
+		if '.' not in name:
+			name = "dabroker.base.codec."+name+".Codec"
+		res = import_string(name)(loader=self, cfg=self.cfg)
+		res.register(adapters)
+		return res
+
+	def register_codec(self,adapter):
+		if self.codec is None:
+			self._adapters.append(adapter)
+		else:
+			self.codec.register(adapter)
 
 	def _add_to_cache(self, obj):
 		key = getattr(obj,'_key',None)
@@ -288,25 +318,36 @@ class BrokerClient(object):
 		return obj
 
 	def get(self, key):
+		"""Get an object, from cache or from the server."""
+
+		# Step 1: if we locally changed the object, return our copy.
 		chg = self.obj_chg.get(key,None)
 		if chg is not None:
 			return chg.obj
 
-		"""Get an object, from cache or from the server."""
+		# Step 2: Get it from cache.
+		# If the cache contains an AsyncResult, wait for that.
 		obj = self._cache.get(key,None)
 		if obj is not None:
 			if isinstance(obj,AsyncResult):
 				obj = obj.get(timeout=RETR_TIMEOUT)
 			return obj
 
+		# Step 3: Get it from the network.
+		# Add an AsyncResult to the cache so that the object is not
+		# retrieved multiple times in parallel.
 		ar = self._cache.set(key, AsyncResult())
 		try:
 			obj = self.send("get",key)
 		except Exception as e:
-			# Remove the AsyncResult from cache and forward the excption to any waiters
-			self._cache.pop(key).set_exception(e)
-			del ar # otherwise the optimizer will drop this, and thus
-				   # delete the weakref, _before_ the previous line!
+			# Owch.
+			# Remove the AsyncResult from cache, and forward the exception to any waiters
+			arx = self._cache.pop(key)
+			assert ar == arx
+			ar.set_exception(e)
+			# As `ar` is unused beyond this point, its value might already
+			# gone from the cache (weak reference!) if we just use the
+			# return value of ._cache_pop()
 			raise
 		else:
 			# The deserializer has already added the object to the cache (or it should have)
@@ -399,7 +440,7 @@ class BrokerClient(object):
 			@key the object (or None if the object is new)
 			@m the object's metadata key (search results hang off metadata)
 			@k: a key=>(value,…) dict. A search is obsoleted when one
-			                           of the search keys matches one of the values.
+									   of the search keys matches one of the values.
 			"""
 		if key is not None:
 			key = tuple(key)
@@ -462,25 +503,40 @@ class BrokerClient(object):
 			self.root_key = None
 			rk.set_exception(e)
 			raise
-		else:
-			self.root_key = getattr(obj,"_key",None)
-			if self.root_key is not None:
-				self._add_to_cache(obj)
-			rk.set(obj)
-			return obj
+		self.root_key = getattr(obj,"_key",None)
+		if self.root_key is not None:
+			self._add_to_cache(obj)
+		rk.set(obj)
+		return obj
 
 	def send(self, action, msg=None, **kw):
-		"""Low-level method for RPCing the server"""
+		"""Generic method for RPCing the server"""
 		logger.debug("send %s %r %r",action,msg,kw)
 		kw['_m'] = msg
 		kw['_a'] = action
-		msg = self.callbacks.send(kw)
+		msg = self._send(kw)
 		logger.debug("recv %r",msg)
 		return msg
 	
+	def _send(self,msg):
+		"""Low-level message sender"""
+		logger.debug("Send req: %r",msg)
+		msg = self.codec.encode(msg)
+		msg = self.transport.send(msg)
+		msg = self.codec.decode(msg)
+		logger.debug("Recv reply: %r",msg)
+		return msg
+
 	def recv(self, msg):
 		"""Process incoming notifications from the server"""
 		#logger.debug("bcast raw %r",msg)
+		try:
+			msg = self.codec.decode(msg)
+		except ServerError as e:
+			logger.exception("Server sends us an error. Shutting down.")
+			self.end()
+			return
+
 		logger.debug("bcast %r",msg)
 		m = msg.pop('_m')
 		a = msg.pop('_a',[])

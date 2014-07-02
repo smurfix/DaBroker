@@ -56,7 +56,6 @@ class RelayedError(Exception):
 
 class BaseTransport(object):
 	_job = None
-	_ready = None
 	defaults = {}
 	connection = None
 
@@ -66,6 +65,7 @@ class BaseTransport(object):
 		self.callbacks = callbacks
 
 	def connect(self):
+		"""Connect. (Synchronously.)"""
 		assert self.callbacks is not None
 		assert self.connection is None
 
@@ -73,22 +73,21 @@ class BaseTransport(object):
 			raise RuntimeError("Already connecting")
 		logger.debug("connecting: %r",self)
 
-		from gevent.event import AsyncResult
-		ready = AsyncResult()
-		self.run_loop(ready)
-		ready.get()
+		assert self._job is None
+		self._job = gevent.spawn(self._run_job)
 
 	def disconnect(self):
-		"""Sever the connection."""
+		"""Sever the connection; do not auto-reconnect."""
 		logger.debug("disconnecting: %r",self)
-		j,self._job = self.job,None
+		j,self._job = self._job,None
 		if j:
 			j.kill()
 
 	def disconnected(self, err=None):
-		"""Clear connection objects or whatever.
+		"""Clear connection objects.
 
-			This will be called by the reader task, as it exits."""
+			This will be called by the reader task as it exits.
+			Do not reconnect from here; do that in your .reconnect"""
 		logger.debug("disconnected: %r",self)
 	
 	def send(self,typ,msg):
@@ -103,21 +102,17 @@ class BaseTransport(object):
 			self.run()
 		except BaseException as e:
 			logger.exception("Receiver loop error: %r",self)
-			self.callbacks.error(e)
-		else:
+			self.callbacks.ended(e)
+		except gevent.GreenletExit:
 			logger.debug("Receiver loop ends: %r",self)
-			self.callbacks.error(None)
+			self.callbacks.ended(None)
+		else:
+			e=None
+			logger.debug("Receiver loop ends: %r",self)
+			self.callbacks.ended(None)
 		finally:
 			self.disconnected()
-			self._job = None
-			self.callbacks.reconnect(e)
+			if self._job is not None:
+				self._job = None
+				self.callbacks.reconnect(e)
 
-	def run_loop(self, ready):
-		"""Start/register the receiver loop. Default is to spawn a runner thread.
-		
-			@ready: AsyncResult to set when connected
-			"""
-		assert self._job is None
-		ready.set(None)
-		self._job = gevent.spawn(self._run_job)
-		

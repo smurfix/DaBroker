@@ -25,7 +25,7 @@ from dabroker.client.service import BrokerClient
 from gevent import spawn,sleep
 from gevent.event import AsyncResult
 
-from tests import test_init,LocalQueue,TestMain
+from tests import test_init,LocalQueue,TestMain,TestClient
 
 logger = test_init("test.22.sql")
 logger_s = test_init("test.22.sql.server")
@@ -68,19 +68,13 @@ DBSession = sessionmaker(bind=engine)
 
 done = 0
 
-class TestBrokerClient(BrokerClient):
-	def __init__(self,q,*a):
-		self.q = q
-		super(TestBrokerClient,self).__init__(*a)
+class Test22_server(BrokerServer):
+	_root = None
 
-	def do_trigger(self,msg):
-		ar = self.q.a[msg]
-		self.q.a[msg] = AsyncResult()
-		ar.set(None)
-	
-class TestBrokerServer(BrokerServer):
-	def __init__(self,sender=None):
-		super(TestBrokerServer,self).__init__(sender=sender)
+	@property
+	def root(self):
+		if self._root is not None:
+			return self._root
 		rootMeta = BrokeredInfo("rootMeta")
 		rootMeta.add(Field("hello"))
 		rootMeta.add(Field("data"))
@@ -91,34 +85,34 @@ class TestBrokerServer(BrokerServer):
 			hello = "Hello!"
 			data = {}
 
-		self.theRootObj = RootObj()
-		self.loader.static.add(self.theRootObj,2,99)
+		root = RootObj()
+		self.loader.static.add(root,2,99)
 
-		sql = SQLLoader(DBSession,self.loader)
-		sql.add_model(Person,self.theRootObj.data)
+		sql = SQLLoader(DBSession,self)
+		sql.add_model(Person,root.data)
 		sql.add_model(Address)
 		self.loader.add_loader(sql)
 
-	def do_root(self,msg):
-		logger_s.debug("Get root %r",msg)
-		return self.theRootObj
-	do_root.include = True
+		self._root = root
+		return root
 
 	def do_trigger(self,msg):
 		self.send("trigger",msg)
 	
-class Broker(TestMain):
-	c = q = s = None
-	def setup(self):
+class Test22_client(TestClient):
+	def __init__(self,*a,**k):
 		self.a = [None]
 		for i in range(3):
 			self.a.append(AsyncResult())
-		self.s = TestBrokerServer()
-		self.q = LocalQueue(self.s.recv)
-		self.c = TestBrokerClient(self,self.q.send)
-		self.q.set_client_worker(self.c._recv)
-		self.s.sender = self.q.notify
-		super(Broker,self).setup()
+		super(Test22_client,self).__init__(*a,**k)
+
+	def make_client(self):
+		return TestClientMain()
+
+	def do_trigger(self,msg):
+		ar = self.a[msg]
+		self.a[msg] = AsyncResult()
+		ar.set(None)
 
 	def jump(self,i,n):
 		if i and n:
@@ -129,30 +123,25 @@ class Broker(TestMain):
 			logger.debug("GOTO {} waits".format(i))
 
 		if n:
-			self.c.send("trigger",n)
+			self.send("trigger",n)
 		if i:
 			self.a[i].get()
 			logger.debug("GOTO {} runs".format(i))
 
-	def stop(self):
-		if self.q is not None:
-			self.q.shutdown()
-		super(Broker,self).stop()
-
 	def ref(self,p):
 		k = p._key
 		def res():
-			return self.c.get(k)
+			return self.get(k)
 		return res
 
 	@property
 	def cid(self):
-		return self.q.cq.next_id
+		return self.transport.next_id
 
 	def job1(self):
 		self.jump(1,0)
 		logger.debug("Get the root")
-		res = self.c.root
+		res = self.root
 		logger.debug("recv %r",res)
 		assert res.hello == "Hello!"
 		P = res.data['Person']
@@ -163,7 +152,7 @@ class Broker(TestMain):
 		# A: create
 		p1 = P.new(name="Fred Flintstone")
 		p1r = self.ref(p1)
-		self.c.commit()
+		self.commit()
 
 		self.jump(1,2) # goto B
 
@@ -178,7 +167,7 @@ class Broker(TestMain):
 
 	def job2(self):
 		logger.debug("Get the root 2")
-		res = self.c.root
+		res = self.root
 		logger.debug("recv %r",res)
 		P = res.data['Person']
 		
@@ -187,13 +176,13 @@ class Broker(TestMain):
 		# B: check+modify
 		p1 = P.get(name="Fred Flintstone")
 		p1.name="Freddy Firestone"
-		self.c.commit()
+		self.commit()
 
 		self.jump(2,3) # goto C
 
 		# E: delete
 		P.delete(p1)
-		self.c.commit()
+		self.commit()
 
 		self.jump(0,3) # goto F
 
@@ -230,11 +219,13 @@ class Broker(TestMain):
 		j2.join()
 		j3.join()
 
-		
+class Tester(TestMain):
+	client_factory = Test22_client
+	server_factory = Test22_server
 
-b = Broker()
-b.register_stop(logger.debug,"shutting down")
-b.run()
+t = Tester()
+t.register_stop(logger.debug,"shutting down")
+t.run()
 assert done==7,done
 
 logger.debug("Exiting")
