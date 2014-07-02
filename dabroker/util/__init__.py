@@ -37,7 +37,10 @@ def import_string(name):
 		if '.' not in name:
 			raise
 		module, obj = name.rsplit('.', 1)
-		return getattr(import_string(module),obj)
+		try:
+			return getattr(import_string(module),obj)
+		except AttributeError:
+			raise AttributeError(name)
 
 class _missing: pass
 

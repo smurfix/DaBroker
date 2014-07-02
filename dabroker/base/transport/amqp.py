@@ -25,6 +25,27 @@ class AmqpTransport(BaseTransport):
 
 	_server = False
 
+	def connect(self):
+		try:
+			self.connection = amqp.connection.Connection(host=self.cfg['host'], userid=self.cfg['username'], password=self.cfg['password'], login_method='AMQPLAIN', login_response=None, virtual_host=self.cfg['virtual_host'])
+			self.setup_channels()
+			
+		except Exception as e:
+			c,self.connection = self.connection,None
+			if c is not None:
+				c.close()
+			self.disconnected()
+			raise
+		else:
+			logger.debug("Connected!")
+		super(AmqpTransport,self).connect()
+
+	def disconnect(self):
+		super(AmqpTransport,self).disconnect()
+		c,self.connection = self.connection,None
+		if c is not None:
+			c.close()
+		
 	def disconnected(self):
 		if self.connection:
 			try: self.connection.close()
@@ -44,18 +65,5 @@ class AmqpTransport(BaseTransport):
 		return msg.body
 
 	def run(self,ready):
-		logger.debug("Start connecting")
-		try:
-			self.connection = amqp.connection.Connection(host=self.cfg['host'], userid=self.cfg['username'], password=self.cfg['password'], login_method='AMQPLAIN', login_response=None, virtual_host=self.cfg['virtual_host'])
-			self.setup_channels()
-			
-		except Exception as e:
-			self.disconnected()
-			ready.set_exception(e)
-			return
-		else:
-			logger.debug("Connected!")
-			ready.set(None)
-
 		while True: channel.wait()
 

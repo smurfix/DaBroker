@@ -56,7 +56,8 @@ class Test09_client(TestClient):
 		counter += msg
 
 class Test09_server(TestServer):
-	def make_root(self):
+	@property
+	def root(self):
 		return Test09_root(self)
 		
 class Tester(TestMain):

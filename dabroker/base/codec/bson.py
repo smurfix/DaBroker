@@ -12,8 +12,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-from . include BaseCodec
-frim bson import BSON
+from . import BaseCodec
+from bson import BSON
 
 class Codec(BaseCodec):
 	def encode(self, data, *a,**k):

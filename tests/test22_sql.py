@@ -21,6 +21,7 @@ from dabroker.server.service import BrokerServer
 from dabroker.server.loader.sqlalchemy import SQLLoader
 from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj
 from dabroker.client.service import BrokerClient
+from dabroker.util import cached_property
 
 from gevent import spawn,sleep
 from gevent.event import AsyncResult
@@ -69,12 +70,8 @@ DBSession = sessionmaker(bind=engine)
 done = 0
 
 class Test22_server(BrokerServer):
-	_root = None
-
-	@property
+	@cached_property
 	def root(self):
-		if self._root is not None:
-			return self._root
 		rootMeta = BrokeredInfo("rootMeta")
 		rootMeta.add(Field("hello"))
 		rootMeta.add(Field("data"))
@@ -93,7 +90,6 @@ class Test22_server(BrokerServer):
 		sql.add_model(Address)
 		self.loader.add_loader(sql)
 
-		self._root = root
 		return root
 
 	def do_trigger(self,msg):

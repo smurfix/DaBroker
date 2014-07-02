@@ -18,6 +18,7 @@ from dabroker import patch; patch()
 from dabroker.server.service import BrokerServer
 from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj
 from dabroker.client.service import BrokerClient
+from dabroker.util import cached_property
 
 from gevent import spawn,sleep
 
@@ -41,7 +42,8 @@ class SearchBrokeredInfo(BrokeredInfo):
 		return res
 
 class Test21_server(TestServer):
-	def make_root(self):
+	@cached_property
+	def root(self):
 		rootMeta = BrokeredInfo("rootMeta")
 		rootMeta.add(Field("hello"))
 		rootMeta.add(Ref("ops"))
@@ -81,14 +83,13 @@ class Test21_server(TestServer):
 			self.loader.static.add(o,0,10,i)
 			opsMeta.obj_add(o)
 		
-		self._root = root
 		self._ops_meta = opsMeta
 		return root
 
 	def do_trigger(self,msg):
 		if msg == 1:
-			self._root.ops.hell = "Yeah!"
-			self.send("invalid",(self._root.ops._key,(3,4,5))) # the latter is unknown
+			self.root.ops.hell = "Yeah!"
+			self.send("invalid",(self.root.ops._key,(3,4,5))) # the latter is unknown
 		elif msg == 2:
 			obj = self._ops_meta.objs[2]
 			ov = obj.hell

@@ -22,7 +22,6 @@ from gevent import spawn
 from gevent.event import AsyncResult
 
 logger = test_init("test.30.sql")
-logger_s = test_init("test.30.sql.server")
 
 class TestClient(BrokerClient):
 
@@ -149,11 +148,3 @@ class TestClient(BrokerClient):
 		j2.join()
 		j3.join()
 
-		
-
-b = Broker()
-b.register_stop(logger.debug,"shutting down")
-b.run()
-assert done==7,done
-
-logger.debug("Exiting")

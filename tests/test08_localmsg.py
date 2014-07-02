@@ -44,7 +44,8 @@ class Test08_client(TestClient):
 		counter += res
 
 class Test08_server(TestServer):
-	def make_root(self):
+	@property
+	def root(self):
 		return Test08_root()
 
 class Tester(TestMain):

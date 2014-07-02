@@ -19,11 +19,13 @@ import sys
 from dabroker.server.service import BrokerServer
 from dabroker.server.loader.sqlalchemy import SQLLoader
 from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj
+from dabroker.util import cached_property
 
 from gevent import spawn,sleep
 from gevent.event import AsyncResult
 
-logger = test_init("test.30.server")
+import logging
+logger = logging.getLogger("test.30.server")
 
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
@@ -63,10 +65,9 @@ DBSession = sessionmaker(bind=engine)
 
 done = 0
 
-class TestBrokerServer(BrokerServer):
-	def __init__(self,*a,**k):
-		super(TestBrokerServer,self).__init__(*a,**k)
-
+class TestServer(BrokerServer):
+	@cached_property
+	def root(self):
 		rootMeta = BrokeredInfo("rootMeta")
 		rootMeta.add(Field("hello"))
 		rootMeta.add(Field("data"))
@@ -77,8 +78,12 @@ class TestBrokerServer(BrokerServer):
 			hello = "Hello!"
 			data = {}
 
-		self.root = RootObj()
-		self.loader.static.add(self.root,2,99)
+		root = RootObj()
+		self.loader.static.add(root,2,99)
+		return root
+
+	def __init__(self,*a,**k):
+		super(TestServer,self).__init__(*a,**k)
 
 		sql = SQLLoader(DBSession,self.loader)
 		sql.add_model(Person,self.root.data)

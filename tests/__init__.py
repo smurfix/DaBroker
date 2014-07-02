@@ -76,7 +76,6 @@ try:
 except ImportError:
 	from Queue import Queue
 from traceback import format_exc
-from bson import BSON
 
 test_cfg = dict(userid='test', password='test', virtual_host='test', codec="null") 
 

@@ -21,27 +21,56 @@ from dabroker.server.service import BrokerServer
 from dabroker.server.loader.sqlalchemy import SQLLoader
 from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj
 from dabroker.client.service import BrokerClient
+from tests import test_init
 
 from gevent import spawn,sleep
 from gevent.event import AsyncResult
 
 from tests import test_init,LocalQueue,TestMain
-from tests.t30_run import run_server,run_client
+
+logger = test_init("test.30.amqp")
 
 cfg = dict(userid='test', password='test', virtual_host='test')
 
+def run_server(cfg={}, ready=None):
+	from tests.t30_server import TestServer
+	logger.debug("Starting the server")
+	try:
+		ts = TestServer(cfg)
+		ts.start()
+		logger.debug("server running")
+		if ready is not None:
+			ready.set(ts)
+	except Exception as e:
+		if ready is not None:
+			logger.exception("Server startup")
+			ready.set_exception(e)
+		else:
+			raise
+	
+def run_Client(cfg={}):
+	from tests.t30_client import TestClient
+	logger.debug("Starting the client")
+	tc = TestClient(cfg)
+	tc.start()
+	try:
+		logger.debug("client run")
+		tc.run()
+	finally:
+		tc.stop()
+
+logger.debug("Starting the server")
 e = AsyncResult()
-s = spawn(run_server,ready=:e,config=cfg)
+s = spawn(run_server, cfg=cfg, ready=e)
+ts = e.get(timeout=5)
+if ts is None:
+	raise RuntimeError("Server did not run")
 
-if not e.wait(5):
-	s.kill()
-	raise RuntimeError("The server did not start up")
-c = spawn(run_client, config=cfg)
-
+c = spawn(run_client, cfg=cfg)
 c.join(timeout=5)
-if not c.ready():
-	s.kill()
-	raise RuntimeError("The client did not end")
-
-s.kill() # TODO create a message for this
+if not c.ready:
+	c.kill()
+	ts.stop()
+	raise RuntimeError("Client did not run")
+ts.stop()
 
