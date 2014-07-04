@@ -111,8 +111,6 @@ class handle_data(object):
 		if ov is _NotGiven:
 			return
 		if obj._meta is None:
-			if ov and ov != val:
-				import pdb;pdb.set_trace()
 			assert not ov or ov == val, (self.name,ov,val)
 		else:
 			obj._meta._dab.obj_change(obj, self.name, ov,val)

@@ -21,24 +21,21 @@ from dabroker.client.service import BrokerClient
 from gevent import spawn
 from gevent.event import AsyncResult
 
-logger = test_init("test.30.sql")
+from tests import test_init
+
+logger = test_init("test.30.amqp.client")
+
+done = 0
 
 class TestClient(BrokerClient):
 
 	def do_trigger(self,msg):
-		ar = self.q.a[msg]
-		self.q.a[msg] = AsyncResult()
+		logger.debug("GOTO {} starts".format(msg))
+		ar = self.a[msg]
 		ar.set(None)
 	
-	def main(self):
-
-		self.a = [None]
-		for i in range(3):
-			self.a.append(AsyncResult())
-		self.s.sender = self.q.notify
-		super(Broker,self).setup()
-
 	def jump(self,i,n):
+		"""task-switch between jobs."""
 		if i and n:
 			logger.debug("GOTO {} to {}".format(i,n))
 		elif n:
@@ -47,33 +44,28 @@ class TestClient(BrokerClient):
 			logger.debug("GOTO {} waits".format(i))
 
 		if n:
-			self.c.send("trigger",n)
+			self.send("trigger",n)
 		if i:
 			self.a[i].get()
+			self.a[i] = AsyncResult()
 			logger.debug("GOTO {} runs".format(i))
-
-	def stop(self):
-		if self.q is not None:
-			self.q.shutdown()
-		super(Broker,self).stop()
 
 	def ref(self,p):
 		k = p._key
 		def res():
-			return self.c.get(k)
+			return self.get(k)
 		return res
 
-	@property
-	def cid(self):
-		return self.q.cq.next_id
-
 	def job1(self):
-		self.jump(1,0)
-		logger.debug("Get the root")
-		res = self.c.root
+		logger.debug("Get the root A")
+		res = self.root
+
 		logger.debug("recv %r",res)
 		assert res.hello == "Hello!"
 		P = res.data['Person']
+
+		self.jump(1,0)
+
 		assert P.name == 'Person',P.name
 		r = P.find()
 		assert len(r) == 0, r
@@ -81,7 +73,7 @@ class TestClient(BrokerClient):
 		# A: create
 		p1 = P.new(name="Fred Flintstone")
 		p1r = self.ref(p1)
-		self.c.commit()
+		self.commit()
 
 		self.jump(1,2) # goto B
 
@@ -95,8 +87,8 @@ class TestClient(BrokerClient):
 		done |= 1
 
 	def job2(self):
-		logger.debug("Get the root 2")
-		res = self.c.root
+		logger.debug("Get the root B")
+		res = self.root
 		logger.debug("recv %r",res)
 		P = res.data['Person']
 		
@@ -105,13 +97,13 @@ class TestClient(BrokerClient):
 		# B: check+modify
 		p1 = P.get(name="Fred Flintstone")
 		p1.name="Freddy Firestone"
-		self.c.commit()
+		self.commit()
 
 		self.jump(2,3) # goto C
 
 		# E: delete
 		P.delete(p1)
-		self.c.commit()
+		self.commit()
 
 		self.jump(0,3) # goto F
 
@@ -119,27 +111,29 @@ class TestClient(BrokerClient):
 		done |= 2
 	
 	def job3(self):
+		logger.debug("Get the root C")
+		res = self.root
+		logger.debug("recv %r",res)
+		P = res.data['Person']
+		
 		self.jump(3,0)
 
-		# C: check
-		session = DBSession()
-		res = list(session.query(Person))
-		assert len(res)==1
-		res = res[0]
-		assert res.name=="Freddy Firestone",res.name
-		del session
+		self.send("check","Freddy Firestone")
 
 		self.jump(3,1) # goto D
 
 		# F: check
-		session = DBSession()
-		res = list(session.query(Person))
+		res = self.send("list_me",None)
 		assert len(res)==0
 
 		global done
 		done |= 4
 
 	def main(self):
+		self.a = [None]
+		for i in range(3):
+			self.a.append(AsyncResult())
+
 		j1 = spawn(self.job1)
 		j2 = spawn(self.job2)
 		j3 = spawn(self.job3)
@@ -148,3 +142,6 @@ class TestClient(BrokerClient):
 		j2.join()
 		j3.join()
 
+		global done
+		assert done==1+2+4, done
+		logger.debug("Success!")

@@ -24,8 +24,8 @@ from dabroker.util import cached_property
 from gevent import spawn,sleep
 from gevent.event import AsyncResult
 
-import logging
-logger = logging.getLogger("test.30.server")
+from tests import test_init
+logger = test_init("test.30.amqp.server")
 
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
@@ -63,8 +63,6 @@ Base.metadata.create_all(engine)
 
 DBSession = sessionmaker(bind=engine)
 
-done = 0
-
 class TestServer(BrokerServer):
 	@cached_property
 	def root(self):
@@ -85,7 +83,7 @@ class TestServer(BrokerServer):
 	def __init__(self,*a,**k):
 		super(TestServer,self).__init__(*a,**k)
 
-		sql = SQLLoader(DBSession,self.loader)
+		sql = SQLLoader(DBSession,self)
 		sql.add_model(Person,self.root.data)
 		sql.add_model(Address)
 		self.loader.add_loader(sql)
@@ -93,4 +91,17 @@ class TestServer(BrokerServer):
 	def do_trigger(self,msg):
 		self.send("trigger",msg)
 	
+	def do_check(self,msg):
+		# C: check
+		session = DBSession()
+		res = list(session.query(Person))
+		assert len(res)==1
+		res = res[0]
+		assert res.name==msg,res.name
+
+	def do_list_me(self,msg):
+		# C: check
+		session = DBSession()
+		return list(session.query(Person))
+
 

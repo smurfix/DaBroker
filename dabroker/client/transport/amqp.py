@@ -12,8 +12,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-from ..base.transport import ConnectionError
-from ..base.transport.amqp import AmqpTransport
+from ...base.transport import ConnectionError
+from ...base.transport.amqp import AmqpTransport
 
 import os
 import base64
@@ -22,7 +22,7 @@ from gevent import spawn
 from gevent.event import AsyncResult
 
 def random_id():
-	res = os.urandom(16)
+	res = os.urandom(15)
 	return base64.b64encode(res)
 
 import logging
@@ -44,15 +44,18 @@ class Transport(AmqpTransport):
 		super(Transport,self).disconnected(err)
 
 	def on_rpc_response(self, msg):
-		import pdb;pdb.set_trace()
 		# TODO: read the type and emit an error if it's not a sane reply
 		msgid = msg.properties['correlation_id']
 		m = self.decode_msg(msg)
 		if msgid in self.replies:
-			logger.debug("recv %s %r",msgid,m)
 			self.replies[msgid].set(m)
 		else:
 			logger.warning("Unknown message: %s %r",msgid,m)
+
+	def on_info_msg(self, msg):
+		# TODO: read the type and emit an error if it's not a sane reply
+		m = self.decode_msg(msg)
+		self.callbacks.recv(m)
 
 	def _asyncDecode(res,res_dec):
 		try:
@@ -60,33 +63,31 @@ class Transport(AmqpTransport):
 		except BaseException as e:
 			res_dec.set_exception(e)
 
-	def call(self, typ,msg, async=False):
+	def send(self, msg):
 		msgid = random_id()
 		res = AsyncResult()
-		assert rand not in self.replies
-		self.replies[rand] = res
+		assert msgid not in self.replies
+		self.replies[msgid] = res
 
-		logger.debug("send %s %s %r",typ,msgid,m)
-		msg = self.encode_msg(typ,msg, correlation_id=msgid)
-		self.channel.basic_publish(exchange='', routing_key=sef.cfg['rpc_queue'], msg=msg)
-
-		if async:
-			res_dec = AsyncResult()
-			spawn(self._asyncDecode(res,res_dec))
-			res = res_dec
-		else:
-			res = self.decode_msg(res.get())
-		return res
+		msg = self.encode_msg(msg, correlation_id=msgid, reply_to = self.callback_queue)
+		logger.debug("send %s %r to %s",msgid,msg, self.cfg['rpc_queue'])
+		#self.rpc_channel.basic_publish(exchange='', routing_key=self.cfg['rpc_queue'], msg=msg)
+		self.channel.basic_publish(exchange='', routing_key=self.cfg['rpc_queue'], msg=msg)
+		return res.get()
 
 	def setup_channels(self):
-		self.rpc_channel = self.connection.channel()
-		self.rpc_channel.queue_declare(queue=self.cfg['rpc_queue'], auto_delete=False, passive=True)
+		self.channel = self.connection.channel()
+		res = self.channel.queue_declare(exclusive=True)
+		self.callback_queue = res.queue
+		self.channel.basic_consume(callback=self.on_rpc_response, queue=self.callback_queue, no_ack=True)
 
-		self.rpc_channel.basic_consume(callback=self.on_rpc_response, queue=self.cfg['rpc_queue'])
+#		self.rpc_channel = self.connection.channel()
+#		self.rpc_channel.queue_declare(queue=self.cfg['rpc_queue'], auto_delete=False, passive=True)
 
-		self.info_channel = self.connection.channel()
-		self.info_channel.exchange_declare(exchange=self.cfg['exchange'], type='fanout')
+#		self.info_channel = self.connection.channel()
+		self.channel.exchange_declare(exchange=self.cfg['exchange'], type='fanout', auto_delete=False)
 
-		res = channel.queue_declare(exclusive=True)
-		self.info_channel.queue_bind(exchange=self.cfg['exchange'], queue=res.queue)	
-		self.info_channel.basic_consume(self.on_info_msg, queue=res.queue, no_ack=True)
+		res = self.channel.queue_declare(exclusive=True)
+		self.channel.queue_bind(exchange=self.cfg['exchange'], queue=res.queue)
+		self.channel.basic_consume(callback=self.on_info_msg, queue=res.queue, no_ack=True)
+

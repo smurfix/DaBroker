@@ -12,7 +12,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-from ..base.transport.amqp import AmqpTransport
+from ...base.transport.amqp import AmqpTransport
 
 import amqp
 
@@ -28,28 +28,26 @@ class Transport(AmqpTransport):
 		ch = msg.channel
 		delivery_info = msg.delivery_info
 
-        m = self.decode_msg(msg)
+		m = self.decode_msg(msg)
 		try:
 			response = self.callbacks.recv(m)
 		except Exception as e:
-			response = str(e)
-			msg = self.encode_msg('rpc_error', response, correlation_id=props['correlation_id'])
-		else:
-			msg = self.encode_msg('rpc_response', msg)
+			logger.exception("This should never happen")
+			raise
+		msg = self.encode_msg(response, correlation_id=props['correlation_id'])
 		ch.basic_publish(msg=msg, exchange='', routing_key=props['reply_to'])
 		ch.basic_ack(delivery_tag = delivery_info['delivery_tag'])
 
 	def setup_channels(self):
-		self.rpc_channel = self.connection.channel()
-		self.rpc_channel.queue_declare(queue=self.cfg['rpc_queue'], auto_delete=False, passive=False)
+		self.channel = self.connection.channel()
+		self.channel.queue_declare(queue=self.cfg['rpc_queue'], auto_delete=False, passive=False)
+		self.channel.basic_qos(prefetch_count=1,prefetch_size=0,a_global=False)
+		logger.debug("Listen RPC %s",self.cfg['rpc_queue'])
+		self.channel.basic_consume(callback=self.on_rpc, queue=self.cfg['rpc_queue'])
 
-		self.rpc_channel.basic_qos(prefetch_count=1,prefetch_size=0,a_global=False)
-		self.rpc_channel.basic_consume(callback=self.on_rpc, queue=self.cfg['info_queue'])
+		self.channel.exchange_declare(exchange=self.cfg['exchange'], type='fanout', auto_delete=False, passive=False)
 
-		self.info_channel = self.connection.channel()
-		self.info_channel.exchange_declare(exchange=self.cfg['exchange'], type='fanout')
-
-	def send(self, typ,msg):
-        msg = self.encode_msg(typ,msg)
-        self.info_channel.basic_publish(msg=msg, exchange=self.cfg['exchange'], routing_key=typ)
+	def send(self, msg):
+		msg = self.encode_msg(msg)
+		self.channel.basic_publish(msg=msg, exchange=self.cfg['exchange'], routing_key='dab_info')#typ)
 		

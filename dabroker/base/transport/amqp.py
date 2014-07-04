@@ -19,26 +19,29 @@ import amqp
 import logging
 logger = logging.getLogger("dabroker.server.transport.amqp")
 
+from gevent import GreenletExit
+
 class AmqpTransport(BaseTransport):
-	defaults = { "host":'localhost',"username":'',"password":'', "virtual_host"='/', "rpc_queue":'dab_rpc', "info_queue":'dab_info', "exchange":'dab_alert'}
+	defaults = dict(host='localhost', username='', password='', virtual_host='/', rpc_queue='rpc_queue', info_queue='dab_info', exchange='dab_alert')
 	connection = None
 
 	_server = False
 
-	def connect(self):
+	def connect1(self):
 		try:
+			logger.debug("Connecting %s %s %s",self.cfg['host'],self.cfg['virtual_host'],self.cfg['username'])
 			self.connection = amqp.connection.Connection(host=self.cfg['host'], userid=self.cfg['username'], password=self.cfg['password'], login_method='AMQPLAIN', login_response=None, virtual_host=self.cfg['virtual_host'])
 			self.setup_channels()
-			
 		except Exception as e:
+			logger.error("Not connected!")
 			c,self.connection = self.connection,None
 			if c is not None:
 				c.close()
 			self.disconnected()
 			raise
 		else:
-			logger.debug("Connected!")
-		super(AmqpTransport,self).connect()
+			logger.debug("Connected: %s %r",self.__class__.__module__,self.connection)
+		super(AmqpTransport,self).connect1()
 
 	def disconnect(self):
 		super(AmqpTransport,self).disconnect()
@@ -46,24 +49,30 @@ class AmqpTransport(BaseTransport):
 		if c is not None:
 			c.close()
 		
-	def disconnected(self):
+	def disconnected(self, err=None):
 		if self.connection:
 			try: self.connection.close()
 			except Exception: logger.exception("closing channel")
 			self.connection = None
-		super(Transport,self).disconnected()
+		super(AmqpTransport,self).disconnected(err)
 
 	def setup_channels(self):
 		raise NotImplementedError("Duh")
 
-	def encode_msg(self,typ,msg, **attrs):
+	def encode_msg(self,msg, **attrs):
 		attrs.setdefault('content_type','application/x-dab')
-		msg = amqp.Message(application_headers={'type':typ}, body=msg, **attrs)
+		msg = amqp.Message(#application_headers={'type':typ},
+			body=msg, **attrs)
+		return msg
  
 	def decode_msg(self,msg):
-		import pdb;pdb.set_trace()
 		return msg.body
 
-	def run(self,ready):
-		while True: channel.wait()
+	def run(self):
+		logger.debug("Receiver loop on %r %r",self.connection,self.channel)
+		try:
+			while True:
+				self.channel.wait()
+		except GreenletExit:
+			pass
 

@@ -30,7 +30,7 @@ from tests import test_init,LocalQueue,TestMain
 
 logger = test_init("test.30.amqp")
 
-cfg = dict(userid='test', password='test', virtual_host='test')
+cfg = dict(username='test', password='test', virtual_host='test', codec="bson")
 
 def run_server(cfg={}, ready=None):
 	from tests.t30_server import TestServer
@@ -48,14 +48,16 @@ def run_server(cfg={}, ready=None):
 		else:
 			raise
 	
-def run_Client(cfg={}):
+def run_client(cfg={}):
 	from tests.t30_client import TestClient
 	logger.debug("Starting the client")
+	cfg = cfg.copy()
+	cfg["host"] = "127.0.0.1"
 	tc = TestClient(cfg)
 	tc.start()
 	try:
 		logger.debug("client run")
-		tc.run()
+		tc.main()
 	finally:
 		tc.stop()
 

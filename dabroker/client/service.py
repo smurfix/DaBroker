@@ -20,6 +20,7 @@ CACHE_SIZE=10000
 from ..base import UnknownCommandError
 from ..base.transport import BaseCallbacks
 from ..base.config import default_config
+from ..base.codec import ServerError
 from ..util import import_string
 from .codec import adapters, client_broker_info_meta
 
@@ -269,7 +270,7 @@ class BrokerClient(BaseCallbacks):
 	def make_transport(self):
 		name = self.cfg['transport']
 		if '.' not in name:
-			name = "dabroker.server.transport."+name+".Transport"
+			name = "dabroker.client.transport."+name+".Transport"
 		return import_string(name)(cfg=self.cfg, callbacks=self)
 
 	def make_codec(self, adapters=()):

@@ -65,14 +65,28 @@ class BaseTransport(object):
 		self.callbacks = callbacks
 
 	def connect(self):
-		"""Connect. (Synchronously.)"""
+		"""Connect. (Synchronously.)
+		
+		Do not override!
+		Override .connect1() (setup) and .connect2() (initial tasks)"""
 		assert self.callbacks is not None
 		assert self.connection is None
+		self.connect1()
+		self.connect2()
+
+	def connect1(self):
+		"""Override to set up a connection.
+
+		Call super() before running your code."""
 
 		if self._job is not None:
-			raise RuntimeError("Already connecting")
+			raise RuntimeError("Already connected")
 		logger.debug("connecting: %r",self)
 
+	def connect2(self):
+		"""Override to add initial tasks, after you're connected.
+
+		Call super() after running your code."""
 		assert self._job is None
 		self._job = gevent.spawn(self._run_job)
 
@@ -90,7 +104,7 @@ class BaseTransport(object):
 			Do not reconnect from here; do that in your .reconnect"""
 		logger.debug("disconnected: %r",self)
 	
-	def send(self,typ,msg):
+	def send(self,msg):
 		raise NotImplementedError("You need to override {}.send()".format(self.__class__.__name__))
 	
 	def run(self):
