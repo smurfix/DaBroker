@@ -18,9 +18,13 @@ from bson import BSON
 class Codec(BaseCodec):
 	def encode(self, data, *a,**k):
 		msg = super(Codec,self).encode(data, *a,**k)
-		return BSON.encode(msg)
+		return BSON.encode({'_m':msg})
+	
+	def encode_error(self, err, tb=None):
+		msg = super(Codec,self).encode_error(err, tb=tb)
+		return BSON.encode({'_m':msg})
 	
 	def decode(self, data, *a,**k):
-		msg = BSON(data).decode()
+		msg = BSON(data).decode()['_m']
 		return super(Codec,self).decode(msg, *a,**k)
 
