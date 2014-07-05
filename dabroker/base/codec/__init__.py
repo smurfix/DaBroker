@@ -7,6 +7,7 @@ from time import mktime
 from ...util import TZ,UTC, format_dt
 from ..config import default_config
 import datetime as dt
+from collections import namedtuple
 
 from traceback import format_tb
 import logging
@@ -14,6 +15,17 @@ logger = logging.getLogger("dabroker.base.codec")
 
 class _notGiven: pass
 class ComplexObjectError(Exception): pass
+
+DecodeRef = namedtuple('DecodeRef',('oid','parent','offset', 'cache'))
+# This is used to store references to to-be-amended objects.
+# The idea is that if a newly-decoded object encounters this, it can
+# replace the offending reference by looking up the result in the cache.
+# 
+# Currently, this type only provides a hint about the problem's origin if
+# it is ever encountered outside the decoding process. The problem does not
+# occur in actual code because most objects are just transmitted as
+# references, to be evaluated later (when an attribute referring to the
+# object is accessed).
 
 class SupD(dict):
 	"""A dictionary which finds classes"""
@@ -124,10 +136,13 @@ class BaseCodec(object):
 		Serialize my object structure to something dict/list-based and
 		non-self-referential, suitable for JSON/BSON/XML/whatever-ization.
 
-		@loader is something with a .get method. The resolving code will,
-		call that with an object key if it needs to refer to an object.
+		@loader is something with a .get method. The resolving code will
+		call that with a key if it needs to refer to an object.
+
+		@adapters is a list of additional adapters which are to be
+		registered.
 		"""
-	try_simple = True
+	try_simple = 1000
 
 	def __init__(self,loader,adapters=(), cfg={}):
 		super(BaseCodec,self).__init__()
@@ -140,6 +155,9 @@ class BaseCodec(object):
 		self.register(adapters)
 	
 	def register(self,cls):
+		"""\
+			Register more adapters.
+			"""
 		if isinstance(cls,(list,tuple)):
 			for c in cls:
 				self.register(c)
@@ -150,17 +168,35 @@ class BaseCodec(object):
 			self.name2cls[cls.clsname] = cls
 		
 	def _encode(self, data, objcache,objref, include=False):
+		# @objcache: dict: id(obj) => (seqnum,encoded)
+		#            `encoded` will be set to the encoded object so that
+		#            the seqnum can be removed later if it turns out not to
+		#            be needed.
+		# 
+		# @objref: set: the seqnums which are actually required for proper
+		#          encoding. If `None`, try to do simple encoding.
+		
+		# Scalars (integers, strings) do not refer to other objects and
+		# thus are never encoded.
+		#
+		# The only case where that would help is long strings which are
+		# referred to multiple times from the same object tree. This is too
+		# unlikely to be worth the bother.
 		if isinstance(data,scalar_types):
 			return data
 
+		# Have I seen that before?
 		did = id(data)
 		oid = objcache.get(did,None)
 		if oid is not None:
+			# Yes.
 			if objref is None:
 				raise ComplexObjectError(data)
+			# Point to it.
 			oid = oid[0]
 			objref.add(oid)
 			return {'_or':oid}
+		# No. Generate a seqnum for it.
 		oid = 1+len(objcache)
 		objcache[did] = (oid,None)
 		
@@ -196,23 +232,53 @@ class BaseCodec(object):
 		return res
 
 	def encode(self, data, include=False):
-		if self.try_simple:
+		"""\
+			Encode this data structure.
+
+			This code first tries to monitor whether the data structure in
+			question is a proper tree (`try_simple` is 1000).
+
+			If it encounters one that is not, it resets `try_simple` to
+			zero and uses the full reference-tagging approach.
+		
+			@include: a flag telling the system to encode an object's data,
+			          not just a reference. Used server>client.
+			"""
+		if self.try_simple >= 1000:
+			# Try to do a faster encoding pass
 			try:
 				objcache = {}
 				res = self._encode(data, objcache,None, include=include)
 			except ComplexObjectError:
-				self.try_simple = False
-		if not self.try_simple:
+				self.try_simple = 0
+
+		if self.try_simple < 1000:
+			# No, not yet / did not work: slower path
 			objcache = {}
 			objref = set()
 			res = self._encode(data, objcache,objref, include=include)
 
-			for i,v in objcache.values():
-				if i not in objref:
+			if objref:
+				# At least one reference was required.
+				self.try_simple = 0
+				for i,v in objcache.values():
+					if i not in objref:
+						del v['_oi']
+			else:
+				# No, this was a proper tree after all.
+				self.try_simple += 1
+				for i,v in objcache.values():
 					del v['_oi']
 		return res
 	
 	def encode_error(self, err, tb=None):
+		"""\
+			Special method for encoding an error, with optional traceback.
+
+			Note that this will not pass through the normal encoder, so the
+			data should be strings (or, in case of the traceback, a list of
+			strings).
+			"""
 		if not hasattr(err,'swapcase'): # it's a string
 			err = str(err)
 		res = {'_error':err }
@@ -224,18 +290,41 @@ class BaseCodec(object):
 		return res
 
 	def _decode(self,data, objcache,objtodo, p=None,off=None):
+		# Decode the data recursively.
+		#
+		# @objcache: dict seqnum=>result
+		# 
+		# @objtodo: Fixup data, list of (seqnum,parent,index). See below.
+		#
+		# @p, @off: parent object and index which refer to this object.
+		#
+		# During decoding, information to recover an object may not be
+		# available, i.e. we encounter an object reference before or even
+		# while decoding the data it refers to. The @objtodo array records
+		# where the actual result is supposed to be stored, as soon as we
+		# have it.
+		#
+		# TODO: This process does not yet work with object references
+		# within other objects. To be implemented if needed.
+
 		if isinstance(data, scalar_types):
 			return data
 
+		# "Unmolested" lists are passed through.
 		if isinstance(data,(list,tuple)):
 			return type(data)(self._decode(v,objcache,objtodo) for v in data)
+
 		if isinstance(data,dict):
 			oid = data.pop('_oi',None)
 			obj = data.pop('_o',None)
 			objref = data.pop('_or',None)
 			if objref is not None:
-				objtodo.append((objref,p,off))
-				return
+				res = objcache.get(objref,None)
+				if res is None:
+					# Save fixing the problem for later
+					res = DecodeRef(objref,p,off, objcache)
+					objtodo.append(res)
+				return res
 
 			if obj == 'LIST':
 				res = []
@@ -264,15 +353,22 @@ class BaseCodec(object):
 		raise NotImplementedError("Don't know how to decode %r"%data)
 	
 	def _cleanup(self, objcache,objtodo):
-		for d,p,k in objtodo:
+		# resolve the "todo" stuff
+		for d,p,k,_ in objtodo:
 			p[k] = objcache[d]
 		
 	def decode(self, data):
+		"""\
+			Decode the data.
+			
+			Reverse everything the encoder does as cleanly as possible.
+			"""
+		if isinstance(data,dict) and '_error' in data:
+			raise ServerError(data['_error'],data.get('tb',None))
+
 		objcache = {}
 		objtodo = []
 		res = self._decode(data,objcache,objtodo)
 		self._cleanup(objcache,objtodo)
-		if isinstance(res,dict) and '_error' in res:
-			raise ServerError(res['_error'],res.get('tb',None))
 		return res
 
