@@ -5,7 +5,9 @@ export PYTHONPATH=$(shell pwd)
 test:
 	make test2 DAB_CODEC=bson
 	make test2 DAB_CODEC=json
+	make test2 DAB_CODEC=marshal
 	make test3 DAB_CODEC=bson
+	make test3 DAB_CODEC=marshal
 
 test2:
 	@set -ex; \
