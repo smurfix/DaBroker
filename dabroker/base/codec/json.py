@@ -12,11 +12,28 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-import os
+from . import BaseCodec
+from json import loads,dumps
 
-default_config = dict(
-    transport="amqp",
-    codec=os.environ.get("DAB_CODEC","bson"),
-)
-# More defaults are located in the modules which actually use the settings.
+import logging
+logger = logging.getLogger("J")
+
+class Codec(BaseCodec):
+	def encode(self, data, *a,**k):
+		msg = super(Codec,self).encode(data, *a,**k)
+		msg = dumps(msg)
+		logger.info("OUT %s",msg)
+		return msg
+	
+	def encode_error(self, err, tb=None):
+		msg = super(Codec,self).encode_error(err, tb=tb)
+		msg = dumps(msg)
+		logger.info("ERR %s",msg)
+		logger.info(msg)
+		return msg
+	
+	def decode(self, data, *a,**k):
+		msg = loads(data)
+		logger.info("IN  %s",msg)
+		return super(Codec,self).decode(msg, *a,**k)
 

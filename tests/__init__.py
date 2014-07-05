@@ -77,7 +77,7 @@ except ImportError:
 	from Queue import Queue
 from traceback import format_exc
 
-test_cfg = dict(codec="null") 
+test_cfg = dict(codec=os.environ.get("DAB_CODEC","null"))
 
 test_cfg_s = dict(transport="tests.ServerQueue")
 test_cfg_c = dict(transport="tests.ClientQueue")

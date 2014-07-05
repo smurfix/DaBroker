@@ -2,7 +2,10 @@
 
 export PYTHONPATH=$(shell pwd)
 
-test: test2 test3
+test:
+	make test2 DAB_CODEC=bson
+	make test2 DAB_CODEC=json
+	make test3 DAB_CODEC=bson
 
 test2:
 	@set -ex; \
