@@ -352,6 +352,7 @@ class BrokerClient(BaseCallbacks):
 			raise
 		else:
 			# The deserializer has already added the object to the cache (or it should have)
+			assert self._cache.get(key,None) is obj
 			return obj
 		
 	def obj_new(self,cls,**kw):
