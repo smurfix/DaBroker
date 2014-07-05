@@ -23,7 +23,7 @@ from gevent.event import AsyncResult
 
 def random_id():
 	res = os.urandom(15)
-	return base64.b64encode(res)
+	return str(base64.b64encode(res))
 
 import logging
 logger = logging.getLogger("dabroker.client.transport.amqp")
