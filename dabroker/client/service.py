@@ -131,7 +131,7 @@ class CountedCache(WeakValueDictionary,object):
 
 class CacheDict(CountedCache):
 	"""\
-		This is a WeakValueDict which keeps the last CACHE_SIZE items pinned.
+		This is an augmented WeakValueDict which keeps the last CACHE_SIZE items pinned.
 
 		.lru is a hash which acts as a FIFO (think collections.deque,
 		except that a deque's length is not mutable).
@@ -413,7 +413,7 @@ class BrokerClient(BaseCallbacks):
 		return res
 
 	def call(self, obj,name,a,k):
-		res = self.send("call",name, o=obj,a=a,k=k)
+		res = self.send(name,_obj=obj,*a,**k)
 		return res
 		
 	def do_ping(self,msg):
@@ -511,11 +511,19 @@ class BrokerClient(BaseCallbacks):
 		rk.set(obj)
 		return obj
 
-	def send(self, action, msg=None, **kw):
+	def send(self, action, *a,**kw):
 		"""Generic method for RPCing the server"""
-		logger.debug("send %s %r %r",action,msg,kw)
-		kw['_m'] = msg
-		kw['_a'] = action
+		_obj = kw.pop('_obj',None)
+		logger.debug("send %s %r %r %r",action,_obj,a,kw)
+		assert '_a' not in kw
+		assert '_m' not in kw
+		assert '_o' not in kw
+
+		kw['_m'] = action
+		if _obj is not None:
+			kw['_o'] = _obj
+		if a:
+			kw['_a'] = a
 		msg = self._send(kw)
 		logger.debug("recv %r",msg)
 		return msg
@@ -541,13 +549,12 @@ class BrokerClient(BaseCallbacks):
 
 		logger.debug("bcast %r",msg)
 		m = msg.pop('_m')
-		a = msg.pop('_a',[])
-		k = msg.pop('_k',{})
+		a = msg.pop('_a',())
 
 		try:
 			proc = getattr(self,'do_'+m)
 		except AttributeError:
 			raise UnknownCommandError(m)
-		proc(*a,**k)
+		proc(*a,**msg)
 
 client = None

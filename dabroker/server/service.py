@@ -75,8 +75,8 @@ class BrokerServer(BaseCallbacks):
 
 	# remote calls
 
-	def do_root(self,msg):
-		logger.debug("Get root %r",msg)
+	def do_root(self):
+		logger.debug("Get root")
 		res = self.root
 		if not hasattr(res,'_key'):
 			self.loader.static.add(res,'root')
@@ -164,24 +164,19 @@ class BrokerServer(BaseCallbacks):
 			msg = self.codec.decode(msg)
 
 			logger.debug("recv %r",msg)
-			job = msg.pop('_a')
-			m = msg.pop('_m',msg)
+			m = msg.pop('_m')
+			o = msg.pop('_o',None)
+			a = msg.pop('_a',())
 
 			try:
-				if job == "call":
-					# unwrap it so we can get at the proc's attributes
-					a = msg.get('a',())
-					k = msg.get('k',{})
-					o = msg['o']
-					assert m in o._meta.calls,"You cannot call method {} of {}".format(msg,o)
+				if o is not None:
+					assert m in o._meta.calls,"You cannot call method {} of {}".format(m,o)
 					proc = getattr(o,m)
 				else:
-					a = (m,)
-					k = msg
-					proc = getattr(self,'do_'+job)
+					proc = getattr(self,'do_'+m)
 			except AttributeError:
-				raise UnknownCommandError(job)
-			msg = proc(*a,**k)
+				raise UnknownCommandError((m,o))
+			msg = proc(*a,**msg)
 			logger.debug("reply %r",msg)
 			attrs = {'include':getattr(proc,'include',False)}
 			msg = self.codec.encode(msg, include=attrs.get('include',False))
@@ -193,7 +188,10 @@ class BrokerServer(BaseCallbacks):
 	def send(self, action, *a, **k):
 		"""Broadcast a message to all clients"""
 		logger.debug("bcast %s %r %r",action,a,k)
-		msg = {'_m':action,'_a':a,'_k':k}
+		msg = k
+		msg['_m'] = action
+		if a:
+			msg['_a'] = a
 
 		msg = self.codec.encode(msg)
 		self.transport.send(msg)
