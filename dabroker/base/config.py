@@ -16,7 +16,7 @@ import os
 
 default_config = dict(
     transport="amqp",
-    codec=os.environ.get("DAB_CODEC","bson"),
+    codec="bson",
 )
 # More defaults are located in the modules which actually use the settings.
 
