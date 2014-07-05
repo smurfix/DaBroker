@@ -30,7 +30,7 @@ from tests import test_init,LocalQueue,TestMain
 
 logger = test_init("test.30.amqp")
 
-cfg = dict(username='test', password='test', virtual_host='test', codec="bson")
+cfg = dict(username='test', password='test', virtual_host='test')
 
 def run_server(cfg={}, ready=None):
 	from tests.t30_server import TestServer
