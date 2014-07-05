@@ -89,11 +89,11 @@ class BrokerServer(BaseCallbacks):
 		logger.debug("echo %r",msg)
 		return msg
 
-	def do_ping(self,msg):
-		logger.debug("ping %r",msg)
+	def do_ping(self):
+		logger.debug("ping")
 
-	def do_pong(self,msg):
-		logger.debug("pong %r",msg)
+	def do_pong(self):
+		logger.debug("pong")
 
 	def do_get(self, key):
 		"""Fetch an object by its key"""
@@ -130,12 +130,12 @@ class BrokerServer(BaseCallbacks):
 	def send_created(self, obj):
 		"""This object has been created."""
 		attrs = dict((k,(v,)) for k,v in obj._attrs.items())
-		self.send("invalid_key",None, m=obj._meta._key, k=attrs)
+		self.send("invalid_key", _meta=obj._meta._key, **attrs)
 
 	def send_deleted(self, obj):
 		"""This object has been deleted."""
 		attrs = dict((k,(v,)) for k,v in obj._attrs.items())
-		self.send("invalid_key",obj._key, m=obj._meta._key, k=attrs)
+		self.send("invalid_key", _key=obj._key, _meta=obj._meta._key, **attrs)
 
 	def send_updated(self, obj, attrs):
 		"""\
@@ -153,7 +153,7 @@ class BrokerServer(BaseCallbacks):
 				if nv is not None: nv = nv._key
 			if ov != nv:
 				attrs[k] = (ov,nv)
-		self.send("invalid_key",key, m=mkey, k=attrs)
+		self.send("invalid_key", _key=key, _meta=mkey, **attrs)
 		
 	# Basic transport handling
 

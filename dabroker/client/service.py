@@ -416,18 +416,18 @@ class BrokerClient(BaseCallbacks):
 		res = self.send(name,_obj=obj,*a,**k)
 		return res
 		
-	def do_ping(self,msg):
+	def do_ping(self):
 		"""The server wants to know who's listening. So tell it."""
 		logger.debug("ping %r",msg)
 		self.send("pong")
 
-	def do_pong(self,msg):
+	def do_pong(self):
 		# for completeness. The server doesn't send a broadcast on client request.
 		raise RuntimeError("This can't happen")
 
-	def do_invalid(self,msg):
+	def do_invalid(self,*keys):
 		"""Directly invalidate these cache entries."""
-		for k in msg:
+		for k in keys:
 			k = tuple(k)
 			try:
 				del self._cache[k]
@@ -436,28 +436,28 @@ class BrokerClient(BaseCallbacks):
 			else:
 				logger.debug("inval: dropped: %r",k)
 
-	def do_invalid_key(self,key, m=None,k={}):
+	def do_invalid_key(self,_key=None,_meta=None, **k):
 		"""Invalidate an object, plus whatever might have been used to search for it.
 		
 			@key the object (or None if the object is new)
-			@m the object's metadata key (search results hang off metadata)
+			@meta the object's metadata key (search results hang off metadata)
 			@k: a key=>(value,…) dict. A search is obsoleted when one
 									   of the search keys matches one of the values.
 			"""
-		if key is not None:
-			key = tuple(key)
-			logger.debug("inval_key: %r: %r",key,k)
-			obj = self._cache.pop(key,None)
+		if _key is not None:
+			_key = tuple(_key)
+			logger.debug("inval_key: %r: %r",_key,k)
+			obj = self._cache.pop(_key,None)
 			if obj is None:
 				logger.debug("not in cache")
 		else:
 			logger.debug("no key")
 
-		if m is None:
+		if _meta is None:
 			logger.warn("no metadata?")
 			return
-		m = tuple(m)
-		obj = self._cache.get(m,None)
+		_meta = tuple(_meta)
+		obj = self._cache.get(_meta,None)
 		if obj is None:
 			logger.warn("metadata not found")
 			return
