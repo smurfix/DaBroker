@@ -13,6 +13,7 @@ import logging
 logger = logging.getLogger("dabroker.base.codec")
 
 class _notGiven: pass
+class ComplexObjectError(Exception): pass
 
 class SupD(dict):
 	"""A dictionary which finds classes"""
@@ -126,6 +127,8 @@ class BaseCodec(object):
 		@loader is something with a .get method. The resolving code will,
 		call that with an object key if it needs to refer to an object.
 		"""
+	try_simple = True
+
 	def __init__(self,loader,adapters=(), cfg={}):
 		super(BaseCodec,self).__init__()
 		self.loader = loader
@@ -146,19 +149,30 @@ class BaseCodec(object):
 		if cls.clsname is not None:
 			self.name2cls[cls.clsname] = cls
 		
-	def _encode(self, data, objcache, include=False):
+	def _encode(self, data, objcache,objref, include=False):
 		if isinstance(data,scalar_types):
 			return data
 
-		oid = objcache.get(id(data),None)
+		did = id(data)
+		oid = objcache.get(did,None)
 		if oid is not None:
+			if objref is None:
+				raise ComplexObjectError(data)
+			oid = oid[0]
+			objref.add(oid)
 			return {'_or':oid}
 		oid = 1+len(objcache)
-		objcache[id(data)] = oid
+		objcache[did] = (oid,None)
 		
 		if isinstance(data,(list,tuple)):
 			# A toplevel list will keep its "include" state
-			return { '_o':'LIST','_oi':oid,'_d':type(data)(self._encode(x,objcache,include) for x in data) }
+			data = type(data)(self._encode(x,objcache,objref,include) for x in data)
+			if objref is None:
+				return data
+
+			res = { '_o':'LIST','_oi':oid,'_d':data }
+			objcache[did] = (oid,res)
+			return res
 
 		odata = data
 		if not isinstance(data,dict):
@@ -173,15 +187,30 @@ class BaseCodec(object):
 				nk = '_o_'+k[2:]
 			else:
 				nk = k
-			res[nk] = self._encode(v,objcache)
+			res[nk] = self._encode(v,objcache,objref)
 		if not isinstance(odata,dict):
 			res['_o'] = obj.clsname
-		res['_oi'] = oid
+		if objref is not None:
+			res['_oi'] = oid
+		objcache[did] = (oid,res)
 		return res
 
 	def encode(self, data, include=False):
-		objcache = {}
-		return self._encode(data, objcache, include=include)
+		if self.try_simple:
+			try:
+				objcache = {}
+				res = self._encode(data, objcache,None, include=include)
+			except ComplexObjectError:
+				self.try_simple = False
+		if not self.try_simple:
+			objcache = {}
+			objref = set()
+			res = self._encode(data, objcache,objref, include=include)
+
+			for i,v in objcache.values():
+				if i not in objref:
+					del v['_oi']
+		return res
 	
 	def encode_error(self, err, tb=None):
 		if not hasattr(err,'swapcase'): # it's a string
