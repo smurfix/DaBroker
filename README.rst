@@ -1,10 +1,14 @@
 DaBroker
 ========
 
-DaBroker is a Data Access Broker, written in Python.
-It exposes objects (e.g. database rows, or their NoSQL equivalent, or
+DaBroker is short for Data Access Broker.
+
+DaBroker exposes objects (e.g. database rows, or their NoSQL equivalent, or
 indeed anything you might think of) to clients which might cache these
 objects.
+
+DaBroker is written in Python. If you understand JSON and RabbitMQ, 
+a client in a different language is reasonably straightforward.
 
 Rationale
 #########
@@ -12,21 +16,21 @@ Rationale
 Assume that you have a database (or several) which is not read-only, but
 not updated frequently either.
 
-Further assume a distributed heap of processes which need to keep a dynamic
-subset of that data in memory. For instance, if you serve a web site, the
-home page qualifies. So does the page that was linked from Slashdot
-yesterday.
+Further assume processes which need to keep a dynamic subset of that data
+in memory. For instance, if you serve a web site, the home page qualifies.
+So does the page that was linked from Slashdot yesterday.
 
 Also assume that you don't want to work with stale data.
 
-Last, assume that you can funnel all data updates through DaBroker.
+Last, assume that you can funnel all updates through DaBroker.
 
 With DaBroker, you can (mostly) forget about network latency or excessive
 memory usage because "hot" data will be cached on the client, dynamically.
 
-The DaBroker server sends "this is no longer valid" broadcasts, so you
-never work with stale data unless you want to (i.e. your data only changes
-when you're not looking).
+The DaBroker server sends "this is no longer valid" messages to all
+clients. Following an object reference will then update the cached copy
+automatically. Objects that are in active use will not be modified
+"behind your back".
 
 Design
 ######
@@ -47,8 +51,9 @@ easily add application-specific back-ends.
 DaBroker's data serialization language is BSON, i.e. binary JSON.
 Other serializers are possible.
 
-DaBroker does not constrain data types beyond what the serializer and the
-database support.
+DaBroker does not constrain data types. Its serializer can reproduce
+arbitrary data structures including self-referential objects and loops.
+It will only transmit Python objects it knows about.
 
 System Layout
 #############
