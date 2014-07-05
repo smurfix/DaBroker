@@ -71,16 +71,26 @@ def pf(m):
 	return pformat(m)
 # local queue implementation
 
+def cfg_merge(*cf, **kw):
+	res = {}
+	for d in cf:
+		res.update(d)
+	res.update(kw)
+	return res
+
 try:
 	from queue import Queue
 except ImportError:
 	from Queue import Queue
 from traceback import format_exc
 
-test_cfg = dict(codec=os.environ.get("DAB_CODEC","null"))
+test_cfg = dict(
+                username='test', password='test', virtual_host='test',
+                codec=os.environ.get("DAB_CODEC","null"),
+)
 
-test_cfg_s = dict(transport="tests.ServerQueue")
-test_cfg_c = dict(transport="tests.ClientQueue")
+test_cfg_s = cfg_merge(test_cfg, transport="tests.ServerQueue")
+test_cfg_c = cfg_merge(test_cfg, transport="tests.ClientQueue")
 
 class RPCmessage(object):
 	msgid = None
@@ -223,6 +233,12 @@ class TestRoot(BaseObj):
 class TestServer(BrokerServer):
 	root_factory = TestRoot
 
+	def __init__(self,cfg={}):
+		my_cfg = default_config.copy()
+		my_cfg.update(test_cfg_s)
+		my_cfg.update(cfg)
+		super(Testclient,self).__init__(my_cfg)
+
 	@property
 	def root(self):
 		return self.root_factory()
@@ -232,6 +248,12 @@ class TestServer(BrokerServer):
 		return super(TestServer,self).start()
 
 class TestClient(BrokerClient):
+	def __init__(self,cfg={}):
+		my_cfg = default_config.copy()
+		my_cfg.update(test_cfg_c)
+		my_cfg.update(cfg)
+		super(Testclient,self).__init__(my_cfg)
+
 	def main(self):
 		raise NotImplementedError("You need to override {}.main!".format(self.__class__.__name__))
 

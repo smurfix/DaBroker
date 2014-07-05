@@ -21,16 +21,15 @@ from dabroker.server.service import BrokerServer
 from dabroker.server.loader.sqlalchemy import SQLLoader
 from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj
 from dabroker.client.service import BrokerClient
-from tests import test_init
 
 from gevent import spawn,sleep
 from gevent.event import AsyncResult
 
-from tests import test_init,LocalQueue,TestMain
+from tests import test_init,LocalQueue,TestMain,test_cfg_s,test_cfg_c, cfg_merge
 
 logger = test_init("test.30.amqp")
 
-cfg = dict(username='test', password='test', virtual_host='test')
+cfg = {'transport':'amqp'}
 
 def run_server(cfg={}, ready=None):
 	from tests.t30_server import TestServer
@@ -63,12 +62,12 @@ def run_client(cfg={}):
 
 logger.debug("Starting the server")
 e = AsyncResult()
-s = spawn(run_server, cfg=cfg, ready=e)
+s = spawn(run_server, cfg=cfg_merge(test_cfg_s,cfg), ready=e)
 ts = e.get(timeout=5)
 if ts is None:
 	raise RuntimeError("Server did not run")
 
-c = spawn(run_client, cfg=cfg)
+c = spawn(run_client, cfg=cfg_merge(test_cfg_c,cfg))
 c.join(timeout=5)
 if not c.ready:
 	c.kill()
