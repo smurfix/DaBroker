@@ -1,5 +1,5 @@
-JSON data
-=========
+Message data
+============
 
 DaBroker's serializer translates arbitrary Python data structures to
 a hierarchy of non-self-referential JSON-compatible `dict` and `list`
@@ -49,11 +49,31 @@ An example:
 The codec will not add `_oi` elements to dictionaries that don't need them.
 It may not actually pack lists in dicts if that is not necessary.
 
+    :note: Current implementation: References are tagged but not marked.
+    If/when it hits a data structure that's not a strict tree, it switches
+    to a "complicated" algorithm.
+
 Strings are always transmitted as plain strings, even if they are long
 enough to benefit from reference counting.
 
+Errors
+------
+
+Error messages are propagated through RPC. Errors are sent as a dict with
+an `_error` key (with a string representation of the problem as the value).
+The decoder will raise the error when it encounters it.
+
+An optional `tb` element contains the traceback. It will be printed
+properly when the resulting error is logged on the client.
+
+TODO: No attempt is yet made to distinguish error severities
+(e.g. retryable or not).
+
 Object types
 ------------
+
+These are the values of the `_o` key. Unrecognized object types will raise
+an error.
 
     *   LIST
 
@@ -62,25 +82,26 @@ Object types
 
     *   date
 
-        The actual date is the current Julian date in `d`. `s` contains a
+        The value is the current Julian date, stored in `d`. `s` contains a
         human-readable form which is ignored when importing.
 
     *   datetime
 
-        The actual date is a Unix timestamp in `t` (int or float). A
+        The value is a Unix timestamp in `t` (int or float). A
         human-readable string with unspecified timezone (probably UTC) is
-        in `s`.
+        stored in `s`.
 
     *   timedelta
 
         A fancy name for "number of seconds" (Python's `datetime.timedelta`
-        type). The number is in `t`, the human-readable string in `s`.
+        type). The number of seconds is in `t`, the human-readable string
+        is in `s`.
 
     *   time
 
         A time-of-day. The difference to `timedelta` is that `time` is
         translated to UTC timezone when exporting. The imported result will
-        be in UTC.
+        be an offset from UTC.
 
     *   Obj
 
