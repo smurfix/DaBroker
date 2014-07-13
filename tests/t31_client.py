@@ -35,12 +35,14 @@ class TestClient(BrokerClient):
 		assert t != time()
 		assert t != time()
 
-		# 5sec of warm-up (for pypy JIT)
-		while time()-t <= 5:
+		pypy = "pypy" in sys.version.lower()
+		warmup = 8 if pypy else 1
+		while time()-t <= warmup:
 			res.pling("This",root=res)
-		while time()-t <= 10:
+		t=time()
+		while time()-t <= 1:
 			res.pling("This",root=res)
 			done += 1
 
 		assert done > 10 # assume that somethign is wrong, otherwise
-		logger.warning("%d iterations (%s)",done/5,t)
+		logger.warning("%d iterations (%s and %s) with %s",done, self.cfg['codec'],self.cfg['transport'], sys.version)
