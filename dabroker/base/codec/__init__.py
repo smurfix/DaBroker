@@ -355,7 +355,6 @@ class BaseCodec(object):
 					res = self.name2cls[obj].decode(**res)
 				except Exception:
 					logger.error("Decoding: %s: %r %r",obj,self.name2cls[obj],res)
-					import pdb;pdb.set_trace()
 					raise
 			if oid is not None:
 				objcache[oid] = res
