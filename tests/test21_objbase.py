@@ -16,7 +16,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from dabroker import patch; patch()
 from dabroker.server.service import BrokerServer
-from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj
+from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj,BaseRef
 from dabroker.client.service import BrokerClient
 from dabroker.util import cached_property
 
@@ -89,7 +89,7 @@ class Test21_server(TestServer):
 	def do_trigger(self,msg):
 		if msg == 1:
 			self.root.ops.hell = "Yeah!"
-			self.send("invalid",self.root.ops._key,(3,4,5)) # the latter is unknown
+			self.send("invalid",self.root.ops._key,BaseRef(key=(3,4,5))) # the latter is unknown
 		elif msg == 2:
 			obj = self._ops_meta.objs[2]
 			ov = obj.hell

@@ -13,10 +13,27 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ##BP
 
 from ..base import BaseRef,BaseObj,BrokeredInfo, adapters as baseAdapters, common_BaseObj,common_BaseRef
+from ..base.config import default_config
+from hashlib import sha1 as mac
+from base64 import b64encode
 
 # This is the server's storage side.
 
 adapters = baseAdapters[:]
+
+secret = None
+
+def make_secret(key):
+	"""Generate a salted hash of the key, so that a client is unable to simply enumerate objects."""
+	assert key
+
+	global secret
+	if secret is None:
+		secret = mac(default_config['SECRET'].encode("utf-8"))
+	m = secret.copy()
+	for k in key:
+		m.update('\0'+(str(k)).encode("utf-8"))
+	return b64encode(m.digest()[0:6])
 
 def codec_adapter(cls):
 	adapters.append(cls)
@@ -25,8 +42,14 @@ def codec_adapter(cls):
 @codec_adapter
 class server_BaseObj(common_BaseObj):
 	@staticmethod
-	def decode(loader, k=None,f=None,r=None):
-		res = loader.get(tuple(k))
+	def encode(obj, include=False):
+		if obj._key.code is None:
+			obj._key.code = make_secret(obj._key.key)
+		return common_BaseObj.encode(obj, include=include)
+
+	@staticmethod
+	def decode(loader, k=None,c=None,f=None,r=None):
+		res = server_BaseRef.decode(loader,k=k,c=c)
 		if f:
 			for k,v in f.items():
 				if getattr(res,k) != v:
@@ -48,12 +71,17 @@ class server_BaseRef(common_BaseRef):
 			from .loader import get
 			obj = get(obj._key)
 			return server_BaseObj.encode(obj,include)
-		return common_BaseRef.encode(obj)
+		if obj.code is None:
+			obj.code = make_secret(obj.key)
+		return common_BaseRef.encode(obj, include=include)
 
 	@staticmethod
-	def decode(loader, k=None,m=None):
-		from .loader import get
-		res = get(k)
+	def decode(loader, k=None,m=None,c=None):
+		res = BaseRef(key=k,code=c)
+		if c is None:
+			return res
+		assert c == make_secret(k)
+		res = loader.get(res)
 		if m:
 			assert m is res._meta,(m,res._meta)
 		return res
@@ -64,8 +92,7 @@ class server_InfoObj(server_BaseObj):
 	clsname = "Info"
 
 	@staticmethod
-	def decode(loader, k=None,f=None,m=None):
-		k = tuple(k)
+	def decode(loader, f=None,**kw):
 		assert f is None
-		return loader.get(k)
+		return server_BaseObj.decode(loader,**kw)
 

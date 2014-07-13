@@ -46,7 +46,7 @@ class ClientBrokeredInfo(BrokeredInfo):
 					res += ":"+n
 				n = getattr(self,'_key',None)
 				if n is not None:
-					res += ":"+" ".join(str(x) for x in n)
+					res += ":"+str(n)
 				res += ">"
 				return res
 			__str__=__repr__
@@ -65,7 +65,7 @@ class ClientBrokeredInfo(BrokeredInfo):
 					else:
 						n = getattr(self,'_key',None)
 						if n is not None:
-							res += ":"+" ".join(str(x) for x in n)
+							res += ":"+str(n)
 					res += ">"
 					return res
 				__str__=__repr__
@@ -161,8 +161,8 @@ class ClientBaseObj(BaseObj):
 @codec_adapter
 class client_baseRef(common_BaseRef):
 	@staticmethod
-	def decode(loader, k):
-		return BaseRef(key=tuple(k))
+	def decode(loader, k,c=None):
+		return BaseRef(key=tuple(k),code=c)
 
 @codec_adapter
 class client_BaseObj(common_BaseObj):
@@ -180,20 +180,23 @@ class client_BaseObj(common_BaseObj):
 	
 
 	@classmethod
-	def decode(cls, loader, k,f=None,r=None,meta=None, _is_meta=None):
+	def decode(cls, loader, k,c=None,f=None,r=None,meta=None, _is_meta=None):
 		"""\
 			Decode a reference.
 			"""
-		k = tuple(k)
+		k = BaseRef(key=k,code=c)
 		if meta is not None:
 			res = meta.class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
-		elif r and '_meta' in r and hasattr(r['_meta'],'_key'):
-			res = loader.get(r['_meta']._key).class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
+		elif r and '_meta' in r:
+			r['_meta'] = meta = loader.get(r['_meta'])
+			res = meta.class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
 		else:
+			#raise RuntimeError("no meta info: untested")
+			import pdb;pdb.set_trace()
 			res = ClientBaseObj
 
 		res = res()
-		res._key = tuple(k)
+		res._key = k
 
 		if f:
 			for k,v in f.items():
@@ -201,9 +204,9 @@ class client_BaseObj(common_BaseObj):
 		if r:
 			for k,v in r.items():
 				if k == '_meta':
-					res._meta = loader.get(v._key)
+					res._meta = v
 				else:
-					res._refs[k] = v._key if v is not None else None
+					res._refs[k] = v
 
 		return loader._add_to_cache(res)
 
@@ -213,13 +216,13 @@ class client_InfoObj(client_BaseObj):
 	clsname = "Info"
 		
 	@staticmethod
-	def decode(loader, k=None,f=None, **kw):
+	def decode(loader, k=None,c=None,f=None, **kw):
 		if f is None:
 			# We always need the data, but this is something like a ref
 			# so we need to go and get the real thing.
 			# NOTE this assumes that the codec doesn't throw away empty lists.
-			return loader.get(tuple(k))
-		res = client_BaseObj.decode(loader, _is_meta=True, k=k,f=f,**kw)
+			return loader.get(BaseRef(key=k,code=c))
+		res = client_BaseObj.decode(loader, _is_meta=True, k=k,c=c,f=f,**kw)
 		res.client = loader
 		return res
 

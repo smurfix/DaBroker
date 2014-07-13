@@ -17,6 +17,7 @@ import os
 default_config = dict(
     transport="amqp",
     codec="bson",
+    SECRET="You really should change this",
 )
 # More defaults are located in the modules which actually use the settings.
 

@@ -14,7 +14,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # The sqlalchemy object loader
 
-from ...base import common_BaseRef, BrokeredInfo,BrokeredMeta, Field,Ref,BackRef,Callable, get_attrs
+from ...base import BrokeredInfo,BrokeredMeta, Field,Ref,BackRef,Callable, get_attrs
 from . import BaseLoader
 from ..codec import server_BaseObj
 from sqlalchemy.inspection import inspect

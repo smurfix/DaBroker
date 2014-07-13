@@ -126,7 +126,7 @@ class _time(object):
 			return dt.datetime.utcfromtimestamp(t).time()
 		return dt.time(*a)
 
-scalar_types = {type(None),float}
+scalar_types = {type(None),float,bytes}
 from six import string_types,integer_types
 for s in string_types+integer_types: scalar_types.add(s)
 scalar_types = tuple(scalar_types)
@@ -214,7 +214,7 @@ class BaseCodec(object):
 		if not isinstance(data,dict):
 			obj = self.type2cls.get(type(data),None)
 			if obj is None:
-				raise NotImplementedError("I don't know how to encode %r"%(data,))
+				raise NotImplementedError("I don't know how to encode %s: %r"%(repr(data.__class__),data,))
 			data = obj.encode(data, include=include)
 
 		res = type(data)()
@@ -223,7 +223,8 @@ class BaseCodec(object):
 				nk = '_o_'+k[2:]
 			else:
 				nk = k
-			res[nk] = self._encode(v,objcache,objref)
+			# if `include` is None, keep that value.
+			res[nk] = self._encode(v,objcache,objref, include=False if include else include)
 		if not isinstance(odata,dict):
 			res['_o'] = obj.clsname
 		if objref is not None:
@@ -242,7 +243,9 @@ class BaseCodec(object):
 			zero and uses the full reference-tagging approach.
 		
 			@include: a flag telling the system to encode an object's data,
-			          not just a reference. Used server>client.
+			          not just a reference. Used server>client. If None,
+			          send object keys without retrieval info. This is used
+			          e.g. when broadcasting, so as to not leak data access.
 			"""
 		if self.try_simple >= 1000:
 			# Try to do a faster encoding pass
@@ -345,7 +348,11 @@ class BaseCodec(object):
 				res[nk] = self._decode(v,objcache,objtodo, res,k)
 
 			if obj is not None:
-				res = self.name2cls[obj].decode(self.loader, **res)
+				try:
+					res = self.name2cls[obj].decode(self.loader, **res)
+				except Exception:
+					logger.error("Decoding: %s: %r",obj,self.name2cls[obj])
+					raise
 			if oid is not None:
 				objcache[oid] = res
 			return res

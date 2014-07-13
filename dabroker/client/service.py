@@ -409,7 +409,7 @@ class BrokerClient(BaseCallbacks):
 		res = self.send("find",typ._key, **skw)
 		ks = KnownSearch(kw,res)
 		typ.searches[kws] = ks
-		self._cache[" ".join(str(x) for x in typ._key)+":"+kws] = ks
+		self._cache[" ".join(str(x) for x in typ._key.key)+":"+kws] = ks
 		return res
 
 	def call(self, obj,name,a,k):
@@ -428,7 +428,6 @@ class BrokerClient(BaseCallbacks):
 	def do_invalid(self,*keys):
 		"""Directly invalidate these cache entries."""
 		for k in keys:
-			k = tuple(k)
 			try:
 				del self._cache[k]
 			except KeyError:
@@ -445,7 +444,6 @@ class BrokerClient(BaseCallbacks):
 									   of the search keys matches one of the values.
 			"""
 		if _key is not None:
-			_key = tuple(_key)
 			logger.debug("inval_key: %r: %r",_key,k)
 			obj = self._cache.pop(_key,None)
 			if obj is None:
@@ -456,7 +454,6 @@ class BrokerClient(BaseCallbacks):
 		if _meta is None:
 			logger.warn("no metadata?")
 			return
-		_meta = tuple(_meta)
 		obj = self._cache.get(_meta,None)
 		if obj is None:
 			logger.warn("metadata not found")

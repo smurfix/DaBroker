@@ -36,6 +36,41 @@ def get_attrs(obj, meta=None):
 class BaseRef(object):
 	"""\
 		A basic (reference to an) object.
+
+		@key: The actual data required to retrieve the object.
+		@code: a secret has to ensure that the client got the code legally
+			(no object enumeration, possibly includes access rights).
+		"""
+	def __init__(self, key, meta=None, code=None):
+		self.meta = meta
+		self.key = tuple(key)
+		self.code = code
+	
+	def __hash__(self):
+		return self.key.__hash__()
+	
+	def __eq__(self,other):
+		other = getattr(other,'key',other)
+		return self.key.__eq__(other)
+
+	def __ne__(self,other):
+		other = getattr(other,'key',other)
+		return self.key.__ne__(other)
+
+	def __repr__(self):
+		res = "R:"+repr(self.key)
+		if self.code is not None:
+			res += "‹{}›".format(repr(str(self.code))[1:-1])
+		return res
+	__str__ = __repr__
+
+class BaseObj(object):
+	"""\
+		This is the base object for our object storage.
+
+		You need:
+		@meta (BrokeredInfo): describes this element's class
+		@key (BaseRef): required to load this element
 		"""
 	def __init__(self, meta=None,key=None):
 		if meta is not None:
@@ -43,14 +78,6 @@ class BaseRef(object):
 		if key is not None:
 			self._key = key
 
-class BaseObj(BaseRef):
-	"""\
-		This is the base object for our object storage.
-
-		You need:
-		@_meta the BrokeredInfo which describes this element's class
-		@_key the data required to load this element
-		"""
 	def _attr_key(self,k):
 		res = getattr(self,k,None)
 		if res is not None:
@@ -68,7 +95,10 @@ class common_BaseRef(object):
 	@staticmethod
 	def encode(obj, include=False):
 		assert not include
-		res = {"k":obj._key}
+		res = {}
+		res['k'] = obj.key
+		if obj.code is not None and include is not None:
+			res['c'] = obj.code
 		return res
 
 class common_BaseObj(object):
@@ -86,15 +116,15 @@ class common_BaseObj(object):
 			"""
 		ref = getattr(obj,k)
 		if ref is not None:
-			ref = BaseRef(ref._meta,ref._key)
+			ref = ref._key
 		return ref
 
 	@classmethod
 	def encode(cls, obj, include=False):
 		if not include:
-			return common_BaseRef.encode(obj, include=False)
+			return common_BaseRef.encode(obj._key, include=False)
 			
-		res = {"k":obj._key}
+		res = common_BaseRef.encode(obj._key)
 		res['f'] = f = dict()
 		for k in obj._meta.fields.keys():
 			f[k] = getattr(obj,k)
@@ -211,8 +241,21 @@ class BrokeredInfoInfo(BrokeredMeta):
 	"""This singleton is used for metadata about BrokeredInfo objects."""
 	def __init__(self):
 		super(BrokeredInfoInfo,self).__init__("BrokeredInfoInfo Singleton")
-		self._key = ()
+		self._key = BaseRef(meta=self,key=(),code="ROOT")
 
 broker_info_meta = BrokeredInfoInfo()
 BrokeredInfo._meta = broker_info_meta
+
+@codec_adapter
+class common_InfoMeta(object):
+	cls = BrokeredInfoInfo
+	clsname = "_ROOT"
+	
+	@staticmethod
+	def encode(obj, include=False):
+		return {}
+	
+	@staticmethod
+	def decode(loader,**attr):
+		return broker_info_meta
 

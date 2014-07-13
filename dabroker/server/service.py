@@ -15,7 +15,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # This implements the main broker server.
 
 from .loader import Loaders
-from ..base import UnknownCommandError
+from ..base import UnknownCommandError,BaseRef
 from ..util import import_string
 from ..base.config import default_config
 from ..base.transport import BaseCallbacks
@@ -95,29 +95,27 @@ class BrokerServer(BaseCallbacks):
 	def do_pong(self):
 		logger.debug("pong")
 
-	def do_get(self, key):
+	def do_get(self, obj):
 		"""Fetch an object by its key"""
-		key = tuple(key)
-		logger.debug("get %r",key)
-		return self.loader.get(key)
+		# … which the loader, most likely, has already taken care of
+		logger.debug("get %r",obj)
+		if isinstance(obj,BaseRef):
+			raise RuntimeError("Not without code")
+		return obj
 	do_get.include = True
 
-	def do_update(self,key,k={}):
+	def do_update(self,obj,k={}):
 		"""Update an object.
 		
 			@k: A map of key => (old_value,new_value)
 			"""
-		logger.debug("update %r %r",key,k)
-		key = tuple(key)
-		obj = self.loader.get(key)
+		logger.debug("update %r %r",obj,k)
 		return obj._meta.update(obj,**k)
 
 	def do_find(self, key, lim=None, k={}):
 		"""Search for objects"""
 		logger.debug("find %r %r",key,k)
-		key = tuple(key)
-		info = self.loader.get(key)
-		return info.obj_find(_limit=lim,**k)
+		return key.obj_find(_limit=lim,**k)
 	do_find.include = True
 		
 	# Broadcast messages to clients
@@ -130,12 +128,12 @@ class BrokerServer(BaseCallbacks):
 	def send_created(self, obj):
 		"""This object has been created."""
 		attrs = dict((k,(v,)) for k,v in obj._attrs.items())
-		self.send("invalid_key", _meta=obj._meta._key, **attrs)
+		self.send("invalid_key", _meta=obj._meta._key, _include=None, **attrs)
 
 	def send_deleted(self, obj):
 		"""This object has been deleted."""
 		attrs = dict((k,(v,)) for k,v in obj._attrs.items())
-		self.send("invalid_key", _key=obj._key, _meta=obj._meta._key, **attrs)
+		self.send("invalid_key", _key=obj._key, _meta=obj._meta._key, _include=None, **attrs)
 
 	def send_updated(self, obj, attrs):
 		"""\
@@ -153,7 +151,7 @@ class BrokerServer(BaseCallbacks):
 				if nv is not None: nv = nv._key
 			if ov != nv:
 				attrs[k] = (ov,nv)
-		self.send("invalid_key", _key=key, _meta=mkey, **attrs)
+		self.send("invalid_key", _key=key, _meta=mkey, _include=None, **attrs)
 		
 	# Basic transport handling
 
@@ -189,11 +187,12 @@ class BrokerServer(BaseCallbacks):
 		"""Broadcast a message to all clients"""
 		logger.debug("bcast %s %r %r",action,a,k)
 		msg = k
+		include = k.pop('_include',False)
 		msg['_m'] = action
 		if a:
 			msg['_a'] = a
 
-		msg = self.codec.encode(msg)
+		msg = self.codec.encode(msg, include=include)
 		self.transport.send(msg)
 
 

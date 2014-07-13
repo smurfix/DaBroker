@@ -14,7 +14,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # Object loaders. The static loader is defined here.
 
-from ...base import broker_info_meta
+from ...base import broker_info_meta, BaseRef
 
 class Loaders(object):
 	"""\
@@ -48,8 +48,9 @@ class Loaders(object):
 		"""\
 			Get an object by key.
 			"""
-		assert isinstance(key,tuple),key
-		obj = self.loaders[key[0]].get(*key[1:])
+		assert isinstance(key,BaseRef),key
+		_key = key.key
+		obj = self.loaders[_key[0]].get(*_key[1:])
 		k = getattr(obj,'_key',None)
 		if k is None:
 			obj._key = key
@@ -70,11 +71,12 @@ class BaseLoader(object):
 			return
 		k = getattr(obj,'_key',None)
 		if k:
+			k = k.key
 			assert k[0] == self.id, (k,self.id)
 			if key:
 				assert k[1:] == key
 		else:
-			obj._key = (self.id,)+key
+			obj._key = BaseRef(key=(self.id,)+key)
 
 class StaticLoader(BaseLoader):
 	"""A simple 'loader' which serves static objects"""
@@ -88,6 +90,6 @@ class StaticLoader(BaseLoader):
 	def add(self,obj,*key):
 		assert key not in self.objects or self.objects[key] is obj,(key, obj, self.objects[key])
 		self.set_key(obj,*key)
-		self.objects[obj._key[1:]] = obj
+		self.objects[obj._key.key[1:]] = obj
 
 
