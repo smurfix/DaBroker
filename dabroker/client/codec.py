@@ -40,13 +40,15 @@ class ClientBrokeredInfo(BrokeredInfo):
 		if cls is not None:
 			return cls
 		class ClientObj(ClientBaseObj):
-			name = None
+			_valid = True
+			_key = None
+
 			def __repr__(self):
 				res = "<ClientObj"
 				n = self.__class__.__name__
 				if n != "ClientObj":
 					res += ":"+n
-				n = getattr(self,'_key',None)
+				n = self._key
 				if n is not None:
 					res += ":"+str(n)
 				res += ">"
@@ -56,16 +58,17 @@ class ClientBrokeredInfo(BrokeredInfo):
 		if is_meta:
 			_ClientObj = ClientObj
 			class ClientObj(_ClientObj,ClientBrokeredInfo):
+				_name = None
 				def __init__(self):
 					_ClientObj.__init__(self)
 					ClientBrokeredInfo.__init__(self)
 				def __repr__(self):
 					res = "<ClientInfo"
-					n = getattr(self,'name',None)
+					n = self.name
 					if n is not None:
 						res += ":"+n
 					else:
-						n = getattr(self,'_key',None)
+						n = self._key
 						if n is not None:
 							res += ":"+str(n)
 					res += ">"
