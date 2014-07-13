@@ -57,10 +57,6 @@ Common parameters
 
         AMQP: Name of the queue name on which the server listens for RPC requests.
 
-    *   info_queue
-
-        AMQP: Name of the queue for the server to submit broadcast messages to.
-
     *   exchange
 
         AMQP: Name of the exchange where clients register for broadcasts.

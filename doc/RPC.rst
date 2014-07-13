@@ -10,7 +10,7 @@ specific elements.
 
     *   _o
 
-        The (key of the) object to operate on, if any.
+        The object to operate on, if any.
 
     *   _a
 

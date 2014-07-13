@@ -11,17 +11,17 @@ are translated to dictionaries with a couple of special elements.
 
     *   _o
 
-        The object's type. Dictionaries don't get a type.
+        The object's type. Plain dictionaries don't get a type element.
 
     *   _oi
 
-        The object's identifier. This is a sequence number which is not
+        The object's identifier. This is a sequence number. It is not
         unique across encodings.
 
     *   _or
 
-        This is another reference to an object. The value is that object's
-        `_oi` number.
+        This is another reference to an object. The 'real' value is the
+        object whose `_oi` element is that number.
 
     *   _o_*
 
@@ -110,18 +110,19 @@ an error.
         pointing to other DaBroker objects) are encoded by adding their
         keys to the `r` dict. All objects have at least one reference
         field named `_meta` which points to that object's type.
-        The actual object key is in the `k` element.
+        The actual object key is a `Ref` object, stored in the `k` element
+        and accessible as the object's `_key` attribute.
 
     *   Ref
         
-        References to other objects. Their sole content is a `k` element
-        with the object's key.
-
-        Keys currently are transmitted as simple lists. TODO.
+        References to other objects. The actual key is a tuple, stored in 
+        the `k` element. The `c` element contains a crypto key which is
+        required to retrieve that object; it is not included in the
+        server's broadcasts which invalidate data.
 
     *   Info
 
-        DaBroker's meta object. It describes the data fields of the objects
+        A DaBroker meta object. It describes the data fields of the objects
         whose `_meta` field refers to this `Info` object.
 
         The minimum data fields of `Info` objects are
@@ -172,5 +173,10 @@ Specific serializations
 
     *   JSON
 
-        No special considerations.
+        No special considerations. Slower than BSON. Text-only, therefore
+        good for debugging and for implementations in other languages.
+
+    *   marshal
+
+        No special considerations. Not portable. About as fast as BSON.
 
