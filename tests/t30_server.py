@@ -75,7 +75,7 @@ class TestServer(BrokerServer):
 			data = {}
 
 		root = RootObj()
-		self.loader.static.add(root,2,99)
+		self.loader.static.add(root,2,30)
 		return root
 
 	def __init__(self,*a,**k):

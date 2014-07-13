@@ -83,7 +83,7 @@ class Test22_server(BrokerServer):
 			data = {}
 
 		root = RootObj()
-		self.loader.static.add(root,2,99)
+		self.loader.static.add(root,2,22)
 
 		sql = SQLLoader(DBSession,self)
 		sql.add_model(Person,root.data)

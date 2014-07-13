@@ -71,7 +71,7 @@ class Test21_server(TestServer):
 				return "<%s>"%self
 
 		root = RootObj()
-		self.loader.static.add(root,0,2,99)
+		self.loader.static.add(root,0,2,21)
 
 		theOpsObj = OpsObj("Oh?")
 		self.loader.static.add(theOpsObj,0,34)
