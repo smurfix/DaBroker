@@ -28,7 +28,7 @@ from tests import test_init,LocalQueue,TestMain,test_cfg_s,test_cfg_c, cfg_merge
 
 logger = test_init("test.31.speed")
 
-cfg = {'transport':'amqp', 'codec':'marshal'}
+cfg = {'transport':'amqp', 'codec':os.environ.get('DAB_CODEC','marshal')}
 
 class ServerThread(Thread):
 	def run(self):
