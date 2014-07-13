@@ -193,8 +193,6 @@ class client_BaseObj(common_BaseObj):
 			r['_meta'] = meta = current_loader.top.get(r['_meta'])
 			res = meta.class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
 		else:
-			#raise RuntimeError("no meta info: untested")
-			import pdb;pdb.set_trace()
 			res = ClientBaseObj
 
 		res = res()
