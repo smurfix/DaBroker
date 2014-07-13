@@ -61,16 +61,17 @@ System Layout
 Storage
 -------
 
-You need at least one persistent storage system. For instance, a SQL or
-NoSQL database. You need introspection data (which tables exist, column
-names, default values, foreign keys, …).
+You probably need at a persistent object storage. For instance, a SQL or
+NoSQL database. You need to store or extract introspection data (which
+tables exist, column names, default values, foreign keys, …).
 
 Message passing
 ---------------
 
-You need a 0MQ server. DaBroker has been tested with RabbitMQ.
+You need a 0MQ server. DaBroker has been tested with RabbitMQ. Other
+methods for passing messages around are possible.
 
-The DaBroker tests use a RabbitMQ test vhost.
+The DaBroker unit tests use a RabbitMQ vhost. You need to do this, once:
 
     rabbitmqctl add_vhost test
     rabbitmqctl add_user test test
