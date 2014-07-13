@@ -20,8 +20,14 @@ import logging
 logger = logging.getLogger("dabroker.server.transport.amqp")
 
 class AmqpTransport(BaseTransport):
-	defaults = dict(host='localhost', username='', password='', virtual_host='/', rpc_queue='rpc_queue', info_queue='dab_info', exchange='dab_alert')
+	"""Talk using RabbitMQ or another AMQP-compabible messaging system."""
+	defaults = dict(host='localhost', username='', password='', virtual_host='/', rpc_queue='rpc_queue', exchange='dab_alert')
 	connection = None
+	content_type = None
+
+	def __init__(self,*a,**k):
+		super(AmqpTransport,self).__init__(*a,**k)
+		self.content_type = 'application/x-dab-'+self.cfg['codec']
 
 	_server = False
 
@@ -58,12 +64,12 @@ class AmqpTransport(BaseTransport):
 		raise NotImplementedError("Duh")
 
 	def encode_msg(self,msg, **attrs):
-		attrs.setdefault('content_type','application/x-dab')
-		msg = amqp.Message(#application_headers={'type':typ},
-			body=msg, **attrs)
+		attrs.setdefault('content_type',self.content_type)
+		msg = amqp.Message(body=msg, **attrs)
 		return msg
  
 	def decode_msg(self,msg):
+		assert msg.content_type == self.content_type, (msg.content_type,self.content_type)
 		return msg.body
 
 	def run(self):
