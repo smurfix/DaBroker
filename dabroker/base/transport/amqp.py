@@ -19,8 +19,6 @@ import amqp
 import logging
 logger = logging.getLogger("dabroker.server.transport.amqp")
 
-from gevent import GreenletExit
-
 class AmqpTransport(BaseTransport):
 	defaults = dict(host='localhost', username='', password='', virtual_host='/', rpc_queue='rpc_queue', info_queue='dab_info', exchange='dab_alert')
 	connection = None
@@ -70,9 +68,6 @@ class AmqpTransport(BaseTransport):
 
 	def run(self):
 		logger.debug("Receiver loop on %r %r",self.connection,self.channel)
-		try:
-			while True:
-				self.channel.wait()
-		except GreenletExit:
-			pass
+		while True:
+			self.channel.wait()
 

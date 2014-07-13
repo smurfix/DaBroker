@@ -16,7 +16,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from dabroker import patch; patch()
 
-from gevent import spawn,sleep
+from gevent import spawn
 
 from tests import test_init,LocalQueue,TestMain,TestRoot,TestClient,TestServer
 

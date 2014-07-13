@@ -16,7 +16,7 @@ from . import BaseCodec
 from json import loads,dumps
 
 import logging
-logger = logging.getLogger("J")
+logger = logging.getLogger("dabroker.codec.json")
 
 class Codec(BaseCodec):
 	def encode(self, data, *a,**k):

@@ -15,7 +15,6 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # generic test setup
 
 from pprint import pformat
-from gevent.event import AsyncResult
 from gevent import spawn,sleep,GreenletExit
 from weakref import ref, WeakValueDictionary
 
@@ -38,7 +37,7 @@ def test_init(who):
 from dabroker.base import BaseObj,BrokeredInfo, Field,Ref,Callable
 from dabroker.base.config import default_config
 from dabroker.base.transport import BaseTransport
-from dabroker.util.thread import Main
+from dabroker.util.thread import Main, AsyncResult, spawned
 from dabroker.client import BrokerClient
 from dabroker.client import service as cs
 from dabroker.server import BrokerServer
@@ -108,25 +107,24 @@ class RPCmessage(object):
 class ServerQueue(BaseTransport):
 	"""Server side of the LocalQueue transport"""
 	def __init__(self,callbacks,cfg):
+		logger.debug("Server: setting up")
 		self.callbacks = callbacks
 		self.p = cfg['_p'] # the LocalQueue instance
 		self.p.server = ref(self) # for clients to find me
 		self.clients = WeakValueDictionary() # clients add themselves here
 		self.next_id = -1
 
+	@spawned
 	def _process(self,msg):
 		m = self.callbacks.recv(msg.msg)
 		msg.reply(m)
 
 	def run(self):
 		logger.debug("Server: wait for messages")
-		while True:
-			try:
-				msg = self.p.request_q.get()
-			except GreenletExit:
-				return
-			else:
-				spawn(self._process,msg)
+		while self.p.request_q is not None:
+			msg = self.p.request_q.get()
+			logger.debug("Server: received %r",msg)
+			self._process(msg)
 
 	def send(self,msg):
 		m = msg
@@ -165,21 +163,22 @@ class ClientQueue(BaseTransport):
 				s.clients.pop(self.client_id,None)
 		super(ClientQueue,self).disconnect()
 
+	@spawned
+	def run_recv(self,msg):
+		self.callbacks.recv(msg)
+		
 	def run(self):
-		try:
-			while self.p.server is not None and self.p.server() is not None:
-				msg = self.reply_q.get()
-				if msg.msgid < 0:
+		while self.p.server is not None and self.p.server() is not None:
+			msg = self.reply_q.get()
+			if msg.msgid < 0:
+				logger.debug("Client: get msg %s",msg.msgid)
+				self.run_recv(msg.msg)
+			else:
+				r = self.q.pop(msg.msgid,None)
+				if r is not None:
+					m = msg.msg
 					logger.debug("Client: get msg %s",msg.msgid)
-					spawn(self.callbacks.recv,msg.msg)
-				else:
-					r = self.q.pop(msg.msgid,None)
-					if r is not None:
-						m = msg.msg
-						logger.debug("Client: get msg %s",msg.msgid)
-						r.set(m)
-		except GreenletExit:
-			pass
+					r.set(m)
 			
 	def send(self,msg):
 		m = msg
@@ -289,17 +288,21 @@ class TestMain(Main):
 		self.server.start()
 
 	def main(self):
+		logger.debug("Main start")
 		assert self.client is None
 		try:
 			self.client = self.client_factory(cfg=self.client_cfg)
 			self.client.start()
 			self.client.main()
 		finally:
+			logger.debug("Main ending")
 			c,self.client = self.client,None
 			if c is not None:
 				c.stop()
+			logger.debug("Main ended")
 
 	def cleanup(self):
+		logger.debug("Cleaning up")
 		s,self.server = self.server,None
 		if s is not None:
 			s.stop()
@@ -308,6 +311,7 @@ class TestMain(Main):
 		k,self.killer = self.killer,None
 		if k is not None:
 			k.kill()
+		logger.debug("Cleaned up")
 
 class TestBasicMain(Main):
 	def setup(self):

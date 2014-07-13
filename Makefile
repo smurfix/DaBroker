@@ -8,6 +8,9 @@ test:
 	make test2 DAB_CODEC=marshal
 	make test3 DAB_CODEC=bson
 	make test3 DAB_CODEC=marshal
+	make testy DAB_CODEC=bson
+	make testy DAB_CODEC=marshal
+
 
 test2:
 	@set -ex; \
@@ -19,6 +22,12 @@ test3:
 	@set -ex; \
 	for f in tests/test??_*.py ; do \
 		python3 $$f ; \
+	done
+
+testy:
+	@set -ex; \
+	for f in tests/test??_*.py ; do \
+		pypy $$f ; \
 	done
 
 dtest:

@@ -12,7 +12,9 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-import gevent
+from gevent import GreenletExit
+
+from dabroker.util.thread import prep_spawned
 
 import logging 
 logger = logging.getLogger("dabroker.base.transport")
@@ -88,14 +90,15 @@ class BaseTransport(object):
 
 		Call super() after running your code."""
 		assert self._job is None
-		self._job = gevent.spawn(self._run_job)
+		self._job = self._run_job()
+		self._job.start()
 
 	def disconnect(self):
 		"""Sever the connection; do not auto-reconnect."""
 		logger.debug("disconnecting: %r",self)
 		j,self._job = self._job,None
 		if j:
-			j.kill()
+			j.stop()
 
 	def disconnected(self, err=None):
 		"""Clear connection objects.
@@ -110,16 +113,17 @@ class BaseTransport(object):
 	def run(self):
 		raise NotImplementedError("You need to override {}.run()".format(self.__class__.__name__))
 
+	@prep_spawned
 	def _run_job(self):
 		try:
 			logger.debug("Running receiver loop: %r",self)
 			self.run()
+		except GreenletExit:
+			logger.debug("Receiver loop ends: %r",self)
+			self.callbacks.ended(None)
 		except BaseException as e:
 			logger.exception("Receiver loop error: %r",self)
 			self.callbacks.ended(e)
-		except gevent.GreenletExit:
-			logger.debug("Receiver loop ends: %r",self)
-			self.callbacks.ended(None)
 		else:
 			e=None
 			logger.debug("Receiver loop ends: %r",self)

@@ -19,8 +19,7 @@ from dabroker.server.service import BrokerServer
 from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj,BaseRef
 from dabroker.client.service import BrokerClient
 from dabroker.util import cached_property
-
-from gevent import spawn,sleep
+from dabroker.util.thread import Event
 
 from tests import test_init,LocalQueue,TestMain,TestClient,TestServer
 
@@ -89,13 +88,15 @@ class Test21_server(TestServer):
 	def do_trigger(self,msg):
 		if msg == 1:
 			self.root.ops.hell = "Yeah!"
-			self.send("invalid",self.root.ops._key,BaseRef(key=(3,4,5))) # the latter is unknown
+			self.send("invalid",self.root.ops._key,BaseRef(key=(3,4,5)), _include=None) # the latter is unknown
+			self.send("go_on")
 		elif msg == 2:
 			obj = self._ops_meta.objs[2]
 			ov = obj.hell
 			obj.hell = nv = "Two2"
 			attrs = {'hell': (ov,nv)}
 			self.send_updated(obj,attrs)
+			self.send("go_on")
 		else:
 			raise RuntimeError(msg)
 	
@@ -106,7 +107,11 @@ class Test21_client(TestClient):
 	def cid(self):
 		return self.transport.next_id
 
+	def do_go_on(self):
+		self.go_on.set()
+
 	def main(self):
+		self.go_on = Event()
 		logger.debug("Get the root")
 		res = self.root
 		logger.debug("recv %r",res)
@@ -118,7 +123,10 @@ class Test21_client(TestClient):
 		assert res.ops.rev("test123") == "321tset"
 		assert res.ops.hell == "Oh?"
 		self.send("trigger",1)
-		assert res.ops.hell == "Yeah!"
+		self.go_on.wait()
+		self.go_on.clear()
+
+		assert res.ops.hell == "Yeah!",res.ops.hell
 		cid=self.cid
 		assert res.ops.hell == "Yeah!"
 		assert cid==self.cid, (cid,self.cid)
@@ -142,6 +150,7 @@ class Test21_client(TestClient):
 
 		# Now update some stuff.
 		self.send("trigger",2)
+		self.go_on.wait()
 
 		os = Op.find(hell="Two")
 		assert len(os) == 0, os

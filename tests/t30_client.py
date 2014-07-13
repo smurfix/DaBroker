@@ -17,9 +17,9 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 import os
 import sys
 from dabroker.client.service import BrokerClient
+from dabroker.util.thread import AsyncResult
 
 from gevent import spawn
-from gevent.event import AsyncResult
 
 from tests import test_init
 

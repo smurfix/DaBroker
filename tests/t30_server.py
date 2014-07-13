@@ -20,9 +20,7 @@ from dabroker.server.service import BrokerServer
 from dabroker.server.loader.sqlalchemy import SQLLoader
 from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj
 from dabroker.util import cached_property
-
-from gevent import spawn,sleep
-from gevent.event import AsyncResult
+from dabroker.util.thread import AsyncResult
 
 from tests import test_init
 logger = test_init("test.30.amqp.server")

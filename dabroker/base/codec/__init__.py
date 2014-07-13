@@ -5,6 +5,7 @@ from __future__ import print_function,absolute_import
 import sys
 from time import mktime
 from ...util import TZ,UTC, format_dt
+from ...util.thread import local_stack
 from ..config import default_config
 import datetime as dt
 from collections import namedtuple
@@ -12,6 +13,8 @@ from collections import namedtuple
 from traceback import format_tb
 import logging
 logger = logging.getLogger("dabroker.base.codec")
+
+current_loader = local_stack()
 
 class _notGiven: pass
 class ComplexObjectError(Exception): pass
@@ -72,7 +75,7 @@ class _datetime(object):
 		return {"t":mktime(obj.timetuple()),"s":format_dt(obj)}
 
 	@staticmethod
-	def decode(loader, t=None,s=None,a=None,k=None,**_):
+	def decode(t=None,s=None,a=None,k=None,**_):
 		if t:
 			return dt.datetime.utcfromtimestamp(t).replace(tzinfo=UTC).astimezone(TZ)
 		else: ## historic
@@ -90,7 +93,7 @@ class _timedelta(object):
 		return {"t":obj.total_seconds(),"s":str(obj)}
 
 	@staticmethod
-	def decode(loader, t,s=None,**_):
+	def decode(t,s=None,**_):
 		return dt.timedelta(0,t)
 
 @codec_adapter
@@ -103,7 +106,7 @@ class _date(object):
 		return {"d":obj.toordinal(), "s":obj.strftime("%Y-%m-%d")}
 
 	@staticmethod
-	def decode(loader, d=None,s=None,a=None,**_):
+	def decode(d=None,s=None,a=None,**_):
 		if d:
 			return dt.date.fromordinal(d)
 		## historic
@@ -121,7 +124,7 @@ class _time(object):
 		return {"t":secs,"s":"%02d:%02d:%02d" % (ou.hour,ou.minute,ou.second)}
 
 	@staticmethod
-	def decode(loader, t=None,s=None,a=None,k=None,**_):
+	def decode(t=None,s=None,a=None,k=None,**_):
 		if t:
 			return dt.datetime.utcfromtimestamp(t).time()
 		return dt.time(*a)
@@ -349,9 +352,10 @@ class BaseCodec(object):
 
 			if obj is not None:
 				try:
-					res = self.name2cls[obj].decode(self.loader, **res)
+					res = self.name2cls[obj].decode(**res)
 				except Exception:
-					logger.error("Decoding: %s: %r",obj,self.name2cls[obj])
+					logger.error("Decoding: %s: %r %r",obj,self.name2cls[obj],res)
+					import pdb;pdb.set_trace()
 					raise
 			if oid is not None:
 				objcache[oid] = res
@@ -373,9 +377,13 @@ class BaseCodec(object):
 		if isinstance(data,dict) and '_error' in data:
 			raise ServerError(data['_error'],data.get('tb',None))
 
-		objcache = {}
-		objtodo = []
-		res = self._decode(data,objcache,objtodo)
-		self._cleanup(objcache,objtodo)
-		return res
+		try:
+			current_loader.push(self.loader)
+			objcache = {}
+			objtodo = []
+			res = self._decode(data,objcache,objtodo)
+			self._cleanup(objcache,objtodo)
+			return res
+		finally:
+			current_loader.pop()
 

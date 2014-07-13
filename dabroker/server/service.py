@@ -156,8 +156,10 @@ class BrokerServer(BaseCallbacks):
 	# Basic transport handling
 
 	def recv(self, msg):
-		"""Receive a message. Usually called from a separate thread."""
-		#logger.debug("recv raw %r",msg)
+		"""Receive a message. Usually called as a separate thread."""
+		logger.debug("recv raw %r",msg)
+
+		rmsg=msg
 		try:
 			msg = self.codec.decode(msg)
 
@@ -176,8 +178,12 @@ class BrokerServer(BaseCallbacks):
 				raise UnknownCommandError((m,o))
 			msg = proc(*a,**msg)
 			logger.debug("reply %r",msg)
-			attrs = {'include':getattr(proc,'include',False)}
-			msg = self.codec.encode(msg, include=attrs.get('include',False))
+			try:
+				msg = self.codec.encode(msg, include = getattr(proc,'include',False))
+			except Exception:
+				print("RAW was",rmsg,file=sys.stderr)
+				print("MSG is",msg,file=sys.stderr)
+				raise
 			return msg
 
 		except BaseException as e:

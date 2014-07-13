@@ -17,14 +17,93 @@ import sys
 import pytz
 import locale
 from functools import wraps
+from werkzeug.local import LocalManager,Local,LocalStack
 
 import gevent
 from gevent.queue import Queue
+from gevent.event import AsyncResult,Event
 from signal import SIGINT
 
 from flask._compat import string_types
 	
 logger = logging.getLogger("dabroker.util.thread")
+
+local_objects = LocalManager()
+class local_object(Local):
+	def __init__(self):
+		super(local_object,self).__init__()
+		local_objects.locals.append(self)
+class local_stack(LocalStack):
+	def __init__(self):
+		super(local_stack,self).__init__()
+		local_objects.locals.append(self)
+
+local_info = local_object()
+
+class Thread(object):
+	"""\
+		A generic thread, intended to be able to be used with greenlets as well as OS threads.
+
+		You need to override `code()` (which gets passed the arguments from __init__()).
+
+		"""
+	def __init__(self, *a,**k):
+		self.a = a
+		self.k = k
+		self.job = None
+	
+	def code(self, *a,**k):
+		raise RuntimeError("You forgot to override "+self.__class__.__name__)
+
+	def run(self):
+		try:
+			return self.code(*self.a,**self.k)
+		except gevent.GreenletExit:
+			pass
+		finally:
+			local_objects.cleanup()
+			
+	def start(self):
+		assert self.job is None
+		self.job = gevent.spawn(self.run)
+		return self
+		
+	def stop(self):
+		if self.job is not None:
+			self.job.kill()
+	
+	def join(self,timeout=None):
+		if self.job is not None:
+			self.job.join(timeout=timeout)
+			self.job = None
+	
+	@property
+	def ready(self):
+		if self.job is None:
+			return True
+		return self.job.ready
+
+def spawned(fn):
+	"""\
+		A wrapper which runs the procedure in its own thread.
+		"""
+	@wraps(fn)
+	def doit(*a,**k):
+		class thr(Thread):
+			def code(self,*a,**k):
+				fn(*a,**k)
+		return thr(*a,**k).start()
+	return doit
+
+def prep_spawned(fn):
+	"""like `spawned` but does not yet start the thread"""
+	@wraps(fn)
+	def doit(*a,**k):
+		class thr(Thread):
+			def code(self,*a,**k):
+				fn(*a,**k)
+		return thr(*a,**k)
+	return doit
 
 class Main(object):
 	"""\

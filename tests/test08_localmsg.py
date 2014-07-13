@@ -15,8 +15,9 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # This test runs the test environment's local queue implementation.
 
 from dabroker import patch; patch()
+from dabroker.util.thread import spawned
 
-from gevent import spawn,sleep
+from gevent import spawn
 
 from tests import test_init,LocalQueue,TestMain,TestRoot,TestClient,TestServer
 
@@ -31,14 +32,18 @@ class Test08_root(TestRoot):
 
 class Test08_client(TestClient):
 	def main(self):
+		logger.debug("Client started")
 		jobs = []
 		for i in range(3):
-			jobs.append(spawn(self.mult,i+1))
+			jobs.append(self.mult(i+1))
 		for j in jobs:
 			j.join()
+		logger.debug("Client stopped")
 
+	@spawned
 	def mult(self,i):
 		global counter
+		logger.debug("Send %r",i)
 		res = self.root.callme(i)
 		logger.debug("Sent %r, got %r",i,res)
 		counter += res

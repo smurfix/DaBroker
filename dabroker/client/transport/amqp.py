@@ -14,12 +14,11 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from ...base.transport import ConnectionError
 from ...base.transport.amqp import AmqpTransport
+from ...util.thread import AsyncResult
 
 import os
 import base64
 import amqp
-from gevent import spawn
-from gevent.event import AsyncResult
 
 def random_id():
 	res = os.urandom(15)

@@ -14,6 +14,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from weakref import ref,WeakValueDictionary
 from ..base import BaseRef,BaseObj, BrokeredInfo, BrokeredInfoInfo, adapters as baseAdapters, common_BaseObj,common_BaseRef
+from ..base.codec import current_loader
+
 import logging
 logger = logging.getLogger("dabroker.client.serial")
 
@@ -159,9 +161,9 @@ class ClientBaseObj(BaseObj):
 		return self._refs[k]
 
 @codec_adapter
-class client_baseRef(common_BaseRef):
+class client_BaseRef(common_BaseRef):
 	@staticmethod
-	def decode(loader, k,c=None):
+	def decode(k,c=None):
 		return BaseRef(key=tuple(k),code=c)
 
 @codec_adapter
@@ -180,7 +182,7 @@ class client_BaseObj(common_BaseObj):
 	
 
 	@classmethod
-	def decode(cls, loader, k,c=None,f=None,r=None,meta=None, _is_meta=None):
+	def decode(cls, k,c=None,f=None,r=None,meta=None, _is_meta=None):
 		"""\
 			Decode a reference.
 			"""
@@ -188,7 +190,7 @@ class client_BaseObj(common_BaseObj):
 		if meta is not None:
 			res = meta.class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
 		elif r and '_meta' in r:
-			r['_meta'] = meta = loader.get(r['_meta'])
+			r['_meta'] = meta = current_loader.top.get(r['_meta'])
 			res = meta.class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
 		else:
 			#raise RuntimeError("no meta info: untested")
@@ -208,7 +210,7 @@ class client_BaseObj(common_BaseObj):
 				else:
 					res._refs[k] = v
 
-		return loader._add_to_cache(res)
+		return current_loader.top._add_to_cache(res)
 
 @codec_adapter
 class client_InfoObj(client_BaseObj):
@@ -216,13 +218,13 @@ class client_InfoObj(client_BaseObj):
 	clsname = "Info"
 		
 	@staticmethod
-	def decode(loader, k=None,c=None,f=None, **kw):
+	def decode(k=None,c=None,f=None, **kw):
 		if f is None:
 			# We always need the data, but this is something like a ref
 			# so we need to go and get the real thing.
 			# NOTE this assumes that the codec doesn't throw away empty lists.
-			return loader.get(BaseRef(key=k,code=c))
-		res = client_BaseObj.decode(loader, _is_meta=True, k=k,c=c,f=f,**kw)
-		res.client = loader
+			return current_loader.top.get(BaseRef(key=k,code=c))
+		res = client_BaseObj.decode(_is_meta=True, k=k,c=c,f=f,**kw)
+		res.client = current_loader.top
 		return res
 

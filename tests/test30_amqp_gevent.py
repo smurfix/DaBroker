@@ -21,53 +21,58 @@ from dabroker.server.service import BrokerServer
 from dabroker.server.loader.sqlalchemy import SQLLoader
 from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj
 from dabroker.client.service import BrokerClient
+from dabroker.util.thread import AsyncResult, Thread
 
-from gevent import spawn,sleep
-from gevent.event import AsyncResult
+from gevent import spawn
 
 from tests import test_init,LocalQueue,TestMain,test_cfg_s,test_cfg_c, cfg_merge
 
 logger = test_init("test.30.amqp")
 
-cfg = {'transport':'amqp'}
+cfg = {'transport':'amqp', 'codec':'marshal'}
 
-def run_server(cfg={}, ready=None):
-	from tests.t30_server import TestServer
-	logger.debug("Starting the server")
-	try:
-		ts = TestServer(cfg)
-		ts.start()
-		logger.debug("server running")
-		if ready is not None:
-			ready.set(ts)
-	except Exception as e:
-		if ready is not None:
-			logger.exception("Server startup")
-			ready.set_exception(e)
-		else:
-			raise
+class ServerThread(Thread):
+	def run(self):
+		cfg=self.k['cfg']
+		ready=self.k['ready']
+		from tests.t30_server import TestServer
+		logger.debug("Starting the server")
+		try:
+			ts = TestServer(cfg)
+			ts.start()
+			logger.debug("server running")
+			if ready is not None:
+				ready.set(ts)
+		except Exception as e:
+			if ready is not None:
+				logger.exception("Server startup")
+				ready.set_exception(e)
+			else:
+				raise
 	
-def run_client(cfg={}):
-	from tests.t30_client import TestClient
-	logger.debug("Starting the client")
-	cfg = cfg.copy()
-	cfg["host"] = "127.0.0.1"
-	tc = TestClient(cfg)
-	tc.start()
-	try:
-		logger.debug("client run")
-		tc.main()
-	finally:
-		tc.stop()
+class ClientThread(Thread):
+	def run(self):
+		cfg=self.k['cfg']
+		from tests.t30_client import TestClient
+		logger.debug("Starting the client")
+		cfg = cfg.copy()
+		cfg["host"] = "127.0.0.1"
+		tc = TestClient(cfg)
+		tc.start()
+		try:
+			logger.debug("client run")
+			tc.main()
+		finally:
+			tc.stop()
 
 logger.debug("Starting the server")
 e = AsyncResult()
-s = spawn(run_server, cfg=cfg_merge(test_cfg_s,cfg), ready=e)
+s = ServerThread(cfg=cfg_merge(test_cfg_s,cfg), ready=e).start()
 ts = e.get(timeout=5)
 if ts is None:
 	raise RuntimeError("Server did not run")
 
-c = spawn(run_client, cfg=cfg_merge(test_cfg_c,cfg))
+c = ClientThread(cfg=cfg_merge(test_cfg_c,cfg)).start()
 c.join(timeout=5)
 if not c.ready:
 	c.kill()

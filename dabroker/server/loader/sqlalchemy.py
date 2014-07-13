@@ -15,15 +15,20 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # The sqlalchemy object loader
 
 from ...base import BrokeredInfo,BrokeredMeta, Field,Ref,BackRef,Callable, get_attrs
+from ...util.thread import local_object
 from . import BaseLoader
 from ..codec import server_BaseObj
 from sqlalchemy.inspection import inspect
 from functools import wraps
 
+_session = local_object()
+
 def with_session(fn):
 	@wraps(fn)
 	def wrapper(self,*a,**k):
-		s = self._meta.session()
+		s = getattr(_session,'s',None)
+		if s is None:
+			_session.s = s = self._meta.session()
 		try:
 			return fn(self,s, *a,**k)
 		except:
@@ -80,7 +85,7 @@ class SQLInfo(BrokeredInfo):
 		server.codec.register(load_me)
 
 	@with_session
-	def find(self,session,_limit=None,**kw):
+	def find(self,session,_limit=None, **kw):
 		res = session.query(self.model).filter_by(**kw)
 		if _limit is not None:
 			res = res[:_limit]
@@ -91,7 +96,7 @@ class SQLInfo(BrokeredInfo):
 	find.include = True
 
 	@with_session
-	def get(self, session,*key,**kw):
+	def get(self, session,*key, **kw):
 		assert len(key) == 1 or kw and not key
 		if key:
 			kw['id'] = key[0]
@@ -100,7 +105,7 @@ class SQLInfo(BrokeredInfo):
 	get.include = True
 
 	@with_session
-	def new(self, session,**kw):
+	def new(self, session, **kw):
 		res = self.model(**kw)
 		session.add(res)
 		session.flush()
@@ -110,7 +115,7 @@ class SQLInfo(BrokeredInfo):
 	new.include = True
 
 	@with_session
-	def update(self, session,obj,**kw):
+	def update(self, session,obj, **kw):
 		obj = session.merge(obj, load=False)
 		for k,on in kw.items():
 			assert k in self.fields or k in self.refs
@@ -123,7 +128,7 @@ class SQLInfo(BrokeredInfo):
 		self.server.send_updated(obj,kw)
 
 	@with_session
-	def delete(self, session, *obj):
+	def delete(self, session, *obj, **kw):
 		res = []
 		for o in obj:
 			self.fixup(o)

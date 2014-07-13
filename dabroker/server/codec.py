@@ -14,6 +14,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from ..base import BaseRef,BaseObj,BrokeredInfo, adapters as baseAdapters, common_BaseObj,common_BaseRef
 from ..base.config import default_config
+from ..base.codec import current_loader
 from hashlib import sha1 as mac
 from base64 import b64encode
 
@@ -29,10 +30,14 @@ def make_secret(key):
 
 	global secret
 	if secret is None:
-		secret = mac(default_config['SECRET'].encode("utf-8"))
+		secret = mac(default_config['SECRET'].encode('utf-8'))
 	m = secret.copy()
 	for k in key:
-		m.update('\0'+(str(k)).encode("utf-8"))
+		if isinstance(k,int):
+			k = str(k)
+		if not isinstance(k,bytes):
+			k = k.encode('utf-8')
+		m.update(b'\0'+k)
 	return b64encode(m.digest()[0:6])
 
 def codec_adapter(cls):
@@ -48,8 +53,8 @@ class server_BaseObj(common_BaseObj):
 		return common_BaseObj.encode(obj, include=include)
 
 	@staticmethod
-	def decode(loader, k=None,c=None,f=None,r=None):
-		res = server_BaseRef.decode(loader,k=k,c=c)
+	def decode(k=None,c=None,f=None,r=None):
+		res = server_BaseRef.decode(k=k,c=c)
 		if f:
 			for k,v in f.items():
 				if getattr(res,k) != v:
@@ -68,20 +73,18 @@ class server_BaseRef(common_BaseRef):
 	@staticmethod
 	def encode(obj, include=False):
 		if include:
-			from .loader import get
-			obj = get(obj._key)
-			return server_BaseObj.encode(obj,include)
+			raise RuntimeError("Cannot deref here")
 		if obj.code is None:
 			obj.code = make_secret(obj.key)
 		return common_BaseRef.encode(obj, include=include)
 
 	@staticmethod
-	def decode(loader, k=None,m=None,c=None):
+	def decode(k=None,m=None,c=None):
 		res = BaseRef(key=k,code=c)
 		if c is None:
 			return res
 		assert c == make_secret(k)
-		res = loader.get(res)
+		res = current_loader.top.get(res)
 		if m:
 			assert m is res._meta,(m,res._meta)
 		return res
@@ -92,7 +95,7 @@ class server_InfoObj(server_BaseObj):
 	clsname = "Info"
 
 	@staticmethod
-	def decode(loader, f=None,**kw):
+	def decode(f=None,**kw):
 		assert f is None
-		return server_BaseObj.decode(loader,**kw)
+		return server_BaseObj.decode(**kw)
 

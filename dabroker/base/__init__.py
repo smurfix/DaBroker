@@ -204,7 +204,7 @@ class AttrAdapter(object):
 	def encode(obj, include=False):
 		return obj.__dict__.copy()
 	@classmethod
-	def decode(cls,loader,**attr):
+	def decode(cls,**attr):
 		return cls.cls(**attr)
 
 @codec_adapter
@@ -256,6 +256,6 @@ class common_InfoMeta(object):
 		return {}
 	
 	@staticmethod
-	def decode(loader,**attr):
+	def decode(**attr):
 		return broker_info_meta
 

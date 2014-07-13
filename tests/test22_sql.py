@@ -23,7 +23,7 @@ from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj
 from dabroker.client.service import BrokerClient
 from dabroker.util import cached_property
 
-from gevent import spawn,sleep
+from gevent import spawn
 from gevent.event import AsyncResult
 
 from tests import test_init,LocalQueue,TestMain,TestClient

@@ -22,6 +22,7 @@ from ..base.transport import BaseCallbacks
 from ..base.config import default_config
 from ..base.codec import ServerError
 from ..util import import_string
+from ..util.thread import spawned, AsyncResult
 from .codec import adapters, client_broker_info_meta
 
 import logging
@@ -29,7 +30,6 @@ logger = logging.getLogger("dabroker.client.service")
 
 from weakref import WeakValueDictionary,KeyedRef,ref
 from collections import deque
-from gevent.event import AsyncResult
 from heapq import heapify,heappop
 
 class _NotGiven: pass
@@ -68,13 +68,14 @@ class CountedCache(WeakValueDictionary,object):
 		def remove(wr, selfref=ref(self)):
 			self = selfref()
 			if self is not None:
-				if self._iterating:
+				if self._iterating and hasattr(self,'_pending_removals'):
 					self._pending_removals.append(wr.key)
 				else:
 					ref = self.data.pop(wr.key,None)
 					if ref is not None:
 						ref.counter = -1
 		self._remove = remove
+
 
 	def __getitem__(self, key):
 		r = self.data[key]
@@ -95,7 +96,7 @@ class CountedCache(WeakValueDictionary,object):
 		return r.count
 
 	def __setitem__(self, key, value):
-		if self._pending_removals:
+		if getattr(self,'_pending_removals',False):
 			self._commit_removals()
 
 		ref = self.data.get(key, None)
@@ -107,7 +108,7 @@ class CountedCache(WeakValueDictionary,object):
 		try:
 			wr = self.data[key]
 		except KeyError:
-			if self._pending_removals:
+			if getattr(self,'_pending_removals',False):
 				self._commit_removals()
 			self.data[key] = ExtKeyedRef(default, self._remove, key)
 			return default
@@ -115,7 +116,7 @@ class CountedCache(WeakValueDictionary,object):
 			return wr()
 
 	def update(self, dict=None, **kwargs):
-		if self._pending_removals:
+		if getattr(self,'_pending_removals',False):
 			self._commit_removals()
 		d = self.data
 		if dict is not None:
@@ -448,8 +449,6 @@ class BrokerClient(BaseCallbacks):
 			obj = self._cache.pop(_key,None)
 			if obj is None:
 				logger.debug("not in cache")
-		else:
-			logger.debug("no key")
 
 		if _meta is None:
 			logger.warn("no metadata?")
@@ -534,6 +533,7 @@ class BrokerClient(BaseCallbacks):
 		logger.debug("Recv reply: %r",msg)
 		return msg
 
+	@spawned
 	def recv(self, msg):
 		"""Process incoming notifications from the server"""
 		#logger.debug("bcast raw %r",msg)
