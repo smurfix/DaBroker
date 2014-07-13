@@ -38,7 +38,7 @@ def make_secret(key):
 		if not isinstance(k,bytes):
 			k = k.encode('utf-8')
 		m.update(b'\0'+k)
-	return b64encode(m.digest()[0:6])
+	return b64encode(m.digest()[0:6]).decode('ascii')
 
 def codec_adapter(cls):
 	adapters.append(cls)
