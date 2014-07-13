@@ -70,6 +70,7 @@ DBSession = sessionmaker(bind=engine)
 done = 0
 
 class Test22_server(BrokerServer):
+	seq = 0
 	@cached_property
 	def root(self):
 		rootMeta = BrokeredInfo("rootMeta")
@@ -93,6 +94,9 @@ class Test22_server(BrokerServer):
 		return root
 
 	def do_trigger(self,msg):
+		self.seq += 1
+		self.root.hello = "Step "+str(self.seq)
+		self.send_updated(self.root)
 		self.send("trigger",msg)
 	
 class Test22_client(TestClient):
@@ -124,12 +128,6 @@ class Test22_client(TestClient):
 			self.a[i].get()
 			logger.debug("GOTO {} runs".format(i))
 
-	def ref(self,p):
-		k = p._key
-		def res():
-			return self.get(k)
-		return res
-
 	@property
 	def cid(self):
 		return self.transport.next_id
@@ -139,7 +137,7 @@ class Test22_client(TestClient):
 		logger.debug("Get the root")
 		res = self.root
 		logger.debug("recv %r",res)
-		assert res.hello == "Hello!"
+		assert res.hello == "Step 1", res.hello
 		P = res.data['Person']
 		assert P.name == 'Person',P.name
 		r = P.find()
@@ -147,14 +145,19 @@ class Test22_client(TestClient):
 
 		# A: create
 		p1 = P.new(name="Fred Flintstone")
-		p1r = self.ref(p1)
 		self.commit()
 
 		self.jump(1,2) # goto B
 
-		# D: check
-		p1 = p1r()
-		assert p1.name == "Freddy Firestone", p1.name
+		assert res.hello == "Step 1", res.hello
+		res = res._key() # refresh
+		assert res.hello == "Step 4", res.hello
+
+		# D: refresh and check
+		p2 = p1._key()
+		#assert p1.name == "Fred Flintstone", p1.name
+		# this test does not work because it's the same process
+		assert p2.name == "Freddy Firestone", p2.name
 
 		self.jump(0,2) # goto E
 

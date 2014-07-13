@@ -213,11 +213,22 @@ class ClientBaseObj(BaseObj):
 	def _attr_key(self,k):
 		return self._refs[k]
 
+class ClientBaseRef(BaseRef):
+	def __init__(self,*a,**k):
+		super(ClientBaseRef,self).__init__(*a,**k)
+		self._dab = current_loader.top
+
+	def __call__(self):
+		return self._dab.get(self)
+
 @codec_adapter
 class client_BaseRef(common_BaseRef):
+	cls = ClientBaseRef
+
 	@staticmethod
 	def decode(k,c=None):
-		return BaseRef(key=tuple(k),code=c)
+		res = ClientBaseRef(key=tuple(k),code=c)
+		return res
 
 @codec_adapter
 class client_BaseObj(common_BaseObj):
@@ -230,7 +241,7 @@ class client_BaseObj(common_BaseObj):
 			"""
 		ref = obj._refs[k]
 		if ref is not None:
-			ref = BaseRef(obj._meta,obj._key)
+			ref = ClientBaseRef(obj._meta,obj._key)
 		return ref
 	
 
@@ -239,7 +250,7 @@ class client_BaseObj(common_BaseObj):
 		"""\
 			Decode a reference.
 			"""
-		k = BaseRef(key=k,code=c)
+		k = ClientBaseRef(key=k,code=c)
 		if meta is not None:
 			res = meta.class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
 		elif r and '_meta' in r:
@@ -274,7 +285,7 @@ class client_InfoObj(client_BaseObj):
 			# We always need the data, but this is something like a ref
 			# so we need to go and get the real thing.
 			# NOTE this assumes that the codec doesn't throw away empty lists.
-			return current_loader.top.get(BaseRef(key=k,code=c))
+			return current_loader.top.get(ClientBaseRef(key=k,code=c))
 		res = client_BaseObj.decode(_is_meta=True, k=k,c=c,f=f,**kw)
 		res.client = current_loader.top
 		return res

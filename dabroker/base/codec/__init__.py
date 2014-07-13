@@ -250,32 +250,36 @@ class BaseCodec(object):
 			          send object keys without retrieval info. This is used
 			          e.g. when broadcasting, so as to not leak data access.
 			"""
-		if self.try_simple >= 1000:
-			# Try to do a faster encoding pass
-			try:
+		current_loader.push(self.loader)
+		try:
+			if self.try_simple >= 1000:
+				# Try to do a faster encoding pass
+				try:
+					objcache = {}
+					res = self._encode(data, objcache,None, include=include)
+				except ComplexObjectError:
+					self.try_simple = 0
+
+			if self.try_simple < 1000:
+				# No, not yet / did not work: slower path
 				objcache = {}
-				res = self._encode(data, objcache,None, include=include)
-			except ComplexObjectError:
-				self.try_simple = 0
+				objref = set()
+				res = self._encode(data, objcache,objref, include=include)
 
-		if self.try_simple < 1000:
-			# No, not yet / did not work: slower path
-			objcache = {}
-			objref = set()
-			res = self._encode(data, objcache,objref, include=include)
-
-			if objref:
-				# At least one reference was required.
-				self.try_simple = 0
-				for i,v in objcache.values():
-					if i not in objref:
+				if objref:
+					# At least one reference was required.
+					self.try_simple = 0
+					for i,v in objcache.values():
+						if i not in objref:
+							del v['_oi']
+				else:
+					# No, this was a proper tree after all.
+					self.try_simple += 1
+					for i,v in objcache.values():
 						del v['_oi']
-			else:
-				# No, this was a proper tree after all.
-				self.try_simple += 1
-				for i,v in objcache.values():
-					del v['_oi']
-		return res
+			return res
+		finally:
+			current_loader.pop()
 	
 	def encode_error(self, err, tb=None):
 		"""\
@@ -285,15 +289,19 @@ class BaseCodec(object):
 			data should be strings (or, in case of the traceback, a list of
 			strings).
 			"""
-		if not hasattr(err,'swapcase'): # it's a string
-			err = str(err)
-		res = {'_error':err }
+		current_loader.push(self.loader)
+		try:
+			if not hasattr(err,'swapcase'): # it's a string
+				err = str(err)
+			res = {'_error':err }
 
-		if tb is not None:
-			if hasattr(tb,'tb_frame'):
-				tb = format_tb(tb)
-			res['tb'] = tb
-		return res
+			if tb is not None:
+				if hasattr(tb,'tb_frame'):
+					tb = format_tb(tb)
+				res['tb'] = tb
+			return res
+		finally:
+			current_loader.pop()
 
 	def _decode(self,data, objcache,objtodo, p=None,off=None):
 		# Decode the data recursively.
@@ -376,8 +384,8 @@ class BaseCodec(object):
 		if isinstance(data,dict) and '_error' in data:
 			raise ServerError(data['_error'],data.get('tb',None))
 
+		current_loader.push(self.loader)
 		try:
-			current_loader.push(self.loader)
 			objcache = {}
 			objtodo = []
 			res = self._decode(data,objcache,objtodo)

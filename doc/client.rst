@@ -11,51 +11,64 @@ Connecting to DaBroker is easy:
     root = broker.root
 
 You now can access the data fields, objects and methods which your server
-publishes, transparently. This includes metadata via the object's `_meta`
-attribute.
+publishes. This includes metadata via the root (or in fact any other)
+object's `_meta` attribute.
 
 All brokered objects are instances of (a subclass of)
-dabroker.client.codec.ClientBaseObj. The server tells the client (by way of
-a metaclass, accessible via the `_meta` attribute) which data fields are
-normal Python data and which refer to other DaBroker objects.
-Whenever you read one of these attributes, the DaBroker client will check
-the local cache and return the current version of that object. Other
-attributes are not special.
+dabroker.client.codec.ClientBaseObj. The server tells the client which data
+fields are normal Python data and which refer to other DaBroker objects.
 
-If you examine the client's root object with the debugger, it will look
-something like this:
+Whenever you read one of the latter attributes, the DaBroker client will
+check the local cache and return the current version of the object which
+that attribute refers to. Thus, when you write
 
-    (Pdb) pp self.root.__dict__
-    {'_dab': <__main__.Test11_client object at 0x7ff1bfc43610>,
-    '_key': R:(u'static', u'root')‹GRjiMxoQ›,
-    '_meta': <ClientInfo:rootMeta>,
-    '_refs': {u'more': R:(u'static', 1, 2, 3)‹AbDiG3xA›},
-    u'data': {},
-    u'hello': u'Hello!'}
+    obj_b = obj_a.some_obj
 
-This is the associated metadata object, `<ClientInfo:rootMeta>`:
+the DaBroker client will take the key stored in `obj_a` for the `some_obj`
+attribute, fetch that object from cache or the server, and save it in
+`obj_b`. However, it will _not_ check in the cache (or on the server)
+whether the server's version of `obj_a.some_obj` still refers to `obj_b`.
 
-    (Pdb) pp self.root._meta.__dict__
-    {'_class': [None, None],
-    '_dab': <__main__.Test11_client object at 0x7ff1bfc43610>,
-    '_key': R:(u'static', u'root', u'meta')‹LNZOGl0S›,
-    '_meta': ClientBrokeredInfoInfo(u'BrokeredInfoInfo Singleton'),
-    '_refs': {},
-    'backrefs': {},
-    'calls': {u'callme': <dabroker.base.Callable object at 0x7ff1bf7c85d0>},
-    'client': <__main__.Test11_client object at 0x7ff1bfc43610>,
-    'fields': {u'data': <dabroker.base.Field object at 0x7ff1bf7c8350>,
-                u'hello': <dabroker.base.Field object at 0x7ff1bf7c84d0>},
-    'name': u'rootMeta',
-    'refs': {u'_meta': <dabroker.base.Ref object at 0x7ff1bf7c8550>,
-            u'more': <dabroker.base.Ref object at 0x7ff1bf7c8590>},
-    'searches': <WeakValueDictionary at 140676276486800>}
+This bascially means that at any time, a single object represents a specific
+consistent instance at the time it was accessed. If you want a consistent
+snapshot of a whole list of objects, there are two ways to do this:
 
-Of special interest here is the `root.more` attribute, which refers to
-another DaBroker object. An up-to-date version will be returned whenever
-you access it, as only that object's key is stored here (in the `_refs`
-attribute). By contrast, if you save a DaBroker object anywhere else
-(local or global variable, another attribute), it will not be updated.
+    * Write a server method that returns them in a list, e.g. via a database transaction.
+      Don't forget to flag the method with `.include=True`.
+
+    * Collect the objects in a list or another convenient data structure, and do
+
+        objs = […]
+        while True:
+            updated = False
+            for o in objs:
+                n = o._key()
+                if n is not o:
+                    updated = True
+                new_objs.append(n)
+            objs = new_objs
+            if not updated: break
+        # the snapshot is in `objs`
+
+Refreshing an object
+--------------------
+
+Easy:
+
+    obj = obj._key()
+
+or in two steps:
+
+    saved = obj._key
+    # later
+    obj = saved()
+
+This releases your reference to the object and then fetches the current
+copy from cache, or from the server. You can find an example in `test22`,
+at the "# refresh" comment in `job1()`.
+
+Client-side subclassing
+-----------------------
 
 If you want to add your own client-side attributes or methods for client-local
 processing, the recommended way is to register it with `@baseclass_for`:
@@ -76,4 +89,36 @@ the client. You need to inherit from `ClientBaseObj`, otherwise passing
 (references to) your objects back to the server will not work.
 
 See `test11` for an example.
+
+Calling the server
+------------------
+
+The easiest way is to call the server directly:
+
+Server, subclassing `dabroker.server.BrokerServer`:
+
+    def do_hello(self,msg):
+        return "hello "+msg
+
+Client:
+
+    assert broker.call("you") == "hello you"
+
+However, most often you'll want to use a method that already exists on the
+server side; simply add a `Callable` entry to the server object's info class:
+
+    rootMeta.add(Callable("callme"))
+
+    class TestRoot(BaseObj):
+        _meta = rootMeta
+        def callme(self,msg):
+            return "hello "+msg
+
+The client then merely needs to do
+
+    from dabroker.client import BrokerClient
+    broker = BrokerClient(cfg={…})
+    assert broker.root.callme("me") == "hello me"
+
+See `tests/__init__.py`.
 

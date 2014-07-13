@@ -135,7 +135,7 @@ class BrokerServer(BaseCallbacks):
 		attrs = dict((k,(v,)) for k,v in obj._attrs.items())
 		self.send("invalid_key", _key=obj._key, _meta=obj._meta._key, _include=None, **attrs)
 
-	def send_updated(self, obj, attrs):
+	def send_updated(self, obj, attrs={}):
 		"""\
 			An object has been updated.
 		
