@@ -6,9 +6,10 @@ Data types
 
 This section refers to data types like `Decimal` or `datetime.date`, i.e.
 types which do not have DaBroker-specific attributes and are recreated 1:1
-on the client.
+on the client. For client-local attributes and methods on DaBroker objects,
+see `client.rst`.
 
-Dabroker incluudes codecs for several common objects like `datetime`.
+Dabroker includes codecs for several common objects like `datetime`.
 
 If you need to pass other classes through DaBroker's RPC, you need to
 register a simple mapper class which can encode and decode your type. As an

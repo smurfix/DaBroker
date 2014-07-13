@@ -12,7 +12,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-# This test runs the test environment's notification system.
+# This test checks the notification system.
+# It also does everything test08 does *shrug*.
 
 from dabroker import patch; patch()
 

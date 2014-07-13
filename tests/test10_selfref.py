@@ -12,7 +12,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-# This test runs the test environment's notification system.
+# This test verifies that data structures which are not a tree, or even a
+# DAG (Directed Acyclic Graph), are transmitted correctly.
 
 from dabroker import patch; patch()
 

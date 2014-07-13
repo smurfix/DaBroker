@@ -12,26 +12,35 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-# This test checks the test environment's local queue implementation
-# and, incidentally, basic object transfer and messaging.
+# This test verifies that instantiating specific objects on the client side
+# works.
 
 from dabroker import patch; patch()
 from dabroker.util.thread import spawned
+from dabroker.client.codec import baseclass_for, ClientBaseObj
 
 from gevent import spawn
 
 from tests import test_init,LocalQueue,TestMain,TestRoot,TestClient,TestServer
 
-logger = test_init("test.08.localmsg")
+logger = test_init("test.11.lclientobj")
 
 counter = 0
 
+# client's root object
+@baseclass_for("static","root","meta")
+class my_root(ClientBaseObj):
+	def test_me(self):
+		global counter
+		counter += 100
+		logger.debug("Local call")
+
 # Server's root object
-class Test08_root(TestRoot):
+class Test11_root(TestRoot):
 	def callme(self,msg):
 		return msg*msg
 
-class Test08_client(TestClient):
+class Test11_client(TestClient):
 	def main(self):
 		logger.debug("Client started")
 		jobs = []
@@ -45,23 +54,24 @@ class Test08_client(TestClient):
 	def mult(self,i):
 		global counter
 		logger.debug("Send %r",i)
+		self.root.test_me()
 		res = self.root.callme(i)
 		logger.debug("Sent %r, got %r",i,res)
 		counter += res
 
-class Test08_server(TestServer):
+class Test11_server(TestServer):
 	@property
 	def root(self):
-		return Test08_root()
+		return Test11_root()
 
 class Tester(TestMain):
-	client_factory = Test08_client
-	server_factory = Test08_server
+	client_factory = Test11_client
+	server_factory = Test11_server
 
 t = Tester()
 t.register_stop(logger.debug,"shutting down")
 t.run()
 
-assert counter == 1+4+9,counter
+assert counter == 300+1+4+9,counter
 
 logger.debug("Exiting")
