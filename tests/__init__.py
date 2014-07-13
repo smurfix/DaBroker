@@ -283,7 +283,7 @@ class TestMain(Main):
 
 		super(TestMain,self).setup()
 		
-		self.killer = spawn(killer,self,5)
+		self.killer = spawn(killer,self,15)
 		self.server = self.server_factory(cfg=self.cfg)
 		self.server.start()
 
@@ -316,7 +316,7 @@ class TestMain(Main):
 class TestBasicMain(Main):
 	def setup(self):
 		super(TestBasicMain,self).setup()
-		self.killer = spawn(killer,self,5)
+		self.killer = spawn(killer,self,15)
 	def cleanup(self):
 		super(TestBasicMain,self).cleanup()
 		if self.killer is not None:
