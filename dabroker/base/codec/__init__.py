@@ -382,6 +382,8 @@ class BaseCodec(object):
 			objtodo = []
 			res = self._decode(data,objcache,objtodo)
 			self._cleanup(objcache,objtodo)
+			if isinstance(res,DecodeRef):
+				res = objcache[res.oid]
 			return res
 		finally:
 			current_loader.pop()
