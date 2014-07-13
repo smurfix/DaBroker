@@ -36,6 +36,7 @@ def test_init(who):
 # reduce cache sizes and timers
 
 from dabroker.base import BaseObj,BrokeredInfo, Field,Ref,Callable
+from dabroker.base.config import default_config
 from dabroker.base.transport import BaseTransport
 from dabroker.util.thread import Main
 from dabroker.client import BrokerClient
@@ -237,7 +238,7 @@ class TestServer(BrokerServer):
 		my_cfg = default_config.copy()
 		my_cfg.update(test_cfg_s)
 		my_cfg.update(cfg)
-		super(Testclient,self).__init__(my_cfg)
+		super(TestServer,self).__init__(my_cfg)
 
 	@property
 	def root(self):
@@ -252,7 +253,7 @@ class TestClient(BrokerClient):
 		my_cfg = default_config.copy()
 		my_cfg.update(test_cfg_c)
 		my_cfg.update(cfg)
-		super(Testclient,self).__init__(my_cfg)
+		super(TestClient,self).__init__(my_cfg)
 
 	def main(self):
 		raise NotImplementedError("You need to override {}.main!".format(self.__class__.__name__))
