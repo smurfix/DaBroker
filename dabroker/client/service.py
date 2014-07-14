@@ -455,7 +455,7 @@ class BrokerClient(BaseCallbacks):
 			return
 		obj = self._cache.get(_meta,None)
 		if obj is None:
-			logger.warn("metadata not found")
+			# logger.warn("metadata not found: %s for %s",_meta,_key)
 			return
 		obsolete = set()
 
