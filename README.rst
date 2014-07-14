@@ -4,33 +4,62 @@ DaBroker
 DaBroker is short for Data Access Broker.
 
 DaBroker exposes objects (e.g. database rows, or their NoSQL equivalent, or
-indeed anything you might think of) to clients which might cache these
-objects.
+indeed anything you might think of) to clients. Clients cache these objects
+until they do not want them any more, or until they are invalidated by the
+server.
 
-DaBroker is written in Python. If you understand JSON and RabbitMQ, 
-a client in a different language is reasonably straightforward.
+DaBroker is written in Python. If you know JSON and AMQP, writing a client
+in a different language is reasonably straightforward. Other marshaling
+formats or transports can be plugged in easily.
 
-Rationale
-#########
+Use case
+########
 
-Assume that you have a database (or several) which is not read-only, but
-not updated frequently either.
+Let's say that you have a database. Or several. Or something else that can
+be expressed as a collection of typed objects. Something which is
+read-only, or updated fairly infrequently. DaBroker does not care (much).
+, as long
+as these objects have well-defined data fields and/or links to other objects:
+and types.
 
-Further assume processes which need to keep a dynamic subset of that data
-in memory. For instance, if you serve a web site, the home page qualifies.
-So does the page that was linked from Slashdot yesterday.
+Let's further assume that you have processes which need to keep a dynamic
+subset of that data in memory. For instance, if you serve a web site, the
+home page qualifies. So does the page that was linked from Slashdot or
+Reddit yesterday.
 
-Also assume that you don't want to work with stale data.
+Also, you probably might want to …
 
-Last, assume that you can funnel all updates through DaBroker.
+    * have some sort of access control
 
-With DaBroker, you can (mostly) forget about network latency or excessive
-memory usage because "hot" data will be cached on the client, dynamically.
+    * use Pythonic syntax for accessing data
+
+    * not care whether the next bit you need is cached at the moment
+
+    * not work with stale data
+
+    * not have an object change under your nose, i.e. while you're processing it
+
+    * not lock everything preemptively
+
+Last, assume that you can funnel all updates, assuming there are any, through DaBroker.
+
+DaBroker
+--------
+
+DaBroker is a client/server system.
+
+The server assigns an object reference key to everything it can send to the
+client and supplies (at least) a method to find a "root object". It
+supports multiple concurrent object stores (database tables, static data,
+you-name-it).
+
+The client generates proxy objects for the content it receives from the
+server. Object references and method calls are handled transparently.
 
 The DaBroker server sends "this is no longer valid" messages to all
-clients. Following an object reference will then update the cached copy
-automatically. Objects that are in active use will not be modified
-"behind your back".
+clients when an object is updated. The client will then remove the
+invalid objects from its cache, so that following an object reference will
+update the cached copy automatically. It will not touch the actual objects.
 
 Design
 ######
@@ -41,18 +70,20 @@ for serving information about your data structure and for object access.
 DaBroker is a distributed system. You can run more than one broker.
 You can use a variety of data back-ends.
 
-DaBroker exposes common one/many-to-many/one semantics. Depending on the
-client's language, accessing linked objects is no different from working
-with local object references.
+DaBroker exposes common one-to-many and many-to-one semantics.
 
-DaBroker does not expose a generic query interface. You can, however,
+DaBroker does not itself have a generic query interface. You can, however,
 easily add application-specific back-ends.
 
-DaBroker's data serialization language is BSON, i.e. binary JSON.
-Other serializers are possible.
+DaBroker does not constrain your data serialization scheme. It currently
+supports JSON, BSON (i.e. binary JSON) and Python's `marshal` module.
+The only mandatory requirement is support for strings and string-keyed
+dictionaries / hashes. All current serializers do also support lists, 
+integers, floats, and True/False/None; that can be made optional if
+necessary.
 
-DaBroker does not constrain data types. Its serializer can reproduce
-arbitrary data structures including self-referential objects and loops.
+DaBroker does not constrain your data types. Its serializer can reproduce
+arbitrary data structures, including self-referential objects and loops.
 It will only transmit Python objects it knows about.
 
 System Layout
@@ -61,15 +92,20 @@ System Layout
 Storage
 -------
 
-You probably need at a persistent object storage. For instance, a SQL or
-NoSQL database. You need to store or extract introspection data (which
-tables exist, column names, default values, foreign keys, …).
+You probably want persistent object storage. For instance, a SQL or
+NoSQL database.
+
+You need to tell DaBroker about your objects' metadata:
+data fields, foreign keys, and methods the client may call.
+
+DaBroker supports extracting field and relationship metadata from
+SQLAlchemy.
 
 Message passing
 ---------------
 
 You need a 0MQ server. DaBroker has been tested with RabbitMQ. Other
-methods for passing messages around are possible.
+methods for passing messages are possible.
 
 The DaBroker unit tests use a RabbitMQ vhost. You need to do this, once:
 
@@ -78,14 +114,15 @@ The DaBroker unit tests use a RabbitMQ vhost. You need to do this, once:
     rabbitmqctl set_permissions -p test test ".*"  ".*"  ".*"
 
 Message passing overhead, on a reasonably current server, is on the order
-of 1 millisecond per RPC call.
+of 1…2 milliseconds per RPC call. No work has yet been done to optimize
+this.
 
 Server
 ------
 
 The DaBroker server listens to an RPC message queue. It exposes methods to
 
-  * retrieve "root" objects
+  * retrieve the "root" object
 
   * call methods on objects
 
@@ -107,29 +144,27 @@ than one server in parallel if one should be too slow.
 Client
 ------
 
-The DaBroker client asks the server for a root object. It then accesses
-other objects by simply reading the appropriate attributes. This works much
-like accessing one-to-many or many-to-one references in SQLAlchemy, except
-that the server can export method calls, as well as objects which are not a
-row in a table. The server operator selects what to export. By default, no
-method calls and all attributes and relationships are exposed.
+The DaBroker client asks the server for its root object. It then accesses
+other objects by reading the appropriate attributes or calling methods.
+This works exactly like accessing one-to-many or many-to-one references in
+SQLAlchemy's ORM.
 
 The client also, of course, listens for the server's invalidation requests
 and other broadcast messages.
 
-The client uses a caching system. It makes sure that each object with a
-given key exists exactly once.
+The client caches objects. It makes sure that each object with a given key
+exists exactly once (except when that object is updated).
 
 The client is thread-safe in the sense that you can run any number of
 greenlets which do whatever you like to your data.
 
-The client is not thread-safe in the sense that changed attributes will be
-immediately visible to other threads in our client, but not to anything
-else in the system. Changes are batched and sent to the server when you
-tell the DaBroker code to do so.
+The client is not thread-safe in the sense that changed object attributes
+will be immediately visible to other threads in your client, but not to
+anything else in the system. Changes are batched and sent to the server
+when you tell the DaBroker code to do so.
 
 DaBroker verifies that the attributes of the objects you update have not
-been modified. In that case, the update is reverted.
+been modified. If that happens, the update is reverted.
 
 When in doubt, use multiple processes.
 
@@ -138,28 +173,36 @@ Access control
 
 None.
 
-However, you can tell the DaBroker server to only export a single root
-object with an "auth" method, which clients need to call with correct
-parameters in order to get at the actual data.
+However, you can tell the DaBroker server to export a root object that only
+has an "auth" method, which clients need to call with correct parameters in
+order to get at the actual data.
 
 While the stream of broadcast messages does contain details of obsolete
 objects, actual object references contain a hash value which is required
-for direct access.
+for accessing them.
 
 Source, Documentation, etc.
 ###########################
 
-TBD
+Source code, issue tracker, etc., is available at
+https://github.com/smurf/dabroker .
+
+The documentation is not yet online because somebody needs to verify that
+the ReST renders correctly, convert the whole mess to Sphinx, document the
+API, and whatnot.
 
 License
 #######
 
-DaBroker is Copyright © 2014 by Matthias Urlichs <matthias@urlichs.de>,
-it is licensed under the GPLv3. See the file `LICENSE` for details.
+DaBroker is Copyright © 2014 by Matthias Urlichs <matthias@urlichs.de>
+and whoever else submits patches (assuming that I accept them, which is
+not unheard-of).
 
-Note that I would have liked to publish this code under the AGPL instead
-(so that everybody will _have_to_ share their extensions and other
-interesting pybble-related code), but life is not perfect, so I'll merely
-state my wish here that you in fact _do_ share your work. Whether you
-ultimately do, or not, is up to you.
+DaBroker is licensed under the GPLv3. See the file `LICENSE` for details.
+
+While I would have liked to publish this code under the AGPL instead
+(so that everybody shall _have_to_ share their extensions and other
+interesting DaBroker-related code), life is not perfect, so I'll merely
+state my wish that you in fact _do_ share your work. Whether you ultimately
+do, or not, is up to you.
 
