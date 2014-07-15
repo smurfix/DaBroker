@@ -1,1 +1,1 @@
-ampq
+amqp
