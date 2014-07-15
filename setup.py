@@ -9,7 +9,7 @@ from six import text_type
 def get_version(fname='dabroker/__init__.py'):
     with open(fname) as f:
         for line in f:
-            if line.startswith('__version__'):
+            if line.startswith('__VERSION__'):
                 return eval(line.split('=')[-1])
 
 try:
@@ -49,7 +49,7 @@ REQUIREMENTS = [i.strip() for i in open("requirements.txt").readlines()
 
 setup(name='DaBroker',
       license='GPLv3+',
-      version=".".join(get_version()),
+      version='.'.join(str(x) for x in get_version()),
       description='DaBroker is a fast distributed object broker for large, mostly-read-only data',
       long_description=long_description,
       author='Matthias Urlichs',

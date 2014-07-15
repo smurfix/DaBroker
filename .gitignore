@@ -1,4 +1,4 @@
-*.pyc
-*.pyo
+/DaBroker.egg-info
+/.pybuild
 .*.swp
 .*.swo

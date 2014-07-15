@@ -1,0 +1,5 @@
+dabroker (0.1.0-1) smurf; urgency=low
+
+  * source package automatically created by stdeb 0.6.0+git
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 15 Jul 2014 08:58:03 +0200
