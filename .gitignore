@@ -2,3 +2,5 @@
 /.pybuild
 .*.swp
 .*.swo
+*.pyc
+*.pyo
