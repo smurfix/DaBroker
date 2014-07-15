@@ -46,12 +46,12 @@ class Test21_server(TestServer):
 		rootMeta = BrokeredInfo("rootMeta")
 		rootMeta.add(Field("hello"))
 		rootMeta.add(Ref("ops"))
-		self.loader.static.add(rootMeta,0,1)
+		self.add_static(rootMeta,0,1)
 
 		opsMeta = SearchBrokeredInfo("opsMeta")
 		opsMeta.add(Callable("rev"))
 		opsMeta.add(Field("hell"))
-		self.loader.static.add(opsMeta,0,2)
+		self.add_static(opsMeta,0,2)
 
 		class RootObj(BaseObj):
 			_meta = rootMeta
@@ -71,15 +71,15 @@ class Test21_server(TestServer):
 				return "<%s>"%self
 
 		root = RootObj()
-		self.loader.static.add(root,0,2,21)
+		self.add_static(root,0,2,21)
 
 		theOpsObj = OpsObj("Oh?")
-		self.loader.static.add(theOpsObj,0,34)
+		self.add_static(theOpsObj,0,34)
 		root.ops = theOpsObj
 
 		for i,n in ((0,"Zero"),(1,"One"),(2,"Two"),(3,"Three")):
 			o = OpsObj(n)
-			self.loader.static.add(o,0,10,i)
+			self.add_static(o,0,10,i)
 			opsMeta.obj_add(o)
 		
 		self._ops_meta = opsMeta
@@ -113,29 +113,29 @@ class Test21_client(TestClient):
 	def main(self):
 		self.go_on = Event()
 		logger.debug("Get the root")
-		res = self.root
-		logger.debug("recv %r",res)
-		assert res.hello == "Hello!"
-		assert res._meta.name == "rootMeta",(res,res._meta,res._meta.name)
+		root = self.root
+		logger.debug("recv %r",root)
+		assert root.hello == "Hello!"
+		assert root._meta.name == "rootMeta",(root,root._meta,root._meta.name)
 		cid=self.cid
-		assert res._meta.name == "rootMeta" # again, to check caching
+		assert root._meta.name == "rootMeta" # again, to check caching
 		assert cid==self.cid, (cid,self.cid)
-		assert res.ops.rev("test123") == "321tset"
-		assert res.ops.hell == "Oh?"
+		assert root.ops.rev("test123") == "321tset"
+		assert root.ops.hell == "Oh?"
 		self.send("trigger",1)
 		self.go_on.wait()
 		self.go_on.clear()
 
-		assert res.ops.hell == "Yeah!",res.ops.hell
+		assert root.ops.hell == "Yeah!",root.ops.hell
 		cid=self.cid
-		assert res.ops.hell == "Yeah!"
+		assert root.ops.hell == "Yeah!"
 		assert cid==self.cid, (cid,self.cid)
 
 		# Now let's search for something
-		Op = res.ops._meta
+		Op = root.ops._meta
 		assert hasattr(Op,"calls")
-		assert not hasattr(res,"calls"),(res,res.calls)
-		assert not hasattr(res.ops,"calls")
+		assert not hasattr(root,"calls"),(root,root.calls)
+		assert not hasattr(root.ops,"calls")
 
 		o1 = Op.get(hell="Two")
 		assert o1.hell == "Two", o1

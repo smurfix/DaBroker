@@ -67,7 +67,7 @@ class TestServer(BrokerServer):
 		rootMeta = BrokeredInfo("rootMeta")
 		rootMeta.add(Field("hello"))
 		rootMeta.add(Field("data"))
-		self.loader.static.add(rootMeta,1)
+		self.add_static(rootMeta,1)
 
 		class RootObj(BaseObj):
 			_meta = rootMeta
@@ -75,7 +75,7 @@ class TestServer(BrokerServer):
 			data = {}
 
 		root = RootObj()
-		self.loader.static.add(root,2,30)
+		self.add_static(root,2,30)
 		return root
 
 	def __init__(self,*a,**k):

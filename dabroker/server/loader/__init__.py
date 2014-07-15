@@ -14,7 +14,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # Object loaders. The static loader is defined here.
 
-from ...base import broker_info_meta, BaseRef
+from ...base import broker_info_meta, BaseObj,BaseRef
 
 class Loaders(object):
 	"""\
@@ -34,9 +34,9 @@ class Loaders(object):
 
 		self.loaders = {} # first key component => actual loader
 
-		self.static = StaticLoader(0)
+		self.static = StaticLoader()
 		self.add_loader(self.static)
-		self.static.add(broker_info_meta)
+		self.static.new(broker_info_meta)
 
 	def add_loader(self,loader):
 		"""Register a loader."""
@@ -58,19 +58,54 @@ class Loaders(object):
 			assert obj._key == key, (obj._key,key)
 		return obj
 
+	def delete(self,*key):
+		"""\
+			Remove an object.
+			"""
+
+		if len(key) == 1 and isinstance(key[0],BaseObj):
+			key = key[0]._key.key
+		self.loaders[key[0]].delete(*key[1:])
+
+	def new(self, obj, *key):
+		"""\
+			Add an object. Gets the correct loader from the object's class.
+			"""
+		if key:
+			k = key[0]
+		else:
+			k = getattr(obj,'_meta',obj.__class__._meta)._key.key[0]
+
+		self.loaders[k].new(obj, key[1:] if key else ())
+
 class BaseLoader(object):
-	def __init__(self, loaders=None, id=0):
-		self.id = id
+	id=None
+	def __init__(self, id=None):
+		if id is not None:
+			self.id = id
+		assert self.id is not None
 
 	def get(self,*key):
 		raise NotImplementedError("You need to override {}.get()".format(self.__class__.__name__))
 
+	def update(self, obj, **kv):
+		"""Update an object. You might want to override this."""
+		for k,v in kv.items():
+			setattr(obj,k,v)
+
+	def delete(self,*key):
+		raise NotImplementedError("You need to override {}.delete()".format(self.__class__.__name__))
+
+	def new(self, obj):
+		raise NotImplementedError("You need to override {}.new()".format(self.__class__.__name__))
+		
 	def set_key(self, obj, *key):
 		"""sets an object's lookup key."""
 		if obj is broker_info_meta:
 			return
+
 		k = getattr(obj,'_key',None)
-		if k:
+		if k is not None:
 			k = k.key
 			assert k[0] == self.id, (k,self.id)
 			if key:
@@ -80,16 +115,24 @@ class BaseLoader(object):
 
 class StaticLoader(BaseLoader):
 	"""A simple 'loader' which serves static objects"""
-	def __init__(self, loaders=None, id='static'):
+	id="_s"
+
+	def __init__(self, id=None):
 		self.objects = {}
-		super(StaticLoader,self).__init__(id=id, loaders=loaders)
+		super(StaticLoader,self).__init__(id=id)
 
 	def get(self,*key):
 		return self.objects[key]
 
-	def add(self,obj,*key):
-		assert key not in self.objects or self.objects[key] is obj,(key, obj, self.objects[key])
+	def delete(self,*key):
+		del self.objects[key]
+
+	def new(self,obj, *key):
+		try:
+			assert key not in self.objects or self.objects[key] is obj,(key, obj, self.objects[key])
+		except AssertionError:
+			import pdb;pdb.set_trace()
 		self.set_key(obj,*key)
-		self.objects[obj._key.key[1:]] = obj
+		self.objects[key] = obj
 
 

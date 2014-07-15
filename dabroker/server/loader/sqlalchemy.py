@@ -21,6 +21,9 @@ from ..codec import server_BaseObj
 from sqlalchemy.inspection import inspect
 from functools import wraps
 
+import logging
+logger = logging.getLogger("dabroker.server.loader.sqlalchemy")
+
 _session = local_object()
 
 def with_session(fn):
@@ -28,19 +31,25 @@ def with_session(fn):
 	def wrapper(self,*a,**k):
 		s = getattr(_session,'s',None)
 		if s is None:
+			logger.debug("new session")
 			_session.s = s = self._meta.session()
+		else:
+			logger.debug("old session")
 		try:
 			return fn(self,s, *a,**k)
 		except:
+			logger.debug("rollback")
 			s.rollback()
 			s = None
 			raise
 		finally:
 			if s is not None:
+				logger.debug("commit")
 				s.commit()
 	return wrapper
 
 class server_SQLobject(server_BaseObj):
+	"""An encoder which auto-sets the _key attribute"""
 	cls = None # override me
 	#clsname = None # ignore me
 
@@ -54,13 +63,14 @@ def _get_attrs(obj):
 	return get_attrs(obj, obj._dab)
 
 class SQLInfo(BrokeredInfo):
+	"""This class represents a single SQL table"""
 	def __new__(cls, server, meta, model, loader):
 		if hasattr(model,'_dab'):
 			return model._dab
 		return object.__new__(cls)
 	def __init__(self, server, meta, model, loader):
 		if hasattr(model,'_dab'):
-			return model._dab
+			return
 		super(SQLInfo,self).__init__()
 
 		i = inspect(model)
@@ -74,7 +84,6 @@ class SQLInfo(BrokeredInfo):
 		self.model = model
 		self.loader = loader
 		self.name = i.class_.__name__
-		self.server = server
 		self._meta = meta
 		model._dab = self
 		model._attrs = property(_get_attrs)
@@ -84,6 +93,9 @@ class SQLInfo(BrokeredInfo):
 
 		server.codec.register(load_me)
 
+	def __call__(self, **kw):
+		return self.new(**kw)
+		
 	@with_session
 	def find(self,session,_limit=None, **kw):
 		res = session.query(self.model).filter_by(**kw)
@@ -105,17 +117,22 @@ class SQLInfo(BrokeredInfo):
 	get.include = True
 
 	@with_session
-	def new(self, session, **kw):
-		res = self.model(**kw)
-		session.add(res)
+	def new(self, session, obj=None, *key, **kw):
+		if obj is None:
+			# called to make a new object
+			assert kw and not key
+			obj = self.model(**kw)
+		else:
+			# called with an existing object
+			assert not kw
+		session.add(obj)
 		session.flush()
-		self.fixup(res)
-		self.server.send_created(res)
-		return res
+		self.fixup(obj)
+		return obj
 	new.include = True
 
 	@with_session
-	def update(self, session,obj, **kw):
+	def update(self, session, obj, **kw):
 		obj = session.merge(obj, load=False)
 		for k,on in kw.items():
 			assert k in self.fields or k in self.refs
@@ -123,32 +140,38 @@ class SQLInfo(BrokeredInfo):
 			assert getattr(obj,k) == ov, (k,getattr(obj,k),nv)
 			setattr(obj,k,nv)
 		session.flush()
-
 		self.fixup(obj)
-		self.server.send_updated(obj,kw)
 
 	@with_session
-	def delete(self, session, *obj, **kw):
-		res = []
-		for o in obj:
-			self.fixup(o)
-			o = session.merge(o, load=False)
-			session.delete(o)
+	def local_update(self, session, obj, **kw):
+		obj = session.merge(obj, load=False)
+		for k,v in kw.items():
+			setattr(obj,k,v)
 		session.flush()
-		for o in obj:
-			self.server.send_deleted(o)
+		self.fixup(obj)
 
-	def fixup(self,res):
-		i=inspect(res)
-		res._meta = self
-		self.loader.set_key(res,i.class_.__name__,res.id)
-		return res
+	@with_session
+	def delete(self, session, *key):
+		if len(key) == 1 and isinstance(key[0],self.model):
+			obj = key[0]
+		else:
+			obj = self.get(*key)
+		session.delete(obj)
+		session.flush()
+
+	def fixup(self,obj):
+		"""Set _meta and _key attributes"""
+		obj._meta = self
+		i=inspect(obj)
+		self.loader.set_key(obj,i.class_.__name__,obj.id)
+		return obj
 
 class SQLLoader(BaseLoader):
 	"""A loader which reads from SQL"""
-	def __init__(self, session, server,id='sql'):
+	id="sql"
+	def __init__(self, session, server,id=None):
 		self.tables = {}
-		super(SQLLoader,self).__init__(id=id,loaders=server.loader)
+		super(SQLLoader,self).__init__(id=id)
 
 		self.model_meta = BrokeredMeta("sql")
 		self.model_meta.add(Callable("new"))
@@ -157,12 +180,12 @@ class SQLLoader(BaseLoader):
 		self.model_meta.add(Callable("delete"))
 		self.model_meta.session = session
 		self.session = session
-		self.server = server
 		self.loaders = server.loader
-		self.loaders.static.add(self.model_meta,"sql")
+		self.loaders.static.new(self.model_meta,"_sql")
+		self.server = server
 
-	def add_model(self, model, root=None):
-		r = SQLInfo(server=self.server, meta=self.model_meta, model=model, loader=self)
+	def add_model(self, model, root=None, cls=SQLInfo):
+		r = cls(meta=self.model_meta, server=self.server, model=model, loader=self)
 		if root is not None:
 			root[r.name] = r
 
@@ -176,4 +199,10 @@ class SQLLoader(BaseLoader):
 			return m
 		return m.get(*key[1:])
 
-
+	def new(self, obj, *key):
+		if key:
+			k = key[0]
+		else:
+			key = getattr(obj,'_meta',obj.__class__._meta)._key.key[1]
+		self.tables[key].new(obj, key[1:] if key else ())
+	

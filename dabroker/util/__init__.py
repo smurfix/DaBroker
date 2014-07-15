@@ -15,6 +15,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # Utility code
 
 from importlib import import_module
+from .thread import AsyncResult
 
 import pytz
 UTC = pytz.UTC
@@ -55,13 +56,22 @@ class cached_property(object):
 		self.__module__ = func.__module__
 		self.__doc__ = doc or func.__doc__
 		self.func = func
+		self.value = _missing
 
 	def __get__(self, obj, type=None):
 		if obj is None:
 			return self
 		value = obj.__dict__.get(self.__name__, _missing)
 		if value is _missing:
-			value = self.func(obj)
-			obj.__dict__[self.__name__] = value
+			value = self.value
+			if value is _missing:
+				self.value = AsyncResult()
+				value = self.func(obj)
+
+				ar,self.value = self.value,value
+				ar.set(value)
+				obj.__dict__[self.__name__] = value
+			elif isinstance(self.value, AsyncResult):
+				value = self.value.get()
 		return value
 

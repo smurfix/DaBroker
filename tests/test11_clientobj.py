@@ -28,7 +28,7 @@ logger = test_init("test.11.lclientobj")
 counter = 0
 
 # client's root object
-@baseclass_for("static","root","meta")
+@baseclass_for("_s","root","meta")
 class my_root(ClientBaseObj):
 	def test_me(self):
 		global counter

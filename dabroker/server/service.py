@@ -23,6 +23,7 @@ from .codec import adapters as default_adapters
 
 import sys
 from traceback import format_exc
+from itertools import chain
 
 import logging
 logger = logging.getLogger("dabroker.server.service")
@@ -73,15 +74,50 @@ class BrokerServer(BaseCallbacks):
 	def stop(self):
 		self.transport.disconnect()
 
+	# server-side convenience methods
+
+	def obj_new(self, cls, *key, **kw):
+		obj = cls(**kw)
+		if getattr(obj,'_key',None) is None:
+			self.loader.new(obj, *key)
+			# otherwise the class already did that
+
+		attrs = {}
+		for k in chain(obj._meta.fields.keys(), obj._meta.refs.keys()):
+			if k != '_meta':
+				attrs[k] = getattr(obj,k,None)
+		self.send_created(obj, attrs)
+		return obj
+
+	def obj_update(self, obj, **kw):
+		attrs = {}
+		for k,v in kw.items():
+			if k in obj._meta.fields or k in obj._meta.refs:
+				if k != '_meta':
+					attrs[k] = (getattr(obj,k,None),v)
+		obj._meta.local_update(obj, **kw)
+		self.send_updated(obj, attrs)
+
+	def obj_delete(self, obj):
+		attrs = {}
+		for k in chain(obj._meta.fields.keys(), obj._meta.refs.keys()):
+			if k != '_meta':
+				attrs[k] = (getattr(obj,k,None),)
+		obj._meta.delete(obj)
+		self.send_deleted(obj, attrs)
+
+	def add_static(self, obj, *key):
+		self.loader.static.new(obj, *key)
+
 	# remote calls
 
 	def do_root(self):
 		logger.debug("Get root")
 		res = self.root
 		if not hasattr(res,'_key'):
-			self.loader.static.add(res,'root')
+			self.add_static(res,'root')
 		if not hasattr(res._meta,'_key'):
-			self.loader.static.add(res._meta,'root','meta')
+			self.add_static(res._meta,'root','meta')
 		return res
 	do_root.include = True
 
@@ -125,14 +161,14 @@ class BrokerServer(BaseCallbacks):
 		
 	# The next three broadcast messages are used for broadcastng object
 	# changes. They will invalidate possibly-matching search results.
-	def send_created(self, obj):
+	def send_created(self, obj, attrs={}):
 		"""This object has been created."""
-		attrs = dict((k,(v,)) for k,v in obj._attrs.items())
+		attrs = dict((k,(v,)) for k,v in attrs.items())
 		self.send("invalid_key", _meta=obj._meta._key, _include=None, **attrs)
 
-	def send_deleted(self, obj):
+	def send_deleted(self, obj, attrs={}):
 		"""This object has been deleted."""
-		attrs = dict((k,(v,)) for k,v in obj._attrs.items())
+		attrs = dict((k,(v,)) for k,v in attrs.items())
 		self.send("invalid_key", _key=obj._key, _meta=obj._meta._key, _include=None, **attrs)
 
 	def send_updated(self, obj, attrs={}):

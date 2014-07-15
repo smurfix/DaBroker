@@ -112,6 +112,17 @@ class Main(object):
 		Specifically, it installs a hook for cleanly shutting down upon receiving SIGINT.
 
 		Use .register_stop() to install cleanup code.
+
+		Common usage:
+		
+			class MyMain(Main):
+				def main(self):
+					# do something, or simply …:
+					self.shutting_down.wait()
+			main = MyMain()
+			main.run()
+
+		Override .__init__() any way you like, but do call super().__init__().
 		"""
 	_plinker = None
 	_sigINT = None
@@ -121,23 +132,26 @@ class Main(object):
 
 	### Methods you override
 	def setup(self):
-		"""Override this to initialize everything"""
+		"""Override this to initialize everything.
+			Do not call this method yourself: .run() does that."""
 		pass
 	def main(self):
-		"""Override this with your main code"""
+		"""Override this with your main code.
+			Do not call this method yourself: .run() does that."""
 		raise NotImplementedError("You forgot to override %s.main" % (self.__class__.__name__,))
-	def stop(self):
-		"""Override this if you don't just want a killed task"""
-		logger.debug("Killing main task")
-		if self._main:
-			self._main.kill(timeout=5)
+	def shutdown(self):
+		"""Override this to cleanly terminate your tasks.
+			Do not call this method yourself: use .stop() to terminate your program."""
+		pass
 	def cleanup(self):
-		"""Override this to clean up after yourself. 'task' is the gevent task of the main loop"""
+		"""Override this to clean up after yourself.
+			Do not call this method yourself: .stop() does that."""
 		pass
 	
 	### Public methods
 	def __init__(self):
 		self._stops = []
+		self.shutting_down = Event()
 
 	def run(self):
 		"""Start the main loop"""
@@ -157,7 +171,7 @@ class Main(object):
 			self._cleanup()
 			logger.debug("Cleanup ends")
 
-	def end(self):
+	def stop(self):
 		"""Stop the main loop"""
 		logger.info("Stop call received.")
 		self._cleanup()
@@ -186,6 +200,7 @@ class Main(object):
 		gevent.spawn(self._cleanup)
 	
 	def _cleanup(self):
+		self.shutting_down.set()
 		if self._stopping:
 			if self._stopping == gevent.getcurrent():
 				try:
@@ -206,7 +221,7 @@ class Main(object):
 			self._sigINT = None
 
 		try:
-			self.stop()
+			self.shutdown()
 		except Exception:
 			logger.exception("Cleanup code")
 		finally:

@@ -29,7 +29,7 @@ class TestServer(BrokerServer):
 		rootMeta.add(Field("hello"))
 		rootMeta.add(Field("data"))
 		rootMeta.add(Callable("pling"))
-		self.loader.static.add(rootMeta,1)
+		self.add_static(rootMeta,1)
 
 		class RootObj(BaseObj):
 			_meta = rootMeta
@@ -40,6 +40,6 @@ class TestServer(BrokerServer):
 				return {'info':"Yes I know", 'root':k['root']}
 
 		root = RootObj()
-		self.loader.static.add(root,2,31)
+		self.add_static(root,2,31)
 		return root
 	

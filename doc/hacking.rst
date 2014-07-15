@@ -74,3 +74,7 @@ the data it gets from calling .callbacks.recv() back to the client. You do
 not need to try to preserve message ordering, but it's imperative that you
 operate asynchronously.
 
+Warning: If you want your transport to support multiple independent
+servers, you need to make sure that a server's broadcast message reaches
+all clients, no matter which server they're currently talking to.
+

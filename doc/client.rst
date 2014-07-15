@@ -122,3 +122,39 @@ The client then merely needs to do
 
 See `tests/__init__.py`.
 
+Shutdown
+--------
+
+Call
+
+    broker.disconnect()
+
+Note that DaBroker is using threads internally. You need to cleanly take
+down your as well as DaBroker's threads if your program terminates,
+otherwise Python's threading system may stall. Also, you may or may not be
+able to simply call sys.exit() from a thread if you see a fatal error.
+This also applies to termination by signal (SIGINT, Control-C).
+
+`dabroker.util.thread.Main` is a helper class which will try to do the
+right thing in these situations.
+
+    class MyMain(Main):
+        broker = None
+        def __init__(self,cfg):
+            self.cfg = cfg
+            super(MyMain,self).__init__()
+        def setup(self):
+            self.broker = BrokerClient(cfg=self.cfg)
+        def main(self):
+            do_whatever_with(self.broker.root)
+        def stop(self):
+            # If you start additional tasks, this is a good place to tell
+            # them to terminate.
+            pass
+        def cleanup(self):
+            if self.broker is not None:
+                self.broker.disconnect()
+
+    main = MyMain(cfg={…})
+    main.run()
+

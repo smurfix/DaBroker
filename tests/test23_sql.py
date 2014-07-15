@@ -12,7 +12,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-# This test mangles SQL, courtesy of sqlalchemy.
+# This test does the same thing as test22, except that all mangling
+# happens on the server side.
 
 import os
 import sys
@@ -28,8 +29,8 @@ from gevent.event import AsyncResult
 
 from tests import test_init,LocalQueue,TestMain,TestClient
 
-logger = test_init("test.22.sql")
-logger_s = test_init("test.22.sql.server")
+logger = test_init("test.23.sql")
+logger_s = test_init("test.23.sql.server")
 
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
@@ -59,17 +60,17 @@ class Address(Base):
 	person = relationship(Person,backref='addrs')
 
 try:
-	os.unlink('/tmp/test22.db')
+	os.unlink('/tmp/test23.db')
 except EnvironmentError:
 	pass
-engine = create_engine('sqlite:////tmp/test22.db', echo=(True if os.environ.get('TRACE',False) else False))
+engine = create_engine('sqlite:////tmp/test23.db', echo=(True if os.environ.get('TRACE',False) else False))
 Base.metadata.create_all(engine)
 
 DBSession = sessionmaker(bind=engine)
 
 done = 0
 
-class Test22_server(BrokerServer):
+class Test23_server(BrokerServer):
 	seq = 0
 	@cached_property
 	def root(self):
@@ -84,7 +85,7 @@ class Test22_server(BrokerServer):
 			data = {}
 
 		root = RootObj()
-		self.add_static(root,2,22)
+		self.add_static(root,2,23)
 
 		sql = SQLLoader(DBSession,self)
 		sql.add_model(Person,root.data)
@@ -99,12 +100,28 @@ class Test22_server(BrokerServer):
 		self.send_updated(self.root)
 		self.send("trigger",msg)
 	
-class Test22_client(TestClient):
+	def do_mangle_new(self,P,*key,**kw):
+		logger.debug("mangle: new: %s %r %r",P,key,kw)
+		res = self.obj_new(P,*key,**kw)
+		logger.debug("mangle: new done")
+		return res
+
+	def do_mangle_update(self,p,**kw):
+		logger.debug("mangle: update: %s %r",p,kw)
+		self.obj_update(p,**kw)
+		logger.debug("mangle: update done")
+
+	def do_mangle_delete(self,p):
+		logger.debug("mangle: delete: %s",p)
+		self.obj_delete(p)
+		logger.debug("mangle: delete done")
+
+class Test23_client(TestClient):
 	def __init__(self,*a,**k):
 		self.a = [None]
 		for i in range(3):
 			self.a.append(AsyncResult())
-		super(Test22_client,self).__init__(*a,**k)
+		super(Test23_client,self).__init__(*a,**k)
 
 	def make_client(self):
 		return TestClientMain()
@@ -144,8 +161,7 @@ class Test22_client(TestClient):
 		assert len(r) == 0, r
 
 		# A: create
-		p1 = P.new(name="Fred Flintstone")
-		self.commit()
+		p1 = self.send("mangle_new", P, name="Fred Flintstone")
 
 		self.jump(1,2) # goto B
 
@@ -155,8 +171,7 @@ class Test22_client(TestClient):
 
 		# D: refresh and check
 		p2 = p1._key()
-		#assert p1.name == "Fred Flintstone", p1.name
-		# this test does not work because it's the same process
+		assert p1.name == "Fred Flintstone", p1.name
 		assert p2.name == "Freddy Firestone", p2.name
 
 		self.jump(0,2) # goto E
@@ -174,14 +189,12 @@ class Test22_client(TestClient):
 
 		# B: check+modify
 		p1 = P.get(name="Fred Flintstone")
-		p1.name="Freddy Firestone"
-		self.commit()
+		self.send("mangle_update",p1,name="Freddy Firestone")
 
 		self.jump(2,3) # goto C
 
 		# E: delete
-		P.delete(p1)
-		self.commit()
+		self.send("mangle_delete",p1)
 
 		self.jump(0,3) # goto F
 
@@ -219,8 +232,8 @@ class Test22_client(TestClient):
 		j3.join()
 
 class Tester(TestMain):
-	client_factory = Test22_client
-	server_factory = Test22_server
+	client_factory = Test23_client
+	server_factory = Test23_server
 
 t = Tester()
 t.register_stop(logger.debug,"shutting down")
