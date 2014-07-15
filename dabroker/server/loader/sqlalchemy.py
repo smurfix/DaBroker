@@ -16,37 +16,13 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from ...base import BrokeredInfo,BrokeredMeta, Field,Ref,BackRef,Callable, get_attrs
 from ...util.thread import local_object
+from ...util.sqlalchemy import with_session
 from . import BaseLoader
 from ..codec import server_BaseObj
 from sqlalchemy.inspection import inspect
-from functools import wraps
 
 import logging
 logger = logging.getLogger("dabroker.server.loader.sqlalchemy")
-
-_session = local_object()
-
-def with_session(fn):
-	@wraps(fn)
-	def wrapper(self,*a,**k):
-		s = getattr(_session,'s',None)
-		if s is None:
-			logger.debug("new session")
-			_session.s = s = self._meta.session()
-		else:
-			logger.debug("old session")
-		try:
-			return fn(self,s, *a,**k)
-		except:
-			logger.debug("rollback")
-			s.rollback()
-			s = None
-			raise
-		finally:
-			if s is not None:
-				logger.debug("commit")
-				s.commit()
-	return wrapper
 
 class server_SQLobject(server_BaseObj):
 	"""An encoder which auto-sets the _key attribute"""
@@ -64,27 +40,36 @@ def _get_attrs(obj):
 
 class SQLInfo(BrokeredInfo):
 	"""This class represents a single SQL table"""
-	def __new__(cls, server, meta, model, loader):
+	def __new__(cls, server, meta, model, loader, rw=False, hide=()):
 		if hasattr(model,'_dab'):
 			return model._dab
 		return object.__new__(cls)
-	def __init__(self, server, meta, model, loader):
+	def __init__(self, server, meta, model, loader, rw=False, hide=()):
 		if hasattr(model,'_dab'):
 			return
 		super(SQLInfo,self).__init__()
 
 		i = inspect(model)
 		for k in i.column_attrs:
-			self.add(Field(k.key))
+			if k not in hide:
+				self.add(Field(k.key))
 		for k in i.relationships:
-			if k.uselist:
-				self.add(BackRef(k.key))
-			else:
-				self.add(Ref(k.key))
+			if k not in hide:
+				if k.uselist:
+					self.add(BackRef(k.key))
+				else:
+					self.add(Ref(k.key))
+
+		self.rw = rw
+		if rw:
+			self.add(Callable("update"))
+			self.add(Callable("delete"))
 		self.model = model
+		self.server = server
 		self.loader = loader
 		self.name = i.class_.__name__
 		self._meta = meta
+		self._dab = self
 		model._dab = self
 		model._attrs = property(_get_attrs)
 		class load_me(server_SQLobject):
@@ -133,6 +118,7 @@ class SQLInfo(BrokeredInfo):
 
 	@with_session
 	def update(self, session, obj, **kw):
+		assert obj._meta.rw
 		obj = session.merge(obj, load=False)
 		for k,on in kw.items():
 			assert k in self.fields or k in self.refs
@@ -150,8 +136,12 @@ class SQLInfo(BrokeredInfo):
 		session.flush()
 		self.fixup(obj)
 
+	def delete(self, obj):
+		assert obj._meta.rw
+		self.server.obj_delete(obj)
+
 	@with_session
-	def delete(self, session, *key):
+	def local_delete(self, session, *key):
 		if len(key) == 1 and isinstance(key[0],self.model):
 			obj = key[0]
 		else:
@@ -162,6 +152,7 @@ class SQLInfo(BrokeredInfo):
 	def fixup(self,obj):
 		"""Set _meta and _key attributes"""
 		obj._meta = self
+		obj._dab = self._dab
 		i=inspect(obj)
 		self.loader.set_key(obj,i.class_.__name__,obj.id)
 		return obj
@@ -173,19 +164,24 @@ class SQLLoader(BaseLoader):
 		self.tables = {}
 		super(SQLLoader,self).__init__(id=id)
 
-		self.model_meta = BrokeredMeta("sql")
-		self.model_meta.add(Callable("new"))
-		self.model_meta.add(Callable("get"))
-		self.model_meta.add(Callable("find"))
-		self.model_meta.add(Callable("delete"))
-		self.model_meta.session = session
+		self.model_meta = []
+		for rw in range(3):
+			m = BrokeredMeta("sql")
+			self.model_meta.append(m)
+			if rw:
+				m.add(Callable("get"))
+				m.add(Callable("find"))
+				m.session = session
+				if rw > 1:
+					m.add(Callable("new"))
+					m.add(Callable("delete"))
+			server.loader.static.new(m,"_sql",self.id,rw)
 		self.session = session
-		self.loaders = server.loader
-		self.loaders.static.new(self.model_meta,"_sql")
+		self.loader = server.loader
 		self.server = server
 
-	def add_model(self, model, root=None, cls=SQLInfo):
-		r = cls(meta=self.model_meta, server=self.server, model=model, loader=self)
+	def add_model(self, model, root=None, cls=SQLInfo, rw=False, hide=()):
+		r = cls(meta=self.model_meta[0 if rw is None else rw+1], server=self.server, model=model, loader=self, rw=rw, hide=hide)
 		if root is not None:
 			root[r.name] = r
 

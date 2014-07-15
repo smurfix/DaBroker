@@ -113,9 +113,26 @@ SQLAlchemy and its ORM is supported directly:
     # `person` and `address` are the standard SQLAlchemy example tables
 
     sql = SQLLoader(DBSession,self)
-    sql.add_model(Person,root.data)
+    broker.loader.add_loader(sql)
+
+    sql.add_model(Person, root.data, rw=True)
     sql.add_model(Address)
-    self.loader.add_loader(sql)
+
+This creates and registers a loader, and creates info objects for your models,
+The "Person" entry is added to root.data (or any other dictionary;
+presumably so that the client may directly access the model).
+
+The `rw` parameter can hold three values. The default is `False` (read-only),
+which means that the client can call `.get()` and `.find()` methods on the
+class object to retrieve records. `True` adds `.new()`, `.delete()` and
+`update()` (which is usually done by syncing the client).
+
+If `rw` is `None`, neither of these methods is available; the client can
+only read attributes (and call methods which you explicitly export).
+
+By default, all relationship attributes known to SQLAlchemy are exported.
+Add a `hide` parameter with a set of field names to exclude if you want to
+block access to some fields.
 
 Updating an object
 ------------------
@@ -141,6 +158,39 @@ status:
     >>> root = root._key()
     >>> print root.status.health
     poor
+
+Database transactions
+---------------------
+
+Summary:
+    
+    from dabroker.util.sqlalchemy import session_wrapper,with_session
+
+    def foo(x,y,z):
+        with session_wrapper(x) as session:
+            [whatever]
+
+or, equivalently,
+
+    @with_session
+    def bar(session, x,y,z):
+        # This is called as `bar(x,y,z)`
+        [whatever]
+
+You can safely nest these calls; the session is stored as a thread-local
+object and the wrapper will use savepoints if nested. The `obj_*` methods
+use these wrappers internally.
+
+The first parameter must be a model created by `sql.add_model()`, or an
+object of that model, so that the wrapper can find the correct database
+engine to use.
+
+Note: If you have to use a database which does not understand savepoints,
+you need to let errors propagate through the outermost wrapper or `with`
+scope, otherwise you'll get inconsistencies. DaBroker knows that sqlite
+does not (and in fact raises an error if you try), and will issue a warning
+(you can set dabroker.util.sqlalchemy._sqlite_warned to True to suppress
+it).
 
 Calling the server
 ------------------

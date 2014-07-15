@@ -103,7 +103,7 @@ class BrokerServer(BaseCallbacks):
 		for k in chain(obj._meta.fields.keys(), obj._meta.refs.keys()):
 			if k != '_meta':
 				attrs[k] = (getattr(obj,k,None),)
-		obj._meta.delete(obj)
+		obj._meta.local_delete(obj)
 		self.send_deleted(obj, attrs)
 
 	def add_static(self, obj, *key):
@@ -146,7 +146,10 @@ class BrokerServer(BaseCallbacks):
 			@k: A map of key => (old_value,new_value)
 			"""
 		logger.debug("update %r %r",obj,k)
-		return obj._meta.update(obj,**k)
+		attrs = obj._meta.update(obj,**k)
+		if not attrs:
+			attrs = k
+		self.send_updated(obj, attrs)
 
 	def do_find(self, key, lim=None, k={}):
 		"""Search for objects"""

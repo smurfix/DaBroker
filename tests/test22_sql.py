@@ -87,7 +87,7 @@ class Test22_server(BrokerServer):
 		self.add_static(root,2,22)
 
 		sql = SQLLoader(DBSession,self)
-		sql.add_model(Person,root.data)
+		sql.add_model(Person,root.data, rw=True)
 		sql.add_model(Address)
 		self.loader.add_loader(sql)
 

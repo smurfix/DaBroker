@@ -82,7 +82,7 @@ class TestServer(BrokerServer):
 		super(TestServer,self).__init__(*a,**k)
 
 		sql = SQLLoader(DBSession,self)
-		sql.add_model(Person,self.root.data)
+		sql.add_model(Person,self.root.data, rw=True)
 		sql.add_model(Address)
 		self.loader.add_loader(sql)
 
