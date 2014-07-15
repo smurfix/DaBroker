@@ -12,6 +12,7 @@ X-Python3-Version: >= 3.3
 Package: python-dabroker
 Architecture: all
 Depends: ${misc:Depends}, ${python:Depends}
+Recommends: python-amqp
 Description: Fast distributed object broker for large, mostly-read-only datasets
  DaBroker is short for Data Access Broker.
  .
@@ -27,6 +28,7 @@ Description: Fast distributed object broker for large, mostly-read-only datasets
 Package: python3-dabroker
 Architecture: all
 Depends: ${misc:Depends}, ${python3:Depends}
+Recommends: python3-amqp
 Description: Fast distributed object broker for large, mostly-read-only datasets
  DaBroker is short for Data Access Broker.
  .
