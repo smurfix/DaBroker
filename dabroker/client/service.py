@@ -71,11 +71,10 @@ class CountedCache(WeakValueDictionary,object):
 				if self._iterating and hasattr(self,'_pending_removals'):
 					self._pending_removals.append(wr.key)
 				else:
-					ref = self.data.pop(wr.key,None)
-					if ref is not None:
-						ref.counter = -1
+					# Bug in Python's stdlib: the original does "del" here
+					# which triggers an ignored error in test06
+					self.data.pop(wr.key,None)
 		self._remove = remove
-
 
 	def __getitem__(self, key):
 		r = self.data[key]
@@ -103,6 +102,14 @@ class CountedCache(WeakValueDictionary,object):
 		if ref is not None:
 			ref.counter = -1
 		self.data[key] = ExtKeyedRef(value, self._remove, key)
+
+	def __delitem__(self, key):
+		if getattr(self,'_pending_removals',False):
+			self._commit_removals()
+
+		ref = self.data.pop(key, None)
+		if ref is not None:
+			ref.counter = -1
 
 	def setdefault(self, key, default=None):
 		try:
@@ -134,7 +141,7 @@ class CacheDict(CountedCache):
 	"""\
 		This is an augmented WeakValueDict which keeps the last CACHE_SIZE items pinned.
 
-		.lru is a hash which acts as a FIFO (think collections.deque,
+		.lru is a hash which is used like a FIFO (I'd use collections.deque,
 		except that a deque's length is not mutable).
 
 		Items popping off the FIFO are added to a heap (sized CACHE_SIZE/10
@@ -147,13 +154,17 @@ class CacheDict(CountedCache):
 		self.lru_last = 0
 		self.lru_size = CACHE_SIZE
 
-		self.heap_min = CACHE_SIZE/20
-		self.heap_max = CACHE_SIZE/10
+		self.heap_min = CACHE_SIZE//20
+		self.heap_max = CACHE_SIZE//10
 		self.heap = []
 		super(CacheDict,self).__init__(*a,**k)
 
 	def set(self, key,value):
-		"""Set an item, but bypass the cache"""
+		"""\
+			Set an item, but bypass the LRU code.
+		
+			Used for adding an interim value (AsyncResult while fetching the real thing).
+			"""
 		super(CacheDict,self).__setitem__(key,value)
 		return value
 
@@ -168,9 +179,10 @@ class CacheDict(CountedCache):
 			id = self.lru_last; self.lru_last += 1
 			if id not in self.lru: continue
 			key,value = self.lru[id]
-			ref = self.data.get(key,0)
+			ref = self.data.get(key,None)
 			if ref is not None:
 				self.heap.append((ref,key,value))
+			del self.lru[id]
 
 		# When enough items accumulate on the heap:
 		# Move the most-used items back to the queue
