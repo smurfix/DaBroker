@@ -18,7 +18,7 @@ import os
 import sys
 from dabroker.server.service import BrokerServer
 from dabroker.server.loader.sqlalchemy import SQLLoader
-from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj
+from dabroker.base import BrokeredInfo, Field, BaseObj
 from dabroker.util import cached_property
 from dabroker.util.thread import AsyncResult
 

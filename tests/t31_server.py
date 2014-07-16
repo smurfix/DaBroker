@@ -15,7 +15,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 import os
 import sys
 from dabroker.server.service import BrokerServer
-from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj
+from dabroker.base import BrokeredInfo, Field,Callable, BaseObj
 from dabroker.util import cached_property
 from dabroker.util.thread import AsyncResult
 
