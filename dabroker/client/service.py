@@ -34,14 +34,18 @@ from heapq import heapify,heappop
 
 class _NotGiven: pass
 
-def search_key(kw):
+def search_key(kw, limit=None):
 	"""Build a reproducible string from search keywords"""
-	return ",".join("{}:{}".format(k, ".".join(v._key) if hasattr(v,'_key') else v) for k,v in sorted(kw.items()))
+	res = ",".join("{}:{}".format(k, ".".join(v._key.key) if hasattr(v,'_key') else v) for k,v in sorted(kw.items()))
+	if limit is not None:
+		res += "/"+str(limit)
+	return res
 
 class KnownSearch(object):
-	def __init__(self, kw, res):
+	def __init__(self, kw, res, ckey):
 		self.kw = kw
 		self.res = res
+		self.ckey = ckey
 
 class ExtKeyedRef(KeyedRef):
 	"""A KeyedRef which includes an access counter."""
@@ -412,17 +416,24 @@ class BrokerClient(BaseCallbacks):
 	def find(self, typ, _limit=None, **kw):
 		"""Find objects by keyword"""
 		kws = search_key(kw)
-		res = typ.searches.get(kws,None)
-		if res is not None:
-			return res.res
+		ks = typ.searches.get(kws,None)
+		if ks is None and _limit:
+			ks = typ.searches.get(kws+"/"+str(_limit),None)
+		if ks is not None:
+			self._cache[ks.ckey] # update the access counter
+			return ks.res
 		
 		skw = {'k':kw}
 		if _limit is not None:
 			skw['lim'] = _limit
 		res = self.send("find",typ._key, **skw)
-		ks = KnownSearch(kw,res)
+		ckey = " ".join(str(x) for x in typ._key.key)+":"+kws
+
+		if _limit and len(res) >= _limit:
+			ckey += "/"+str(limit)
+		ks = KnownSearch(kw,res,ckey)
 		typ.searches[kws] = ks
-		self._cache[" ".join(str(x) for x in typ._key.key)+":"+kws] = ks
+		self._cache[ckey] = ks
 		return res
 
 	def call(self, obj,name,a,k):

@@ -142,6 +142,7 @@ class Test21_client(TestClient):
 		os = Op.find(hell="Two2")
 		assert len(os) == 0, os
 
+		# 'get' will use limit=2
 		cid=self.cid
 		os = Op.find(hell="Two")
 		assert len(os) == 1, os
