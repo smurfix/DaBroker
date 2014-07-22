@@ -67,6 +67,9 @@ This releases your reference to the object and then fetches the current
 copy from cache, or from the server. You can find an example in `test22`,
 at the "# refresh" comment in `job1()`.
 
+You can test `obj._obsolete` to discover whether the server has sent an
+invalidation notive for that object.
+
 Client-side subclassing
 -----------------------
 
@@ -135,6 +138,8 @@ statement:
 In fact it makes sense to wrap the client's whole thread with this.
 
 See `tests/__init__.py`. Caching is tested in `test21`.
+
+Calls on invalidated (i.e. out-of-date or deleted) objects are never cached.
 
 Shutdown
 --------

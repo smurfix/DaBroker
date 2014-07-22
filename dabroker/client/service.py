@@ -198,6 +198,16 @@ class CacheDict(CountedCache):
 
 			self.heap = [] ## optional
 
+	def invalidate(self,key):
+		obj = self.get(key,None)
+		if isinstance(obj,(AsyncResult,type(None))):
+			return
+		obj = self.pop(key,None)
+		if obj is None:
+			return
+		obj._obsolete = True
+		
+
 class ChangeData(object):
 	"""Some data has been changed locally. Remember which."""
 	def __init__(self,server,obj):
@@ -240,7 +250,7 @@ class ChangeDel(ChangeData):
 	def obj(self):
 		raise KeyError(self.obj._key)
 	def send_commit(self,server):
-		server._cache.pop(self.obj._key,None)
+		server._cache.invalidate(self.obj._key)
 		return server._send("delete",self.obj._key)
 	def send_revert(self,server):
 		if self.obj not in server._cache:
@@ -449,7 +459,7 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 		"""Directly invalidate these cache entries."""
 		for k in keys:
 			try:
-				del self._cache[k]
+				self._cache.invalidate(k)
 			except KeyError:
 				logger.debug("inval: not found: %r",k)
 			else:
@@ -465,9 +475,7 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 			"""
 		if _key is not None:
 			logger.debug("inval_key: %r: %r",_key,k)
-			obj = self._cache.pop(_key,None)
-			if obj is None:
-				logger.debug("not in cache")
+			self._cache.invalidate(_key)
 
 		if _meta is None:
 			logger.warn("no metadata?")

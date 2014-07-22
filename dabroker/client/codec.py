@@ -222,7 +222,7 @@ class call_proc(object):
 			return self
 
 		def c(*a,**k):
-			if self.cached:
+			if self.cached and not obj._obsolete:
 				kws = self.name+':'+search_key(a,k)
 				ckey = " ".join(str(x) for x in obj._key.key)+":"+kws
 
@@ -232,7 +232,7 @@ class call_proc(object):
 					current_service.top._cache[ckey] # Lookup to increase counter
 					return res
 			res = obj._meta._dab.call(obj,self.name, a,k)
-			if self.cached:
+			if self.cached and not obj._obsolete:
 				rc = CacheProxy(res)
 				obj.call_cache[kws] = rc
 				current_service.top._cache[ckey] = rc
@@ -242,6 +242,8 @@ class call_proc(object):
 
 class ClientBaseObj(BaseObj):
 	"""The base of all DaBroker-controlled objects on the client."""
+	_obsolete = False
+
 	def __init__(self):
 		self._refs = {}
 	
