@@ -23,7 +23,7 @@ from dabroker.util.thread import AsyncResult, Thread
 
 from gevent import spawn
 
-from tests import test_init,LocalQueue,TestMain,test_cfg_s,test_cfg_c, cfg_merge
+from dabroker.util.tests import test_init,LocalQueue,TestMain,test_cfg_s,test_cfg_c, cfg_merge
 
 logger = test_init("test.31.speed")
 

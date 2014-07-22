@@ -18,7 +18,7 @@ from dabroker import patch; patch()
 
 from gevent import spawn,sleep
 
-from tests import test_init,TestBasicMain
+from dabroker.util.tests import test_init,TestBasicMain
 
 logger = test_init("test.05.basic")
 

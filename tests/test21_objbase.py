@@ -21,7 +21,7 @@ from dabroker.client.service import BrokerClient
 from dabroker.util import cached_property
 from dabroker.util.thread import Event
 
-from tests import test_init,LocalQueue,TestMain,TestClient,TestServer
+from dabroker.util.tests import test_init,LocalQueue,TestMain,TestClient,TestServer
 
 logger = test_init("test.21.objbase")
 logger_s = test_init("test.21.objbase.server")

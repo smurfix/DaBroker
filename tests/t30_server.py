@@ -22,7 +22,7 @@ from dabroker.base import BrokeredInfo, Field, BaseObj
 from dabroker.util import cached_property
 from dabroker.util.thread import AsyncResult
 
-from tests import test_init
+from dabroker.util.tests import test_init
 logger = test_init("test.30.amqp.server")
 
 from sqlalchemy import Column, ForeignKey, Integer, String

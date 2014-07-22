@@ -15,7 +15,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # Test the dict cache
 
 from gevent import spawn,sleep
-from tests import test_init,TestBasicMain
+from dabroker.util.tests import test_init,TestBasicMain
 logger = test_init("test.06.cachedict")
 
 from dabroker.client.service import CacheDict

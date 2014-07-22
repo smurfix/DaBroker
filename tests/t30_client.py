@@ -21,7 +21,7 @@ from dabroker.util.thread import AsyncResult
 
 from gevent import spawn
 
-from tests import test_init
+from dabroker.util.tests import test_init
 
 logger = test_init("test.30.amqp.client")
 

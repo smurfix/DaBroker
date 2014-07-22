@@ -20,7 +20,7 @@ from dabroker.util.thread import spawned
 
 from gevent import spawn
 
-from tests import test_init,LocalQueue,TestMain,TestRoot,TestClient,TestServer
+from dabroker.util.tests import test_init,LocalQueue,TestMain,TestRoot,TestClient,TestServer
 
 logger = test_init("test.08.localmsg")
 

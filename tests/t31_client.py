@@ -22,7 +22,7 @@ from time import time
 
 from gevent import spawn
 
-from tests import test_init
+from dabroker.util.tests import test_init
 
 logger = test_init("test.31.amqp.speed")
 
