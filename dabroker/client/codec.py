@@ -14,12 +14,29 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from weakref import ref,WeakValueDictionary
 from ..base import BaseRef,BaseObj, BrokeredInfo, BrokeredInfoInfo, adapters as baseAdapters, common_BaseObj,common_BaseRef
-from ..base.codec import current_loader
+from ..base.service import current_service
 
 import logging
 logger = logging.getLogger("dabroker.client.serial")
 
 class _NotGiven: pass
+
+class CacheProxy(object):
+	"""Can't weakref a string, so …"""
+	def __init__(self,data):
+		self.data = data
+
+def kstr(v):
+	if hasattr(v,'_key'):
+		return '.'.join(str(x) for x in v._key.key)
+	else:
+		return str(v)
+
+def search_key(a,kw):
+	"""Build a reproducible string from search keywords"""
+	if a is None:
+		a = ()
+	return ','.join(kstr(v) for v in a) + '|' + ','.join('{}:{}'.format(k, kstr(v)) for k,v in sorted(kw.items()))
 
 # This is the client's adapter storage.
 adapters = baseAdapters[:]
@@ -77,6 +94,9 @@ class ClientBrokeredInfo(BrokeredInfo):
 				_valid = True
 				_key = None
 
+				def __init__(self,*a,**k):
+					self.call_cache = WeakValueDictionary()
+					ClientBaseObj.__init__(self,*a,**k)
 				def __repr__(self):
 					res = "<ClientObj"
 					n = self.__class__.__name__
@@ -121,8 +141,8 @@ class ClientBrokeredInfo(BrokeredInfo):
 			for k in self.refs.keys():
 				if k != '_meta' and not hasattr(ClientObj,k):
 					setattr(ClientObj,k,handle_ref(k))
-		for k in self.calls.keys():
-			setattr(ClientObj,k,call_proc(k))
+		for k,v in self.calls.items():
+			setattr(ClientObj,k,call_proc(v))
 		ClientObj._processed = True
 		return ClientObj
 
@@ -193,15 +213,30 @@ class handle_ref(handle_related):
 
 class call_proc(object):
 	"""This property accessor returns a shim which executes a RPC to the server."""
-	def __init__(self, name):
-		self.name = name
+	def __init__(self, proc):
+		self.name = proc.name
+		self.cached = getattr(proc,'cached',False)
 
 	def __get__(self, obj, type=None):
 		if obj is None:
 			return self
 
 		def c(*a,**k):
-			return obj._meta._dab.call(obj,self.name, a,k)
+			if self.cached:
+				kws = self.name+':'+search_key(a,k)
+				ckey = " ".join(str(x) for x in obj._key.key)+":"+kws
+
+				res = obj.call_cache.get(kws,_NotGiven)
+				if res is not _NotGiven:
+					res = res.data
+					current_service.top._cache[ckey] # Lookup to increase counter
+					return res
+			res = obj._meta._dab.call(obj,self.name, a,k)
+			if self.cached:
+				rc = CacheProxy(res)
+				obj.call_cache[kws] = rc
+				current_service.top._cache[ckey] = rc
+			return res
 		c.__name__ = str(self.name)
 		return c
 
@@ -216,7 +251,7 @@ class ClientBaseObj(BaseObj):
 class ClientBaseRef(BaseRef):
 	def __init__(self,*a,**k):
 		super(ClientBaseRef,self).__init__(*a,**k)
-		self._dab = current_loader.top
+		self._dab = current_service.top
 
 	def __call__(self):
 		return self._dab.get(self)
@@ -254,7 +289,7 @@ class client_BaseObj(common_BaseObj):
 		if meta is not None:
 			res = meta.class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
 		elif r and '_meta' in r:
-			r['_meta'] = meta = current_loader.top.get(r['_meta'])
+			r['_meta'] = meta = current_service.top.get(r['_meta'])
 			res = meta.class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
 		else:
 			res = ClientBaseObj
@@ -272,7 +307,7 @@ class client_BaseObj(common_BaseObj):
 				else:
 					res._refs[k] = v
 
-		return current_loader.top._add_to_cache(res)
+		return current_service.top._add_to_cache(res)
 
 @codec_adapter
 class client_InfoObj(client_BaseObj):
@@ -285,8 +320,8 @@ class client_InfoObj(client_BaseObj):
 			# We always need the data, but this is something like a ref
 			# so we need to go and get the real thing.
 			# NOTE this assumes that the codec doesn't throw away empty lists.
-			return current_loader.top.get(ClientBaseRef(key=k,code=c))
+			return current_service.top.get(ClientBaseRef(key=k,code=c))
 		res = client_BaseObj.decode(_is_meta=True, k=k,c=c,f=f,**kw)
-		res.client = current_loader.top
+		res.client = current_service.top
 		return res
 

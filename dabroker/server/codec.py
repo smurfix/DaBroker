@@ -14,7 +14,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from ..base import BaseRef,BaseObj,BrokeredInfo, adapters as baseAdapters, common_BaseObj,common_BaseRef
 from ..base.config import default_config
-from ..base.codec import current_loader
+from ..base.service import current_service
 from hashlib import sha1 as mac
 from base64 import b64encode
 
@@ -84,7 +84,7 @@ class server_BaseRef(common_BaseRef):
 		if c is None:
 			return res
 		assert c == make_secret(k)
-		res = current_loader.top.get(res)
+		res = current_service.top.get(res)
 		if m:
 			assert m is res._meta,(m,res._meta)
 		return res

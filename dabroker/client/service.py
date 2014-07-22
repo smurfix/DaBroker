@@ -21,9 +21,10 @@ from ..base import UnknownCommandError
 from ..base.transport import BaseCallbacks
 from ..base.config import default_config
 from ..base.codec import ServerError
+from ..base.service import BrokerEnv
 from ..util import import_string
 from ..util.thread import spawned, AsyncResult
-from .codec import adapters, client_broker_info_meta
+from .codec import adapters, client_broker_info_meta, search_key
 
 import logging
 logger = logging.getLogger("dabroker.client.service")
@@ -33,11 +34,6 @@ from collections import deque
 from heapq import heapify,heappop
 
 class _NotGiven: pass
-
-def search_key(kw):
-	"""Build a reproducible string from search keywords"""
-	res = ",".join("{}:{}".format(k, ".".join(v._key.key) if hasattr(v,'_key') else v) for k,v in sorted(kw.items()))
-	return res
 
 class KnownSearch(object):
 	def __init__(self, kw, res, ckey, limit):
@@ -255,7 +251,7 @@ class ChangeInvalid(ChangeData):
 	def send_commit(self,server):
 		raise RuntimeError("inconsistent data",self.obj,_key)
 
-class BrokerClient(BaseCallbacks):
+class BrokerClient(BrokerEnv, BaseCallbacks):
 	"""\
 		The basic client implementation.
 		"""
@@ -414,7 +410,7 @@ class BrokerClient(BaseCallbacks):
 	
 	def find(self, typ, _limit=None, **kw):
 		"""Find objects by keyword"""
-		kws = search_key(kw)
+		kws = search_key(None,kw)
 		ks = typ.searches.get(kws,None)
 		if ks is not None and (not ks.limit or (_limit and _limit <= len(ks.res))):
 			self._cache[ks.ckey] # update the access counter
@@ -549,32 +545,34 @@ class BrokerClient(BaseCallbacks):
 	
 	def _send(self,msg):
 		"""Low-level message sender"""
-		logger.debug("Send req: %r",msg)
-		msg = self.codec.encode(msg)
-		msg = self.transport.send(msg)
-		msg = self.codec.decode(msg)
-		logger.debug("Recv reply: %r",msg)
-		return msg
+		with self.env:
+			logger.debug("Send req: %r",msg)
+			msg = self.codec.encode(msg)
+			msg = self.transport.send(msg)
+			msg = self.codec.decode(msg)
+			logger.debug("Recv reply: %r",msg)
+			return msg
 
 	@spawned
 	def recv(self, msg):
 		"""Process incoming notifications from the server"""
 		#logger.debug("bcast raw %r",msg)
-		try:
-			msg = self.codec.decode(msg)
-		except ServerError as e:
-			logger.exception("Server sends us an error. Shutting down.")
-			self.end()
-			return
+		with self.env:
+			try:
+				msg = self.codec.decode(msg)
+			except ServerError as e:
+				logger.exception("Server sends us an error. Shutting down.")
+				self.end()
+				return
 
-		logger.debug("bcast %r",msg)
-		m = msg.pop('_m')
-		a = msg.pop('_a',())
+			logger.debug("bcast %r",msg)
+			m = msg.pop('_m')
+			a = msg.pop('_a',())
 
-		try:
-			proc = getattr(self,'do_'+m)
-		except AttributeError:
-			raise UnknownCommandError(m)
-		proc(*a,**msg)
+			try:
+				proc = getattr(self,'do_'+m)
+			except AttributeError:
+				raise UnknownCommandError(m)
+			proc(*a,**msg)
 
 client = None

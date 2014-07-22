@@ -50,6 +50,7 @@ class Test21_server(TestServer):
 
 		opsMeta = SearchBrokeredInfo("opsMeta")
 		opsMeta.add(Callable("rev"))
+		opsMeta.add(Callable("revc", cached=True))
 		opsMeta.add(Field("hell"))
 		self.add_static(opsMeta,0,2)
 
@@ -65,6 +66,7 @@ class Test21_server(TestServer):
 				s = [c for c in s]
 				s.reverse()
 				return "".join(s)
+			revc = rev
 			def __str__(self):
 				return "OpsObj:%r:%s"%(self._key,self.hell)
 			def __repr__(self):
@@ -111,55 +113,72 @@ class Test21_client(TestClient):
 		self.go_on.set()
 
 	def main(self):
-		self.go_on = Event()
-		logger.debug("Get the root")
-		root = self.root
-		logger.debug("recv %r",root)
-		assert root.hello == "Hello!"
-		assert root._meta.name == "rootMeta",(root,root._meta,root._meta.name)
-		cid=self.cid
-		assert root._meta.name == "rootMeta" # again, to check caching
-		assert cid==self.cid, (cid,self.cid)
-		assert root.ops.rev("test123") == "321tset"
-		assert root.ops.hell == "Oh?"
-		self.send("trigger",1)
-		self.go_on.wait()
-		self.go_on.clear()
+		with self.env:
+			self.go_on = Event()
+			logger.debug("Get the root")
+			root = self.root
+			logger.debug("recv %r",root)
+			assert root.hello == "Hello!"
+			assert root._meta.name == "rootMeta",(root,root._meta,root._meta.name)
+			cid=self.cid
+			assert root._meta.name == "rootMeta" # again, to check caching
+			assert cid==self.cid, (cid,self.cid)
 
-		assert root.ops.hell == "Yeah!",root.ops.hell
-		cid=self.cid
-		assert root.ops.hell == "Yeah!"
-		assert cid==self.cid, (cid,self.cid)
+			assert root.ops.revc("test123") == "321tset"
+			assert cid!=self.cid
+			cid=self.cid
 
-		# Now let's search for something
-		Op = root.ops._meta
-		assert hasattr(Op,"calls")
-		assert not hasattr(root,"calls"),(root,root.calls)
-		assert not hasattr(root.ops,"calls")
+			assert root.ops.rev("test123") == "321tset"
+			assert cid!=self.cid
+			cid=self.cid
 
-		o1 = Op.get(hell="Two")
-		assert o1.hell == "Two", o1
-		os = Op.find(hell="Two2")
-		assert len(os) == 0, os
+			assert root.ops.revc("test123") == "321tset"
+			assert cid==self.cid
+			cid=self.cid
 
-		# 'get' will use limit=2
-		cid=self.cid
-		os = Op.find(hell="Two")
-		assert len(os) == 1, os
-		assert os[0] is o1, (os,o1)
-		assert cid==self.cid
+			res = root.ops.revc("test1234")
+			assert res == "4321tset", res
+			assert cid!=self.cid
 
-		# Now update some stuff.
-		self.send("trigger",2)
-		self.go_on.wait()
+			assert root.ops.hell == "Oh?"
+			self.send("trigger",1)
+			self.go_on.wait()
+			self.go_on.clear()
 
-		os = Op.find(hell="Two")
-		assert len(os) == 0, os
-		os = Op.find(hell="Two2")
-		assert len(os) == 1, os
+			assert root.ops.hell == "Yeah!",root.ops.hell
+			cid=self.cid
+			assert root.ops.hell == "Yeah!"
+			assert cid==self.cid, (cid,self.cid)
 
-		global done
-		done = 1
+			# Now let's search for something
+			Op = root.ops._meta
+			assert hasattr(Op,"calls")
+			assert not hasattr(root,"calls"),(root,root.calls)
+			assert not hasattr(root.ops,"calls")
+
+			o1 = Op.get(hell="Two")
+			assert o1.hell == "Two", o1
+			os = Op.find(hell="Two2")
+			assert len(os) == 0, os
+
+			# 'get' will use limit=2
+			cid=self.cid
+			os = Op.find(hell="Two")
+			assert len(os) == 1, os
+			assert os[0] is o1, (os,o1)
+			assert cid==self.cid
+
+			# Now update some stuff.
+			self.send("trigger",2)
+			self.go_on.wait()
+
+			os = Op.find(hell="Two")
+			assert len(os) == 0, os
+			os = Op.find(hell="Two2")
+			assert len(os) == 1, os
+
+			global done
+			done = 1
 
 class Tester(TestMain):
 	client_factory = Test21_client

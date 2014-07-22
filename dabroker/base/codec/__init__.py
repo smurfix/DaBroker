@@ -12,11 +12,9 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-from __future__ import print_function,absolute_import
 import sys
 from time import mktime
 from ...util import TZ,UTC, format_dt
-from ...util.thread import local_stack
 from ..config import default_config
 import datetime as dt
 from collections import namedtuple
@@ -24,8 +22,6 @@ from collections import namedtuple
 from traceback import format_tb
 import logging
 logger = logging.getLogger("dabroker.base.codec")
-
-current_loader = local_stack()
 
 class _notGiven: pass
 class ComplexObjectError(Exception): pass
@@ -261,36 +257,32 @@ class BaseCodec(object):
 			          send object keys without retrieval info. This is used
 			          e.g. when broadcasting, so as to not leak data access.
 			"""
-		current_loader.push(self.loader)
-		try:
-			if self.try_simple >= 1000:
-				# Try to do a faster encoding pass
-				try:
-					objcache = {}
-					res = self._encode(data, objcache,None, include=include)
-				except ComplexObjectError:
-					self.try_simple = 0
-
-			if self.try_simple < 1000:
-				# No, not yet / did not work: slower path
+		if self.try_simple >= 1000:
+			# Try to do a faster encoding pass
+			try:
 				objcache = {}
-				objref = set()
-				res = self._encode(data, objcache,objref, include=include)
+				res = self._encode(data, objcache,None, include=include)
+			except ComplexObjectError:
+				self.try_simple = 0
 
-				if objref:
-					# At least one reference was required.
-					self.try_simple = 0
-					for i,v in objcache.values():
-						if i not in objref:
-							del v['_oi']
-				else:
-					# No, this was a proper tree after all.
-					self.try_simple += 1
-					for i,v in objcache.values():
+		if self.try_simple < 1000:
+			# No, not yet / did not work: slower path
+			objcache = {}
+			objref = set()
+			res = self._encode(data, objcache,objref, include=include)
+
+			if objref:
+				# At least one reference was required.
+				self.try_simple = 0
+				for i,v in objcache.values():
+					if i not in objref:
 						del v['_oi']
-			return res
-		finally:
-			current_loader.pop()
+			else:
+				# No, this was a proper tree after all.
+				self.try_simple += 1
+				for i,v in objcache.values():
+					del v['_oi']
+		return res
 	
 	def encode_error(self, err, tb=None):
 		"""\
@@ -300,19 +292,15 @@ class BaseCodec(object):
 			data should be strings (or, in case of the traceback, a list of
 			strings).
 			"""
-		current_loader.push(self.loader)
-		try:
-			if not hasattr(err,'swapcase'): # it's a string
-				err = str(err)
-			res = {'_error':err }
+		if not hasattr(err,'swapcase'): # it's a string
+			err = str(err)
+		res = {'_error':err }
 
-			if tb is not None:
-				if hasattr(tb,'tb_frame'):
-					tb = format_tb(tb)
-				res['tb'] = tb
-			return res
-		finally:
-			current_loader.pop()
+		if tb is not None:
+			if hasattr(tb,'tb_frame'):
+				tb = format_tb(tb)
+			res['tb'] = tb
+		return res
 
 	def _decode(self,data, objcache,objtodo, p=None,off=None):
 		# Decode the data recursively.
@@ -395,15 +383,11 @@ class BaseCodec(object):
 		if isinstance(data,dict) and '_error' in data:
 			raise ServerError(data['_error'],data.get('tb',None))
 
-		current_loader.push(self.loader)
-		try:
-			objcache = {}
-			objtodo = []
-			res = self._decode(data,objcache,objtodo)
-			self._cleanup(objcache,objtodo)
-			if isinstance(res,DecodeRef):
-				res = objcache[res.oid]
-			return res
-		finally:
-			current_loader.pop()
+		objcache = {}
+		objtodo = []
+		res = self._decode(data,objcache,objtodo)
+		self._cleanup(objcache,objtodo)
+		if isinstance(res,DecodeRef):
+			res = objcache[res.oid]
+		return res
 

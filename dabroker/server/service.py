@@ -19,6 +19,7 @@ from ..base import UnknownCommandError,BaseRef
 from ..util import import_string
 from ..base.config import default_config
 from ..base.transport import BaseCallbacks
+from ..base.service import BrokerEnv
 from .codec import adapters as default_adapters
 
 import sys
@@ -28,7 +29,7 @@ from itertools import chain
 import logging
 logger = logging.getLogger("dabroker.server.service")
 
-class BrokerServer(BaseCallbacks):
+class BrokerServer(BrokerEnv, BaseCallbacks):
 	"""\
 		The main server.
 
@@ -108,6 +109,9 @@ class BrokerServer(BaseCallbacks):
 
 	def add_static(self, obj, *key):
 		self.loader.static.new(obj, *key)
+
+	def get(self,*a,**k):
+		return self.loader.get(*a,**k)
 
 	# remote calls
 
@@ -196,48 +200,49 @@ class BrokerServer(BaseCallbacks):
 
 	def recv(self, msg):
 		"""Receive a message. Usually called as a separate thread."""
-		logger.debug("recv raw %r",msg)
+		with self.env:
+			logger.debug("recv raw %r",msg)
 
-		rmsg=msg
-		try:
-			msg = self.codec.decode(msg)
-
-			logger.debug("recv %r",msg)
-			m = msg.pop('_m')
-			o = msg.pop('_o',None)
-			a = msg.pop('_a',())
-
+			rmsg=msg
 			try:
-				if o is not None:
-					assert m in o._meta.calls,"You cannot call method {} of {}".format(m,o)
-					proc = getattr(o,m)
-				else:
-					proc = getattr(self,'do_'+m)
-			except AttributeError:
-				raise UnknownCommandError((m,o))
-			msg = proc(*a,**msg)
-			logger.debug("reply %r",msg)
-			try:
-				msg = self.codec.encode(msg, include = getattr(proc,'include',False))
-			except Exception:
-				print("RAW was",rmsg,file=sys.stderr)
-				print("MSG is",msg,file=sys.stderr)
-				raise
-			return msg
+				msg = self.codec.decode(msg)
 
-		except BaseException as e:
-			return self.codec.encode_error(e, sys.exc_info()[2])
+				logger.debug("recv %r",msg)
+				m = msg.pop('_m')
+				o = msg.pop('_o',None)
+				a = msg.pop('_a',())
+
+				try:
+					if o is not None:
+						assert m in o._meta.calls,"You cannot call method {} of {}".format(m,o)
+						proc = getattr(o,m)
+					else:
+						proc = getattr(self,'do_'+m)
+				except AttributeError:
+					raise UnknownCommandError((m,o))
+				msg = proc(*a,**msg)
+				logger.debug("reply %r",msg)
+				try:
+					msg = self.codec.encode(msg, include = getattr(proc,'include',False))
+				except Exception:
+					print("RAW was",rmsg,file=sys.stderr)
+					print("MSG is",msg,file=sys.stderr)
+					raise
+				return msg
+
+			except BaseException as e:
+				return self.codec.encode_error(e, sys.exc_info()[2])
 
 	def send(self, action, *a, **k):
 		"""Broadcast a message to all clients"""
-		logger.debug("bcast %s %r %r",action,a,k)
-		msg = k
-		include = k.pop('_include',False)
-		msg['_m'] = action
-		if a:
-			msg['_a'] = a
+		with self.env:
+			logger.debug("bcast %s %r %r",action,a,k)
+			msg = k
+			include = k.pop('_include',False)
+			msg['_m'] = action
+			if a:
+				msg['_a'] = a
 
-		msg = self.codec.encode(msg, include=include)
-		self.transport.send(msg)
-
+			msg = self.codec.encode(msg, include=include)
+			self.transport.send(msg)
 

@@ -120,7 +120,21 @@ The client then merely needs to do
     broker = BrokerClient(cfg={…})
     assert broker.root.callme("me") == "hello me"
 
-See `tests/__init__.py`.
+The server can mark the `Callable` as cachable on the client side:
+
+    rootMeta.add(Callable("callme", cached=True))
+
+On the client side, the call to the server needs to be wrapped in a `with`
+statement:
+
+    with broker.env:
+        […]
+        broker.root.callme("me") # calls the server
+        broker.root.callme("me") # doesn't
+
+In fact it makes sense to wrap the client's whole thread with this.
+
+See `tests/__init__.py`. Caching is tested in `test21`.
 
 Shutdown
 --------
