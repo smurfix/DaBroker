@@ -53,7 +53,7 @@ class Thread(object):
 		self.job = None
 	
 	def code(self, *a,**k):
-		raise RuntimeError("You forgot to override "+self.__class__.__name__)
+		raise RuntimeError("You forgot to override %s.code()"%(self.__class__.__name__,))
 
 	def run(self):
 		try:
