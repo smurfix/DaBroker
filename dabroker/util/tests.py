@@ -135,8 +135,8 @@ class ServerQueue(BaseTransport):
 		for c in self.clients.values():
 			c.reply_q.put(msg)
 
-global client_id
-client_id = 0
+global _client_id
+_client_id = 0
 
 class ClientQueue(BaseTransport):
 	def __init__(self,callbacks,cfg):
@@ -147,9 +147,9 @@ class ClientQueue(BaseTransport):
 		self.q = {} # msgid => AsyncResult for the answer
 		self.next_id = 1
 
-		global client_id
-		client_id += 1
-		self.client_id = client_id
+		global _client_id
+		_client_id += 1
+		self.client_id = _client_id
 
 	def connect(self):
 		self.p.server().clients[self.client_id] = self
