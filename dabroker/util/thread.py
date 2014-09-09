@@ -71,7 +71,11 @@ class Thread(object):
 	def stop(self):
 		if self.job is not None:
 			self.job.kill()
-	
+
+	def kill(self, timeout=None):
+		self.stop()
+		self.join(timeout)
+
 	def join(self,timeout=None):
 		if self.job is not None:
 			self.job.join(timeout=timeout)
