@@ -127,6 +127,14 @@ class Main(object):
 			main.run()
 
 		Override .__init__() any way you like, but do call super().__init__().
+
+		If you already have a Thread object you'd like to use as your main
+		program, you can use Main() as an adapter:
+
+			t = MainThread()
+			m = Main(t)
+			m.run()
+
 		"""
 	_plinker = None
 	_sigINT = None
@@ -153,9 +161,12 @@ class Main(object):
 		pass
 	
 	### Public methods
-	def __init__(self):
+	def __init__(self, main=None, *a,**k):
 		self._stops = []
 		self.shutting_down = Event()
+		self._main = main
+		self.a = a
+		self.k = k
 
 #	def spawn(self,thread,*a,**k):
 #		"""Start a thread object, and register for stopping"""
@@ -174,8 +185,13 @@ class Main(object):
 			logger.debug("Setting up")
 			self._setup()
 			logger.debug("Main program starting")
-			self._main = gevent.spawn(self.main)
-			self._main.join()
+			if self._main is None:
+				self._main = gevent.spawn(self.main,*self.a,**self.k)
+				self._main.join()
+			else:
+				self._main.start()
+				self.register_stop(self._main.stop)
+				self._main.code(*self.a,**self.k)
 			self._main = None
 		except Exception:
 			logger.exception("Main program died")
