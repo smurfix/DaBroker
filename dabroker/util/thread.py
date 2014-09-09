@@ -153,6 +153,17 @@ class Main(object):
 		self._stops = []
 		self.shutting_down = Event()
 
+	def spawn(self,thread,*a,**k):
+		"""Start a thread object, and register for stopping"""
+		if isinstance(thread,Thread):
+			assert not a and not k, (thread,a,k)
+		else:
+			thread = thread(*a,**k)
+		assert thread.ready, thread
+
+		thread.start()
+		self.register_stop(thread.stop)
+
 	def run(self):
 		"""Start the main loop"""
 		try:
