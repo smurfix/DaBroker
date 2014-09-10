@@ -5,6 +5,8 @@ Priority: optional
 Build-Depends: debhelper (>= 7),
   python-setuptools (>= 0.6b3), python-all (>= 2.6.6-3),
   python3-setuptools (>= 0.6b3), python3-all (>= 3.3),
+  python-tz, python3-tz,
+  python-six (>= 1.7), python3-six (>= 1.7),
 Standards-Version: 3.9.1
 X-Python-Version: >= 2.7
 X-Python3-Version: >= 3.3
