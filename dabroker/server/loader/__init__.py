@@ -128,10 +128,7 @@ class StaticLoader(BaseLoader):
 		del self.objects[key]
 
 	def new(self,obj, *key):
-		try:
-			assert key not in self.objects or self.objects[key] is obj,(key, obj, self.objects[key])
-		except AssertionError:
-			import pdb;pdb.set_trace()
+		assert key not in self.objects or self.objects[key] is obj,(key, obj, self.objects[key])
 		self.set_key(obj,*key)
 		self.objects[key] = obj
 
