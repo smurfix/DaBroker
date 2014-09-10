@@ -128,13 +128,6 @@ class Main(object):
 
 		Override .__init__() any way you like, but do call super().__init__().
 
-		If you already have a Thread object you'd like to use as your main
-		program, you can use Main() as an adapter:
-
-			t = MainThread()
-			m = Main(t)
-			m.run()
-
 		"""
 	_plinker = None
 	_sigINT = None
@@ -147,7 +140,7 @@ class Main(object):
 		"""Override this to initialize everything.
 			Do not call this method yourself: .run() does that."""
 		pass
-	def main(self):
+	def main(self, *a,**k):
 		"""Override this with your main code.
 			Do not call this method yourself: .run() does that."""
 		raise NotImplementedError("You forgot to override %s.main" % (self.__class__.__name__,))
@@ -161,10 +154,9 @@ class Main(object):
 		pass
 	
 	### Public methods
-	def __init__(self, main=None, *a,**k):
+	def __init__(self, *a,**k):
 		self._stops = []
 		self.shutting_down = Event()
-		self._main = main
 		self.a = a
 		self.k = k
 
@@ -186,7 +178,7 @@ class Main(object):
 			self._setup()
 			logger.debug("Main program starting")
 			if self._main is None:
-				self._main = gevent.spawn(self.main,*self.a,**self.k)
+				self._main = gevent.spawn(self.main)
 				self._main.join()
 			else:
 				self._main.start()
@@ -274,3 +266,17 @@ class Main(object):
 			self._plinker = None
 		logger.debug("Cleanup done.")
 
+class MainThread(Main):
+	"""\
+		If you already have a Thread object you'd like to use as your main
+		program, you can use Main() as an adapter:
+
+			t = Your_Thread()
+			m = MainThread(t, args…)
+			m.run()
+		"""
+	def __init__(self, main=None, *a,**k):
+		self._main = main
+		super(MainThread,self).__init__(*a,**k)
+
+#	def spawn(self,thread,*a,**k):
