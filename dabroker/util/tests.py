@@ -85,7 +85,7 @@ except ImportError:
 from traceback import format_exc
 
 test_cfg = dict(
-                username='test', password='test', virtual_host='test',
+                user='test', password='test', virtual_host='test',
                 codec=os.environ.get("DAB_CODEC","null"),
 )
 

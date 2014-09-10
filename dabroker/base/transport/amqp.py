@@ -21,7 +21,7 @@ logger = logging.getLogger("dabroker.server.transport.amqp")
 
 class AmqpTransport(BaseTransport):
 	"""Talk using RabbitMQ or another AMQP-compabible messaging system."""
-	defaults = dict(host='localhost', username='', password='', virtual_host='/', rpc_queue='rpc_queue', exchange='dab_alert')
+	defaults = dict(host='localhost', user='', password='', virtual_host='/', rpc_queue='rpc_queue', exchange='dab_alert')
 	connection = None
 	content_type = None
 
@@ -33,11 +33,11 @@ class AmqpTransport(BaseTransport):
 
 	def connect1(self):
 		try:
-			logger.debug("Connecting %s %s %s",self.cfg['host'],self.cfg['virtual_host'],self.cfg['username'])
-			self.connection = amqp.connection.Connection(host=self.cfg['host'], userid=self.cfg['username'], password=self.cfg['password'], login_method='AMQPLAIN', login_response=None, virtual_host=self.cfg['virtual_host'])
+			logger.debug("Connecting %s %s %s",self.cfg['host'],self.cfg['virtual_host'],self.cfg['user'])
+			self.connection = amqp.connection.Connection(host=self.cfg['host'], userid=self.cfg['user'], password=self.cfg['password'], login_method='AMQPLAIN', login_response=None, virtual_host=self.cfg['virtual_host'])
 			self.setup_channels()
 		except Exception as e:
-			logger.error("Not connected!")
+			logger.error("Not connected to AMPQ: host=%s vhost=%s user=%s", self.cfg['host'],self.cfg['virtual_host'],self.cfg['user'])
 			c,self.connection = self.connection,None
 			if c is not None:
 				c.close()
