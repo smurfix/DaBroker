@@ -119,19 +119,16 @@ class Main(object):
 
 		Common usage:
 		
-			class MyMain(Main):
-				def main(self):
+			class MyMainThread(Thread):
+				def code(self, args…):
 					# do something, or simply …:
 					self.shutting_down.wait()
-			main = MyMain()
+			main = Main(MyMainThread, args…)
 			main.run()
-
-		Override .__init__() any way you like, but do call super().__init__().
-
 		"""
 	_plinker = None
 	_sigINT = None
-	_main = None
+	_thread = None
 	_stops = None
 	_stopping = False
 
@@ -140,10 +137,6 @@ class Main(object):
 		"""Override this to initialize everything.
 			Do not call this method yourself: .run() does that."""
 		pass
-	def main(self, *a,**k):
-		"""Override this with your main code.
-			Do not call this method yourself: .run() does that."""
-		raise NotImplementedError("You forgot to override %s.main" % (self.__class__.__name__,))
 	def shutdown(self):
 		"""Override this to cleanly terminate your tasks.
 			Do not call this method yourself: use .stop() to terminate your program."""
@@ -154,22 +147,25 @@ class Main(object):
 		pass
 	
 	### Public methods
-	def __init__(self, *a,**k):
-		self._stops = []
-		self.shutting_down = Event()
+	def __init__(self, main=None, *a,**k):
+		self._main = main
 		self.a = a
 		self.k = k
 
-#	def spawn(self,thread,*a,**k):
-#		"""Start a thread object, and register for stopping"""
-#		if isinstance(thread,Thread):
-#			assert not a and not k, (thread,a,k)
-#		else:
-#			thread = thread(*a,**k)
-#		assert thread.ready, thread
-#
-#		thread.start()
-#		self.register_stop(thread.stop)
+		self._stops = []
+		self.shutting_down = Event()
+
+	def spawn(self,thread,*a,**k):
+		"""Start a thread object, and register for stopping"""
+		if isinstance(thread,Thread):
+			assert not a and not k, (thread,a,k)
+		else:
+			thread = thread(*a,**k)
+		assert thread.ready, thread
+
+		thread.start()
+		self.register_stop(thread.stop)
+		return thread
 
 	def run(self):
 		"""Start the main loop"""
@@ -177,14 +173,8 @@ class Main(object):
 			logger.debug("Setting up")
 			self._setup()
 			logger.debug("Main program starting")
-			if self._main is None:
-				self._main = gevent.spawn(self.main)
-				self._main.join()
-			else:
-				self._main.start()
-				self.register_stop(self._main.stop)
-				self._main.code(*self.a,**self.k)
-			self._main = None
+			self._thread = self.spawn(self._main, *self.a,**self.k)
+			self._thread.join()
 		except Exception:
 			logger.exception("Main program died")
 		else:
@@ -249,8 +239,9 @@ class Main(object):
 			logger.exception("Cleanup code")
 		finally:
 			logger.debug("Killing main task again(?)")
-			if self._main:
-				self._main.kill(timeout=5)
+			t,self._thread = self._thread,None
+			if t:
+				t.kill(timeout=5)
 
 		for j,a,k in self._stops:
 			logger.debug("Running %s",j)
@@ -266,17 +257,3 @@ class Main(object):
 			self._plinker = None
 		logger.debug("Cleanup done.")
 
-class MainThread(Main):
-	"""\
-		If you already have a Thread object you'd like to use as your main
-		program, you can use Main() as an adapter:
-
-			t = Your_Thread()
-			m = MainThread(t, args…)
-			m.run()
-		"""
-	def __init__(self, main=None, *a,**k):
-		self._main = main
-		super(MainThread,self).__init__(*a,**k)
-
-#	def spawn(self,thread,*a,**k):
