@@ -109,6 +109,15 @@ def prep_spawned(fn):
 		return thr(*a,**k)
 	return doit
 
+class MainThread(Thread):
+	"""Adapter from a code snippet to a Thread"""
+	def __init__(self, code, *a,**k):
+		self._code = code
+		super(MainThread,self).__init__(*a,**k)
+
+	def code(self,*a,**k):
+		return self._code(*a,**k)
+
 class Main(object):
 	"""\
 		This class represents DaBroker's (or indeed any) main task.
@@ -145,9 +154,16 @@ class Main(object):
 		"""Override this to clean up after yourself.
 			Do not call this method yourself: .stop() does that."""
 		pass
+
+	def main(self):
+		"""Main code, if you don't have a separate thread.
+			Deprecated / used for testing."""
+		raise NotImplementedError("You should use a separate thread for main code")
 	
 	### Public methods
 	def __init__(self, main=None, *a,**k):
+		if main is None:
+			main = MainThread(self.main)
 		self._main = main
 		self.a = a
 		self.k = k
@@ -168,7 +184,9 @@ class Main(object):
 		return thread
 
 	def run(self):
-		"""Start the main loop"""
+		"""Run the main code"""
+		assert self._thread is None and not self.shutting_down.is_set(), "You cannot call .run() twice!"
+
 		try:
 			logger.debug("Setting up")
 			self._setup()
