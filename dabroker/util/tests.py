@@ -85,7 +85,7 @@ except ImportError:
 from traceback import format_exc
 
 test_cfg = dict(
-                amqp_user='test', amqp_password='test', amqp_virtual_host='test',
+                amqp_user='test', amqp_password='test', amqp_host='127.0.0.1', amqp_virtual_host='test',
                 codec=os.environ.get("DAB_CODEC","null"),
 )
 

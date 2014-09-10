@@ -55,7 +55,7 @@ class ClientThread(Thread):
 		from tests.t30_client import TestClient
 		logger.debug("Starting the client")
 		cfg = cfg.copy()
-		cfg["host"] = "127.0.0.1"
+		cfg["amqp_host"] = "127.0.0.1"
 		tc = TestClient(cfg)
 		tc.start()
 		try:
