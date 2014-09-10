@@ -33,11 +33,11 @@ class AmqpTransport(BaseTransport):
 
 	def connect1(self):
 		try:
-			logger.debug("Connecting %s %s %s",self.cfg['host'],self.cfg['virtual_host'],self.cfg['user'])
-			self.connection = amqp.connection.Connection(host=self.cfg['host'], userid=self.cfg['user'], password=self.cfg['password'], login_method='AMQPLAIN', login_response=None, virtual_host=self.cfg['virtual_host'])
+			logger.debug("Connecting %s %s %s",self.cfg['amqp_host'],self.cfg['amqp_virtual_host'],self.cfg['amqp_user'])
+			self.connection = amqp.connection.Connection(host=self.cfg['amqp_host'], userid=self.cfg['amqp_user'], password=self.cfg['amqp_password'], login_method='AMQPLAIN', login_response=None, virtual_host=self.cfg['amqp_virtual_host'])
 			self.setup_channels()
 		except Exception as e:
-			logger.error("Not connected to AMPQ: host=%s vhost=%s user=%s", self.cfg['host'],self.cfg['virtual_host'],self.cfg['user'])
+			logger.error("Not connected to AMPQ: host=%s vhost=%s user=%s", self.cfg['amqp_host'],self.cfg['amqp_virtual_host'],self.cfg['amqp_user'])
 			c,self.connection = self.connection,None
 			if c is not None:
 				c.close()
