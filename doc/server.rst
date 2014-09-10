@@ -205,7 +205,7 @@ Server, subclassing `dabroker.server.BrokerServer`:
 
 Client:
 
-    assert broker.call("you") == "hello you"
+    assert broker.call("hello","you") == "hello you"
 
 If you mark a server method with an "include" attribute, as in
 
