@@ -232,8 +232,8 @@ otherwise Python's threading system may stall. Also, you may or may not be
 able to simply call sys.exit() from a thread if you see a fatal error.
 This also applies to termination by signal (SIGINT, Control-C).
 
-`dabroker.util.thread.Main` is a helper class which will try to do the
-right thing in these situations.
+`dabroker.util.thread.Main` is a helper class which will clean up when your
+main program gets a signal, or simply ends.
 
     class MyMain(Main):
         broker = None
