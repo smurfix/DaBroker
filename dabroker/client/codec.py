@@ -141,6 +141,8 @@ class ClientBrokeredInfo(BrokeredInfo):
 			for k in self.refs.keys():
 				if k != '_meta' and not hasattr(ClientObj,k):
 					setattr(ClientObj,k,handle_ref(k))
+			for k,v in self.backrefs.items():
+				setattr(ClientObj,k,handle_backref(k,v))
 		for k,v in self.calls.items():
 			setattr(ClientObj,k,call_proc(v))
 		ClientObj._processed = True
@@ -210,6 +212,43 @@ class handle_ref(handle_related):
 		if ov is _NotGiven:
 			return
 		obj._meta._dab.obj_change(obj, self.name, ov,val)
+
+class handle_backref(object):
+	"""This property accessor handles retrieving one-to-many relationships"""
+	def __init__(self, name,refobj):
+		self.name = name
+		self.ref = ref(refobj)
+
+	def __get__(self, obj, type=None):
+		if obj is None:
+			return self
+
+		k = obj._refs.get(self.name,None)
+		if k is None:
+			k = obj._refs[self.name] = k = backref_handler(obj, self.name,self.ref)
+		return k
+
+class backref_handler(object):
+	"""Manage a specific back reference"""
+	def __init__(self, obj, name,refobj):
+		self.obj = ref(obj)
+		self.name = name
+		self.ref = refobj
+
+	def _deref(self):
+		obj = self.obj()
+		ref = self.ref()
+		if obj is None or ref is None:
+			raise RuntimeError("weak ref: should not have been freed")
+		return obj,ref
+
+	def __getitem__(self,i):
+		obj,ref = self._deref()
+		return obj._meta._dab.send("backref_idx",obj, self.name,i)
+
+	def __len__(self):
+		obj,ref = self._deref()
+		return obj._meta._dab.send("backref_len",obj, self.name)
 
 class call_proc(object):
 	"""This property accessor returns a shim which executes a RPC to the server."""

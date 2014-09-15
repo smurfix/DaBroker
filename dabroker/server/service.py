@@ -161,6 +161,14 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 		return key.obj_find(_limit=lim,**k)
 	do_find.include = True
 		
+	def do_backref_idx(self, obj, name,idx):
+		"""Get an item from the backref list. This is severely suboptimal."""
+		return obj._meta.backref_idx(obj,name,idx)
+
+	def do_backref_len(self, obj, name):
+		"""Get the length of the backref list."""
+		return obj._meta.backref_len(obj,name)
+
 	# Broadcast messages to clients
 
 	def send_ping(self, msg):

@@ -70,6 +70,7 @@ class SQLInfo(BrokeredInfo):
 		for k in i.relationships:
 			if k not in hide:
 				if k.uselist:
+					### TODO add info to generate the list on the client
 					self.add(BackRef(k.key))
 				else:
 					self.add(Ref(k.key))
@@ -96,6 +97,14 @@ class SQLInfo(BrokeredInfo):
 	def __call__(self, **kw):
 		return self.new(**kw)
 		
+	@with_session
+	def backref_idx(self,session, obj,name,idx):
+		return getattr(obj,name)[idx]
+
+	@with_session
+	def backref_len(self,session, obj,name):
+		return len(getattr(obj,name))
+
 	@with_session
 	def find(self,session,_limit=None, **kw):
 		res = session.query(self.model).filter_by(**kw)
