@@ -93,12 +93,14 @@ class common_BaseRef(object):
 	clsname = "Ref"
 	
 	@staticmethod
-	def encode(obj, include=False):
+	def encode(ref, include=False, meta=None):
 		assert not include
 		res = {}
-		res['k'] = obj.key
-		if obj.code is not None and include is not None:
-			res['c'] = obj.code
+		res['k'] = ref.key
+		if meta is not None: # set by the server to tag ref types
+			res['m'] = meta
+		if ref.code is not None and include is not None:
+			res['c'] = ref.code
 		return res
 
 class common_BaseObj(object):
@@ -116,7 +118,10 @@ class common_BaseObj(object):
 			"""
 		ref = getattr(obj,k)
 		if ref is not None:
-			ref = ref._key
+			try:
+				ref = ref._key
+			except Exception:
+				raise
 		return ref
 
 	@classmethod

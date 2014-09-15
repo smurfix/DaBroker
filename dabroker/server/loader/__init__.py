@@ -50,7 +50,11 @@ class Loaders(object):
 			"""
 		assert isinstance(key,BaseRef),key
 		_key = key.key
-		obj = self.loaders[_key[0]].get(*_key[1:])
+		try:
+			obj = self.loaders[_key[0]]
+		except KeyError:
+			raise KeyError("Object type '%s' not known" % (_key[0],))
+		obj = obj.get(*_key[1:])
 		k = getattr(obj,'_key',None)
 		if k is None:
 			obj._key = key
@@ -100,18 +104,20 @@ class BaseLoader(object):
 		raise NotImplementedError("You need to override {}.new()".format(self.__class__.__name__))
 		
 	def set_key(self, obj, *key):
-		"""sets an object's lookup key."""
+		"""sets an object's lookup key. Returns the key object for convenience."""
 		if obj is broker_info_meta:
-			return
+			return broker_info_meta._key
 
-		k = getattr(obj,'_key',None)
-		if k is not None:
-			k = k.key
+		# getattr() might use the class property, which recurses back here
+		kx = obj.__dict__.get('_key',None)
+		if kx is not None:
+			k = kx.key
 			assert k[0] == self.id, (k,self.id)
 			if key:
 				assert k[1:] == key
 		else:
-			obj._key = BaseRef(key=(self.id,)+key)
+			obj.__dict__['_key'] = kx = BaseRef(key=(self.id,)+key)
+		return kx
 
 class StaticLoader(BaseLoader):
 	"""A simple 'loader' which serves static objects"""

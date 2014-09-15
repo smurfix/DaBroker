@@ -50,6 +50,8 @@ class server_BaseObj(common_BaseObj):
 	def encode(obj, include=False):
 		if obj._key.code is None:
 			obj._key.code = make_secret(obj._key.key)
+		if not include:
+			return common_BaseRef.encode(obj._key, meta=obj._meta)
 		return common_BaseObj.encode(obj, include=include)
 
 	@staticmethod

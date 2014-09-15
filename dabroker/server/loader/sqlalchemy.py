@@ -15,6 +15,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # The sqlalchemy object loader
 
 from ...base import BrokeredInfo,BrokeredMeta, Field,Ref,BackRef,Callable, get_attrs
+from ...util import cached_property
 from ...util.thread import local_object
 from ...util.sqlalchemy import with_session
 from . import BaseLoader
@@ -35,8 +36,21 @@ class server_SQLobject(server_BaseObj):
 			obj.__class__._dab.fixup(obj)
 		return server_BaseObj.encode(obj, include=include)
 
+	def encode_ref(obj, include=False):
+		if not hasattr(obj,'_key'):
+			obj.__class__._dab.fixup(obj)
+		return server_BaseObj.encode_ref(obj, include=include)
+
 def _get_attrs(obj):
 	return get_attrs(obj, obj._dab)
+
+def keyfix(self,*a,**k):
+	"""
+		SQLalchemy objects don't get a key on their own.
+		Attach it here.
+		"""
+	self.__class__._dab.fixup(self)
+	return self.__dict__.get('_key')
 
 class SQLInfo(BrokeredInfo):
 	"""This class represents a single SQL table"""
@@ -71,6 +85,7 @@ class SQLInfo(BrokeredInfo):
 		self._meta = meta
 		self._dab = self
 		model._dab = self
+		model._key = cached_property(keyfix)
 		model._attrs = property(_get_attrs)
 		class load_me(server_SQLobject):
 			cls = model
@@ -98,7 +113,8 @@ class SQLInfo(BrokeredInfo):
 		if key:
 			kw['id'] = key[0]
 		res = session.query(self.model).filter_by(**kw).one()
-		return self.fixup(res)
+		self.fixup(res)
+		return res
 	get.include = True
 
 	@with_session
@@ -154,8 +170,7 @@ class SQLInfo(BrokeredInfo):
 		obj._meta = self
 		obj._dab = self._dab
 		i=inspect(obj)
-		self.loader.set_key(obj,i.class_.__name__,obj.id)
-		return obj
+		return self.loader.set_key(obj,i.class_.__name__,obj.id)
 
 class SQLLoader(BaseLoader):
 	"""A loader which reads from SQL"""

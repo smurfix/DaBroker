@@ -283,16 +283,16 @@ class client_BaseObj(common_BaseObj):
 	
 
 	@classmethod
-	def decode(cls, k,c=None,f=None,r=None,meta=None, _is_meta=None):
+	def decode(cls, k,c=None,f=None,r=None,m=None, _is_meta=None):
 		"""\
 			Decode a reference.
 			"""
 		k = ClientBaseRef(key=k,code=c)
-		if meta is not None:
-			res = meta.class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
+		if m is not None:
+			res = m.class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
 		elif r and '_meta' in r:
-			r['_meta'] = meta = current_service.top.get(r['_meta'])
-			res = meta.class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
+			r['_meta'] = m = current_service.top.get(r['_meta'])
+			res = m.class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
 		else:
 			res = ClientBaseObj
 

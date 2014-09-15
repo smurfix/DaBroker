@@ -29,8 +29,8 @@ from gevent.event import AsyncResult
 
 from dabroker.util.tests import test_init,LocalQueue,TestMain,TestClient
 
-logger = test_init("test.23.sql")
-logger_s = test_init("test.23.sql.server")
+logger = test_init("test.24.sql")
+logger_s = test_init("test.24.sql.server")
 
 from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
@@ -48,18 +48,27 @@ class Person(Base):
 	id = Column(Integer, primary_key=True)
 	name = Column(String(250), nullable=False)
  
+class Address(Base):
+	__tablename__ = 'address'
+	# Here we define columns for the table address.
+	# Notice that each column is also a normal Python instance attribute.
+	id = Column(Integer, primary_key=True)
+	street = Column(String(250))
+	person_id = Column(Integer, ForeignKey('person.id'))
+	person = relationship(Person,backref='addrs')
+
 try:
-	os.unlink('/tmp/test23.db')
+	os.unlink('/tmp/test24.db')
 except EnvironmentError:
 	pass
-engine = create_engine('sqlite:////tmp/test23.db', echo=(True if os.environ.get('TRACE',False) else False))
+engine = create_engine('sqlite:////tmp/test24.db', echo=(True if os.environ.get('TRACE',False) else False))
 Base.metadata.create_all(engine)
 
 DBSession = sessionmaker(bind=engine)
 
 done = 0
 
-class Test23_server(BrokerServer):
+class Test24_server(BrokerServer):
 	seq = 0
 	@cached_property
 	def root(self):
@@ -74,10 +83,11 @@ class Test23_server(BrokerServer):
 			data = {}
 
 		root = RootObj()
-		self.add_static(root,2,23)
+		self.add_static(root,2,24)
 
 		sql = SQLLoader(DBSession,self)
 		sql.add_model(Person,root.data)
+		sql.add_model(Address,root.data)
 		self.loader.add_loader(sql)
 
 		return root
@@ -104,12 +114,12 @@ class Test23_server(BrokerServer):
 		self.obj_delete(p)
 		logger.debug("mangle: delete done")
 
-class Test23_client(TestClient):
+class Test24_client(TestClient):
 	def __init__(self,*a,**k):
 		self.a = [None]
 		for i in range(3):
 			self.a.append(AsyncResult())
-		super(Test23_client,self).__init__(*a,**k)
+		super(Test24_client,self).__init__(*a,**k)
 
 	def make_client(self):
 		return TestClientMain()
@@ -144,12 +154,15 @@ class Test23_client(TestClient):
 		logger.debug("recv %r",res)
 		assert res.hello == "Step 1", res.hello
 		P = res.data['Person']
+		A = res.data['Address']
 		assert P.name == 'Person',P.name
 		r = P.find()
 		assert len(r) == 0, r
 
 		# A: create
 		p1 = self.send("mangle_new", P, name="Fred Flintstone")
+		q1 = self.send("mangle_new", P, name="Barney Rubble")
+		a1 = self.send("mangle_new", A, street="Rubble Way", person=p1)
 
 		self.jump(1,2) # goto B
 
@@ -161,6 +174,7 @@ class Test23_client(TestClient):
 		p2 = p1._key()
 		assert p1.name == "Fred Flintstone", p1.name
 		assert p2.name == "Freddy Firestone", p2.name
+		assert a1.person is p2
 
 		self.jump(0,2) # goto E
 
@@ -172,17 +186,22 @@ class Test23_client(TestClient):
 		res = self.root
 		logger.debug("recv %r",res)
 		P = res.data['Person']
+		A = res.data['Address']
 		
 		self.jump(2,0)
 
 		# B: check+modify
 		p1 = P.get(name="Fred Flintstone")
+		q1 = P.get(name="Barney Rubble")
+		a1 = A.get(street="Rubble Way")
 		self.send("mangle_update",p1,name="Freddy Firestone")
+		self.send("mangle_update",q1,person=q1)
 
 		self.jump(2,3) # goto C
 
 		# E: delete
 		self.send("mangle_delete",p1)
+		self.send("mangle_delete",q1)
 
 		self.jump(0,3) # goto F
 
@@ -195,7 +214,7 @@ class Test23_client(TestClient):
 		# C: check
 		session = DBSession()
 		res = list(session.query(Person))
-		assert len(res)==1
+		assert len(res)==2,res
 		res = res[0]
 		assert res.name=="Freddy Firestone",res.name
 		del session
@@ -220,8 +239,8 @@ class Test23_client(TestClient):
 		j3.join()
 
 class Tester(TestMain):
-	client_factory = Test23_client
-	server_factory = Test23_server
+	client_factory = Test24_client
+	server_factory = Test24_server
 
 t = Tester()
 t.register_stop(logger.debug,"shutting down")
