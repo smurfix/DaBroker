@@ -94,8 +94,11 @@ Message passing
 You need a 0MQ server. DaBroker has been tested with RabbitMQ. Other
 methods for passing messages are possible.
 
-The DaBroker unit tests use a RabbitMQ vhost. You need to run
-`tests/setup_rabbitmq.sh` before you run the tests the first time.
+The DaBroker unit tests need a RabbitMQ server with a "test" virtual host:
+run `tests/setup_rabbitmq.sh` before you run the tests the first time.
+
+If you set the `AMQP_HOST` environment variable, the tests will use a
+RabbitMQ server on that host.
 
 Message passing overhead, on a reasonably current server, is on the order
 of 1…2 milliseconds per RPC call. No work has yet been done to optimize
