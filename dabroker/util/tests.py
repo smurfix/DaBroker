@@ -45,30 +45,6 @@ from dabroker.server import BrokerServer
 cs.RETR_TIMEOUT=1 # except that we want 1000 when debugging
 cs.CACHE_SIZE=5
 
-# prettyprint
-
-def _p_filter(m,mids):
-	if isinstance(m,dict):
-		if m.get('_oi',0) not in mids:
-			del m['_oi']
-		for v in m.values():
-			_p_filter(v,mids)
-	elif isinstance(m,(tuple,list)):
-		for v in m:
-			_p_filter(v,mids)
-def _p_find(m,mids):
-	if isinstance(m,dict):
-		mids.add(m.get('_or',0))
-		for v in m.values():
-			_p_find(v,mids)
-	elif isinstance(m,(tuple,list)):
-		for v in m:
-			_p_find(v,mids)
-def pf(m):
-	mids = set()
-	_p_find(m,mids)
-	_p_filter(m,mids)
-	return pformat(m)
 # local queue implementation
 
 def cfg_merge(*cf, **kw):
@@ -90,126 +66,7 @@ test_cfg = dict(
                 codec=os.environ.get("DAB_CODEC","null"),
 )
 
-test_cfg_s = cfg_merge(test_cfg, transport="dabroker.util.tests.ServerQueue")
-test_cfg_c = cfg_merge(test_cfg, transport="dabroker.util.tests.ClientQueue")
-
-class RPCmessage(object):
-	msgid = None
-	def __init__(self,msg,q=None):
-		self.msg = msg
-		self.q = q
-
-	def reply(self,msg):
-		logger.debug("Reply to %s:\n%s", self.msgid,pf(msg))
-		msg = type(self)(msg,None)
-		msg.msgid = self.msgid
-		self.q.put(msg)
-
-class ServerQueue(BaseTransport):
-	"""Server side of the LocalQueue transport"""
-	def __init__(self,callbacks,cfg):
-		logger.debug("Server: setting up")
-		self.callbacks = callbacks
-		self.p = cfg['_p'] # the LocalQueue instance
-		self.p.server = ref(self) # for clients to find me
-		self.clients = WeakValueDictionary() # clients add themselves here
-		self.next_id = -1
-
-	@spawned
-	def _process(self,msg):
-		m = self.callbacks.recv(msg.msg)
-		msg.reply(m)
-
-	def run(self):
-		logger.debug("Server: wait for messages")
-		while self.p.request_q is not None:
-			msg = self.p.request_q.get()
-			logger.debug("Server: received %r",msg)
-			self._process(msg)
-
-	def send(self,msg):
-		m = msg
-		msg = RPCmessage(msg)
-		msg.msgid = self.next_id
-		self.next_id -= 1
-		logger.debug("Server: send msg %s:\n%s",msg.msgid,pf(m))
-		for c in self.clients.values():
-			c.reply_q.put(msg)
-
-global _client_id
-_client_id = 0
-
-class ClientQueue(BaseTransport):
-	def __init__(self,callbacks,cfg):
-		self.callbacks = callbacks
-		self.p = cfg['_p']
-
-		self.reply_q = Queue()
-		self.q = {} # msgid => AsyncResult for the answer
-		self.next_id = 1
-
-		global _client_id
-		_client_id += 1
-		self.client_id = _client_id
-
-	def connect(self):
-		self.p.server().clients[self.client_id] = self
-		super(ClientQueue,self).connect()
-
-	def disconnect(self):
-		s = self.p.server
-		if s:
-			s = s()
-			if s: 
-				s.clients.pop(self.client_id,None)
-		super(ClientQueue,self).disconnect()
-
-	@spawned
-	def run_recv(self,msg):
-		self.callbacks.recv(msg)
-		
-	def run(self):
-		while self.p.server is not None and self.p.server() is not None:
-			msg = self.reply_q.get()
-			if msg.msgid < 0:
-				logger.debug("Client: get msg %s",msg.msgid)
-				self.run_recv(msg.msg)
-			else:
-				r = self.q.pop(msg.msgid,None)
-				if r is not None:
-					m = msg.msg
-					logger.debug("Client: get msg %s",msg.msgid)
-					r.set(m)
-			
-	def send(self,msg):
-		m = msg
-		msg = RPCmessage(msg,self.reply_q)
-		res = AsyncResult()
-
-		msg.msgid = self.next_id
-		msg.q = self.reply_q
-		self.q[self.next_id] = res
-		self.next_id += 1
-
-		logger.debug("Client: send msg %s:\n%s",msg.msgid,pf(m))
-		self.p.request_q.put(msg)
-		res = res.get()
-		return res
-
-class LocalQueue(object):
-	"""\
-		Queue manager for transferring data between a server and a couple
-		of receivers within the same process.
-	
-		Passing this object to the client's and server's transport is achieved by 
-		insertion into the confg dict, instead of copying it.
-
-		You need to instantiate the server first.
-		"""
-	def __init__(self, cfg):
-		self.request_q = Queue()
-		self.server = None
-		cfg['_p'] = self
+test_cfg_local = cfg_merge(test_cfg, transport="local")
 
 def killer(x,t):
 	sleep(t)
@@ -235,9 +92,10 @@ class TestServer(BrokerServer):
 	root_factory = TestRoot
 
 	def __init__(self,cfg={}):
-		my_cfg = default_config.copy()
-		my_cfg.update(test_cfg_s)
-		my_cfg.update(cfg)
+		#my_cfg = default_config.copy()
+		#my_cfg.update(test_cfg_local)
+		#my_cfg.update(cfg)
+		my_cfg = cfg
 		super(TestServer,self).__init__(my_cfg)
 
 	@property
@@ -250,9 +108,10 @@ class TestServer(BrokerServer):
 
 class TestClient(BrokerClient):
 	def __init__(self,cfg={}):
-		my_cfg = default_config.copy()
-		my_cfg.update(test_cfg_c)
-		my_cfg.update(cfg)
+		#my_cfg = default_config.copy()
+		#my_cfg.update(test_cfg_local)
+		#my_cfg.update(cfg)
+		my_cfg = cfg
 		super(TestClient,self).__init__(my_cfg)
 
 	def main(self):
@@ -267,16 +126,16 @@ class TestMain(Main):
 	def __init__(self,cfg={}):
 		in_cfg = cfg
 		self.cfg = test_cfg.copy()
-		self.cfg.update(test_cfg_s)
+		self.cfg.update(test_cfg_local)
 		self.cfg.update(in_cfg)
-		self.q = LocalQueue(self.cfg)
 
 		super(TestMain,self).__init__()
 
-		self.client_cfg = test_cfg.copy()
-		self.client_cfg.update(test_cfg_c)
-		self.client_cfg.update(in_cfg)
-		self.client_cfg['_p'] = self.cfg['_p']
+		#self.client_cfg = test_cfg.copy()
+		#self.client_cfg.update(test_cfg_local)
+		#self.client_cfg.update(in_cfg)
+		#self.client_cfg['_LocalQueue'] = self.cfg['_LocalQueue']
+		self.client_cfg = self.cfg
 
 	def setup(self):
 		assert self.server is None
@@ -285,6 +144,7 @@ class TestMain(Main):
 		super(TestMain,self).setup()
 		
 		self.killer = spawn(killer,self,15)
+		logger.debug("SE %s",id(self.cfg))
 		self.server = self.server_factory(cfg=self.cfg)
 		self.server.start()
 
@@ -292,6 +152,7 @@ class TestMain(Main):
 		logger.debug("Main start")
 		assert self.client is None
 		try:
+			logger.debug("CL %s",id(self.client_cfg))
 			self.client = self.client_factory(cfg=self.client_cfg)
 			self.client.start()
 			self.client.main()

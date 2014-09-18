@@ -15,6 +15,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # Utility code
 
 from importlib import import_module
+from pprint import pformat
+
 from .thread import AsyncResult
 
 import pytz
@@ -28,6 +30,30 @@ def format_dt(value, format='%Y-%m-%d %H:%M:%S'):
 		return value.astimezone(TZ).strftime(format)
 	except ValueError: ## naïve time: assume UTC
 		return value.replace(tzinfo=UTC).astimezone(TZ).strftime(format)
+
+def _p_filter(m,mids):
+	if isinstance(m,dict):
+		if m.get('_oi',0) not in mids:
+			del m['_oi']
+		for v in m.values():
+			_p_filter(v,mids)
+	elif isinstance(m,(tuple,list)):
+		for v in m:
+			_p_filter(v,mids)
+def _p_find(m,mids):
+	if isinstance(m,dict):
+		mids.add(m.get('_or',0))
+		for v in m.values():
+			_p_find(v,mids)
+	elif isinstance(m,(tuple,list)):
+		for v in m:
+			_p_find(v,mids)
+
+def format_msg(m):
+	mids = set()
+	_p_find(m,mids)
+	_p_filter(m,mids)
+	return pformat(m)
 
 def import_string(name):
 	"""Import a module, or resolve an attribute of a module."""

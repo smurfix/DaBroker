@@ -19,7 +19,7 @@ from dabroker import patch; patch()
 
 from gevent import spawn
 
-from dabroker.util.tests import test_init,LocalQueue,TestMain,TestRoot,TestClient,TestServer
+from dabroker.util.tests import test_init,TestMain,TestRoot,TestClient,TestServer
 
 logger = test_init("test.09.localmsg")
 

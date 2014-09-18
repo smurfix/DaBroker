@@ -39,8 +39,9 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 	def __init__(self, cfg={}, loader=None, adapters=()):
 		# the sender might be set later
 		logger.debug("Setting up")
-		self.cfg = default_config.copy()
-		self.cfg.update(cfg)
+		self.cfg = cfg
+		for k,v in default_config.items():
+			self.cfg.setdefault(k,v)
 
 		if loader is None:
 			loader = Loaders(server=self)
@@ -227,6 +228,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 					else:
 						proc = getattr(self,'do_'+m)
 				except AttributeError:
+					import pdb;pdb.set_trace()
 					raise UnknownCommandError((m,o))
 				msg = proc(*a,**msg)
 				logger.debug("reply %r",msg)

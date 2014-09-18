@@ -78,3 +78,10 @@ Warning: If you want your transport to support multiple independent
 servers, you need to make sure that a server's broadcast message reaches
 all clients, no matter which server they're currently talking to.
 
+There is also a local transport, surprisingly named "local", which you can
+use if the server thread lives in the same process as your client. It is
+mainly useful for testing. Note that the server part adds a special
+`_LocalQueue` element to the configuration dictionary which the client
+needs to read. You therefore need to setup the server first, but that's a
+reasonable thing to do in any case.
+

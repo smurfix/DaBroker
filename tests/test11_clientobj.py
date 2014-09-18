@@ -21,7 +21,7 @@ from dabroker.client.codec import baseclass_for, ClientBaseObj
 
 from gevent import spawn
 
-from dabroker.util.tests import test_init,LocalQueue,TestMain,TestRoot,TestClient,TestServer
+from dabroker.util.tests import test_init,TestMain,TestRoot,TestClient,TestServer
 
 logger = test_init("test.11.lclientobj")
 

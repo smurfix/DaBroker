@@ -29,6 +29,7 @@ class Transport(AmqpTransport):
 		delivery_info = msg.delivery_info
 
 		m = self.decode_msg(msg)
+		if m is None: return
 		try:
 			response = self.callbacks.recv(m)
 		except Exception as e:

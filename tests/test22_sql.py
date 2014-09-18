@@ -26,7 +26,7 @@ from dabroker.util import cached_property
 from gevent import spawn
 from gevent.event import AsyncResult
 
-from dabroker.util.tests import test_init,LocalQueue,TestMain,TestClient
+from dabroker.util.tests import test_init,TestMain,TestClient
 
 logger = test_init("test.22.sql")
 logger_s = test_init("test.22.sql.server")

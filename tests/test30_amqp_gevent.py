@@ -24,7 +24,7 @@ from dabroker.util.thread import AsyncResult, Thread
 
 from gevent import spawn
 
-from dabroker.util.tests import test_init,LocalQueue,TestMain,test_cfg_s,test_cfg_c, cfg_merge
+from dabroker.util.tests import test_init,TestMain,test_cfg, cfg_merge
 
 logger = test_init("test.30.amqp")
 
@@ -65,12 +65,12 @@ class ClientThread(Thread):
 
 logger.debug("Starting the server")
 e = AsyncResult()
-s = ServerThread(cfg=cfg_merge(test_cfg_s,cfg), ready=e).start()
+s = ServerThread(cfg=cfg_merge(test_cfg,cfg), ready=e).start()
 ts = e.get(timeout=5)
 if ts is None:
 	raise RuntimeError("Server did not run")
 
-c = ClientThread(cfg=cfg_merge(test_cfg_c,cfg)).start()
+c = ClientThread(cfg=cfg_merge(test_cfg,cfg)).start()
 c.join(timeout=5)
 if not c.ready:
 	c.kill()
