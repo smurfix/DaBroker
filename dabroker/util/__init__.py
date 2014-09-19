@@ -71,6 +71,22 @@ def import_string(name):
 
 class _missing: pass
 
+class attrdict(dict):
+	"""A dictionary which can be accessed via attributes, for convenience"""
+	def __init__(self,*a,**k):
+		super(attrdict,self).__init__(*a,**k)
+		self._done = set()
+
+	def __getattr__(self,a):
+		return self[a]
+	def __setattr__(self,a,b):
+		if a.startswith("_"):
+			super(attrdict,self).__setattr__(a,b)
+		else:
+			self[a]=b
+	def __delattr__(self,a):
+		del self[a]
+
 class cached_property(object):
 	"""A decorator that converts a function into a lazy property.
 
