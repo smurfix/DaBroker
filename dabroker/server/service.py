@@ -228,7 +228,6 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 					else:
 						proc = getattr(self,'do_'+m)
 				except AttributeError:
-					import pdb;pdb.set_trace()
 					raise UnknownCommandError((m,o))
 				msg = proc(*a,**msg)
 				logger.debug("reply %r",msg)
