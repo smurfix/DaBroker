@@ -17,6 +17,7 @@ from ..base.config import default_config
 from ..base.service import current_service
 from hashlib import sha1 as mac
 from base64 import b64encode
+from six import integer_types
 
 # This is the server's storage side.
 
@@ -33,7 +34,7 @@ def make_secret(key):
 		secret = mac(default_config['SECRET_KEY'].encode('utf-8'))
 	m = secret.copy()
 	for k in key:
-		if isinstance(k,int):
+		if isinstance(k,integer_types):
 			k = str(k)
 		if not isinstance(k,bytes):
 			k = k.encode('utf-8')
