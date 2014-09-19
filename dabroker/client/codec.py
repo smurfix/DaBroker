@@ -13,7 +13,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ##BP
 
 from weakref import ref,WeakValueDictionary
-from ..base import BaseRef,BaseObj, BrokeredInfo, BrokeredInfoInfo, adapters as baseAdapters, common_BaseObj,common_BaseRef
+from ..base import BaseRef,BaseObj, BrokeredInfo, BrokeredInfoInfo, adapters as baseAdapters, common_BaseObj,common_BaseRef, NoData,ManyData
 from ..base.service import current_service
 
 import logging

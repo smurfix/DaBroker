@@ -20,6 +20,11 @@ class UnknownCommandError(Exception):
 	def __str__(self):
 		return "Unknown command: {}".format(repr(self.cmd))
 
+class NoData(RuntimeError):
+    pass
+class ManyData(RuntimeError):
+    pass
+
 def get_attrs(obj, meta=None):
 	"""Return a dict with my attributes"""
 	if meta is None:
