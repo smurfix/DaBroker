@@ -14,12 +14,9 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # generic test setup
 
-from pprint import pformat
-from gevent import spawn,sleep,GreenletExit
-from weakref import ref, WeakValueDictionary
 from dabroker.util import format_msg
 
-import logging,sys,os
+import logging,os
 logger = logging.getLogger("dabroker.base.transport.local")
 
 try:
