@@ -30,7 +30,7 @@ def make_secret(key):
 
 	global secret
 	if secret is None:
-		secret = mac(default_config['SECRET'].encode('utf-8'))
+		secret = mac(default_config['SECRET_KEY'].encode('utf-8'))
 	m = secret.copy()
 	for k in key:
 		if isinstance(k,int):
