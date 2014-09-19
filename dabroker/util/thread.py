@@ -40,6 +40,8 @@ class local_stack(LocalStack):
 
 local_info = local_object()
 
+aux_cleanup = []
+
 class Thread(object):
 	"""\
 		A generic thread, intended to be able to be used with greenlets as well as OS threads.
@@ -62,6 +64,8 @@ class Thread(object):
 			pass
 		finally:
 			local_objects.cleanup()
+			for p in aux_cleanup:
+				p()
 			
 	def start(self):
 		assert self.job is None
