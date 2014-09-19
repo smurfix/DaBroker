@@ -18,6 +18,7 @@ from ...util import TZ,UTC, format_dt
 from ..config import default_config
 import datetime as dt
 from collections import namedtuple
+from dabroker.util import attrdict
 
 from traceback import format_tb
 import logging
@@ -136,6 +137,19 @@ class _time(object):
 			return dt.datetime.utcfromtimestamp(t).time()
 		return dt.time(*a)
 
+@codec_adapter
+class _attrdict(object):
+	cls = attrdict
+	clsname = "adict"
+
+	@staticmethod
+	def encode(obj, include=False):
+		return dict(**obj)
+
+	@staticmethod
+	def decode(**k):
+		return attrdict(**k)
+
 scalar_types = {type(None),float,bytes}
 from six import string_types,integer_types
 for s in string_types+integer_types: scalar_types.add(s)
@@ -226,7 +240,7 @@ class BaseCodec(object):
 			return res
 
 		odata = data
-		if not isinstance(data,dict):
+		if type(data) is not dict:
 			obj = self.type2cls.get(type(data),None)
 			if obj is None:
 				raise NotImplementedError("I don't know how to encode %s: %r"%(repr(data.__class__),data,))
@@ -240,7 +254,7 @@ class BaseCodec(object):
 				nk = k
 			# if `include` is None, keep that value.
 			res[nk] = self._encode(v,objcache,objref, include=False if include else include)
-		if not isinstance(odata,dict):
+		if type(odata) is not dict:
 			res['_o'] = obj.clsname
 		if objref is not None:
 			res['_oi'] = oid
@@ -332,7 +346,7 @@ class BaseCodec(object):
 		if isinstance(data,(list,tuple)):
 			return type(data)(self._decode(v,objcache,objtodo) for v in data)
 
-		if isinstance(data,dict):
+		if type(data) is dict:
 			oid = data.pop('_oi',None)
 			obj = data.pop('_o',None)
 			objref = data.pop('_or',None)
@@ -385,7 +399,7 @@ class BaseCodec(object):
 			
 			Reverse everything the encoder does as cleanly as possible.
 			"""
-		if isinstance(data,dict) and '_error' in data:
+		if type(data) is dict and '_error' in data:
 			raise ServerError(data['_error'],data.get('tb',None))
 
 		objcache = {}
