@@ -261,21 +261,22 @@ class call_proc(object):
 			return self
 
 		def c(*a,**k):
-			if self.cached and not obj._obsolete:
-				kws = self.name+':'+search_key(a,k)
-				ckey = " ".join(str(x) for x in obj._key.key)+":"+kws
+			with obj._dab.env:
+				if self.cached and not obj._obsolete:
+					kws = self.name+':'+search_key(a,k)
+					ckey = " ".join(str(x) for x in obj._key.key)+":"+kws
 
-				res = obj.call_cache.get(kws,_NotGiven)
-				if res is not _NotGiven:
-					res = res.data
-					current_service.top._cache[ckey] # Lookup to increase counter
-					return res
-			res = obj._meta._dab.call(obj,self.name, a,k)
-			if self.cached and not obj._obsolete:
-				rc = CacheProxy(res)
-				obj.call_cache[kws] = rc
-				current_service.top._cache[ckey] = rc
-			return res
+					res = obj.call_cache.get(kws,_NotGiven)
+					if res is not _NotGiven:
+						res = res.data
+						current_service.top._cache[ckey] # Lookup to increase counter
+						return res
+				res = obj._meta._dab.call(obj,self.name, a,k)
+				if self.cached and not obj._obsolete:
+					rc = CacheProxy(res)
+					obj.call_cache[kws] = rc
+					current_service.top._cache[ckey] = rc
+				return res
 		c.__name__ = str(self.name)
 		return c
 
