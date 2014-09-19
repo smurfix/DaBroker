@@ -216,8 +216,13 @@ class BaseCodec(object):
 			if objref is None:
 				return data
 
-			res = { '_o':'LIST','_oi':oid,'_d':data }
-			objcache[did] = (oid,res)
+
+			if self.try_simple >= 1000:
+				res = data
+				objcache[did] = None
+			else:
+				res = { '_o':'LIST','_oi':oid,'_d':data }
+				objcache[did] = (oid,res)
 			return res
 
 		odata = data
