@@ -14,34 +14,15 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # generic test setup
 
-from gevent import spawn,sleep,GreenletExit
 from weakref import ref, WeakValueDictionary
 
-import logging,sys,os
-logger = logging.getLogger("dabroker.server.transport.local")
-
-def test_init(who):
-	if os.environ.get("TRACE","0") == '1':
-		level = logging.DEBUG
-	else:
-		level = logging.WARN
-
-	logger = logging.getLogger(who)
-	logging.basicConfig(stream=sys.stderr,level=level)
-
-	return logger
-
-# reduce cache sizes and timers
-
-from dabroker.base import BaseObj,BrokeredInfo, Field,Ref,Callable
-from dabroker.base.config import default_config
 from dabroker.base.transport import BaseTransport
 from dabroker.base.transport.local import RPCmessage,LocalQueue
 from dabroker.util import format_msg
-from dabroker.util.thread import Main, AsyncResult, spawned
-from dabroker.client import BrokerClient
-from dabroker.client import service as cs
-from dabroker.server import BrokerServer
+from dabroker.util.thread import spawned
+
+import logging,sys,os
+logger = logging.getLogger("dabroker.server.transport.local")
 
 class Transport(BaseTransport):
 	"""Server side of the LocalQueue transport"""
