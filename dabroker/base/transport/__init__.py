@@ -119,18 +119,20 @@ class BaseTransport(object):
 			logger.debug("Running receiver loop: %r",self)
 			self.run()
 		except GreenletExit:
+			err=None
 			logger.debug("Receiver loop ends: %r",self)
 			self.callbacks.ended(None)
 		except BaseException as e:
+			err = e
 			logger.exception("Receiver loop error: %r",self)
 			self.callbacks.ended(e)
 		else:
-			e=None
+			err=None
 			logger.debug("Receiver loop ends: %r",self)
 			self.callbacks.ended(None)
 		finally:
 			self.disconnected()
 			if self._job is not None:
 				self._job = None
-				self.callbacks.reconnect(e)
+				self.callbacks.reconnect(err)
 
