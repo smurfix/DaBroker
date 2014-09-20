@@ -371,6 +371,7 @@ class BaseCodec(object):
 			res = {}
 			for k,v in data.items():
 				if k.startswith("_o"):
+					assert nk[2] == '_',nk # unknown meta key?
 					nk = '_o'+k[3:]
 				else:
 					nk = k
