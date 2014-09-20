@@ -195,12 +195,18 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 			"""
 		key = obj._key
 		mkey = obj._meta._key
+		fields = obj._meta.refs
 		refs = obj._meta.refs
 		for k,on in attrs.items():
 			ov,nv = on
 			if k in refs:
+				if getattr(refs[k],'hidden'):
+					continue
 				if ov is not None: ov = ov._key
 				if nv is not None: nv = nv._key
+			elif k in fields:
+				if getattr(fields[k],'hidden'):
+					continue
 			if ov != nv:
 				attrs[k] = (ov,nv)
 		self.send("invalid_key", _key=key, _meta=mkey, _include=None, **attrs)

@@ -158,15 +158,21 @@ When in doubt, use multiple processes.
 Access control
 ##############
 
-None.
+None, so far.
 
-However, you can tell the DaBroker server to export a root object that only
+However, you can tell your DaBroker server to export a root object that only
 has an "auth" method, which clients need to call with correct parameters in
 order to get at the actual data.
 
-While the stream of broadcast messages does contain details of obsolete
-objects, actual object references contain a hash value which is required
-for accessing them.
+Retrieving or modifying object data is secured by a hash value which the
+server only sends to a client that receives that specific object. This
+prevents clients from maliciously retrieving or changing random objects.
+
+However, the server's broadcast messages contain details of obsolete, new,
+and changed objects. Otherwise the client cache could not be cleared.
+Set the "hidden" attribute on a field or reference if you want to block
+a specific field – either for privacy, or when you know that you never
+search for it anyway and want to save some bandwidth.
 
 Source, Documentation, etc.
 ###########################

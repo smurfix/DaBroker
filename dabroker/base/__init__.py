@@ -188,11 +188,13 @@ class _attr(object):
 			setattr(self,k,v)
 
 class Field(_attr):
-	"""A standard data field; may be a dict/list"""
+	"""A standard data field; may be a dict/list.
+		Set the "hidden" attribute to True if you don't want this value broadcast."""
 	pass
 
 class Ref(_attr):
-	"""A reference to another BrokeredBase object"""
+	"""A reference to another BrokeredBase object.
+		Set the "hidden" attribute to True if you don't want this value broadcast."""
 	pass
 
 class BackRef(_attr):
