@@ -55,12 +55,13 @@ class SupD(dict):
 
 class ServerError(Exception):
 	"""An encapsulation for a server error (with traceback)"""
-	def __init__(self,err,tb):
+	def __init__(self,err,name,tb):
 		self.err = err
+		self.name = name
 		self.tb = tb
 
 	def __repr__(self):
-		return "ServerError({})".format(repr(self.err))
+		return "{}({})".format(self.name or "ServerError", repr(self.err))
 
 	def __str__(self):
 		r = repr(self)
@@ -319,10 +320,13 @@ class BaseCodec(object):
 			data should be strings (or, in case of the traceback, a list of
 			strings).
 			"""
-		ename = error_rev.get(type(err),'*')
-		if not hasattr(err,'swapcase'): # it's a string
-			err = str(err)
-		res = {'_error':err, '_ename':ename }
+		res = {'id': error_rev.get(type(err),'*')}
+
+		if isinstance(err,string_types):
+			res['_error'] = err
+		else:
+			res['_error'] = str(err)
+			res['typ'] = err.__class__.__name__
 
 		if tb is not None:
 			if hasattr(tb,'tb_frame'):
@@ -410,11 +414,11 @@ class BaseCodec(object):
 			Reverse everything the encoder does as cleanly as possible.
 			"""
 		if type(data) is dict and '_error' in data:
-			real_error = error_list.get(data.get('_etyp','*'))
+			real_error = error_list.get(data.get('id','*'),ServerError)
 			if real_error is ServerError:
-				raise ServerError(data['_error'],data.get('tb',None))
+				raise ServerError(data['_error'],data.get('typ',None),data.get('tb',None))
 			else:
-				raise RealError(data['_error'])
+				raise real_error(data['_error'])
 
 		objcache = {}
 		objtodo = []
