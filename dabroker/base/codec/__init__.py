@@ -150,6 +150,7 @@ class _time(object):
 class _attrdict(object):
 	cls = attrdict
 	clsname = "adict"
+	include = True
 
 	@staticmethod
 	def encode(obj, include=False):
@@ -249,10 +250,14 @@ class BaseCodec(object):
 			return res
 
 		odata = data
+		inc = 2
+		# Marker to use the field key
+
 		if type(data) is not dict:
 			obj = self.type2cls.get(type(data),None)
 			if obj is None:
 				raise NotImplementedError("I don't know how to encode %s: %r"%(repr(data.__class__),data,))
+			inc = getattr(obj,"include",inc)
 			data = obj.encode(data, include=include)
 			if isinstance(data,tuple):
 				obj,data = data
@@ -260,6 +265,10 @@ class BaseCodec(object):
 				obj = obj.clsname
 		else:
 			obj = None
+			inc = True
+		if not include:
+			# override with existing None/False values
+			inc = include
 
 		res = type(data)()
 		for k,v in data.items():
@@ -269,7 +278,8 @@ class BaseCodec(object):
 				nk = k
 			# if `include` is None, or if packing a toplevel non-object
 			# (or an object field that's not a ref), keep that value.
-			res[nk] = self._encode(v,objcache,objref, include=False if (include and obj is not None and k != 'f') else include)
+
+			res[nk] = self._encode(v,objcache,objref, include=((k == "f") if (inc == 2) else inc))
 		if obj is not None:
 			res['_o'] = obj
 		if objref is not None:
