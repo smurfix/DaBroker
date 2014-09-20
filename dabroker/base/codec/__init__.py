@@ -16,6 +16,7 @@ import sys
 from time import mktime
 from ...util import TZ,UTC, format_dt
 from ..config import default_config
+from .. import NoData,ManyData
 import datetime as dt
 from collections import namedtuple
 from dabroker.util import attrdict
@@ -65,6 +66,13 @@ class ServerError(Exception):
 		r = repr(self)
 		if self.tb is None: return r
 		return r+"\n"+"".join(self.tb)
+
+error_list = {
+	'*': ServerError,
+	'_n': NoData,
+	'_m': ManyData,
+}
+error_rev = dict((v,k) for k,v in error_list.items())
 
 _basics = []
 def codec_adapter(cls):
@@ -311,9 +319,10 @@ class BaseCodec(object):
 			data should be strings (or, in case of the traceback, a list of
 			strings).
 			"""
+		ename = error_rev.get(type(err),'*')
 		if not hasattr(err,'swapcase'): # it's a string
 			err = str(err)
-		res = {'_error':err }
+		res = {'_error':err, '_ename':ename }
 
 		if tb is not None:
 			if hasattr(tb,'tb_frame'):
@@ -401,7 +410,11 @@ class BaseCodec(object):
 			Reverse everything the encoder does as cleanly as possible.
 			"""
 		if type(data) is dict and '_error' in data:
-			raise ServerError(data['_error'],data.get('tb',None))
+			real_error = error_list.get(data.get('_etyp','*'))
+			if real_error is ServerError:
+				raise ServerError(data['_error'],data.get('tb',None))
+			else:
+				raise RealError(data['_error'])
 
 		objcache = {}
 		objtodo = []
