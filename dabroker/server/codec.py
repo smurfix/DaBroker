@@ -12,7 +12,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-from ..base import BaseRef,BaseObj,BrokeredInfo, adapters as baseAdapters, common_BaseObj,common_BaseRef
+from ..base import BaseRef,BaseObj,BrokeredInfo,BrokeredInfoInfo, adapters as baseAdapters, common_BaseObj,common_BaseRef
 from ..base.config import default_config
 from ..base.service import current_service
 from hashlib import sha1 as mac
@@ -101,4 +101,17 @@ class server_InfoObj(server_BaseObj):
 	def decode(f=None,**kw):
 		assert f is None
 		return server_BaseObj.decode(**kw)
+
+@codec_adapter
+class server_InfoMeta(object):
+    cls = BrokeredInfoInfo
+    clsname = "_ROOT"
+
+    @staticmethod
+    def encode(obj, include=False):
+        return {}
+
+    @staticmethod
+    def decode(**attr):
+        return broker_info_meta
 

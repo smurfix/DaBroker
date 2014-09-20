@@ -97,16 +97,18 @@ class common_BaseRef(object):
 	cls = BaseRef
 	clsname = "Ref"
 	
-	@staticmethod
-	def encode(ref, include=False, meta=None):
+	@classmethod
+	def encode(cls,ref, include=False, meta=None):
 		assert not include
 		res = {}
 		res['k'] = ref.key
-		if meta is not None: # set by the server to tag ref types
-			res['m'] = meta
+#		if meta is not None: # set by the server to tag ref types
+#			res['m'] = meta.key
 		if ref.code is not None and include is not None:
+			if ref.code == "ROOT":
+				raise RuntimeError("The root object is never referenced")
 			res['c'] = ref.code
-		return res
+		return cls.clsname,res
 
 class common_BaseObj(object):
 	"""Common base class for object coding; overridden in client and server"""
@@ -134,7 +136,12 @@ class common_BaseObj(object):
 		if not include:
 			return common_BaseRef.encode(obj._key, include=False)
 			
-		res = common_BaseRef.encode(obj._key)
+		rx = common_BaseRef.encode(obj._key)
+		if isinstance(rx,tuple):
+			res = rx[1]
+		else:
+			res = rx
+
 		res['f'] = f = dict()
 		for k in obj._meta.fields.keys():
 			f[k] = getattr(obj,k)
@@ -149,13 +156,24 @@ class BrokeredInfo(BaseObj):
 	"""\
 		This class is used for metadata about Brokered objects.
 		It is immutable on the client.
+
+		The `cached` attribute specifies how client-side search works
+		(i.e. the meta-object's `get` and `find` methods).
+
+		None: No search, explicitly exported methods only.
+		False: Searches should not be cached.
+		True: Searches are cached normally.
 		"""
 	name = None
 	_meta = None
+	cached = None
 
 	def __init__(self,name=None):
 		super(BrokeredInfo,self).__init__()
-		self.name = name
+		if name is not None:
+			self.name = name
+		elif self.name is None:
+			self.name = self.__class__.__name__
 		self.fields = dict()
 		self.refs = dict()
 		self.backrefs = dict()
@@ -248,26 +266,15 @@ class BrokeredMeta(BrokeredInfo):
 		self.add(Field("refs"))
 		self.add(Field("backrefs"))
 		self.add(Field("calls"))
+		self.add(Field("cached"))
 
-class BrokeredInfoInfo(BrokeredMeta):
+class BrokeredInfoInfo(BrokeredMeta,BaseRef):
 	"""This singleton is used for metadata about BrokeredInfo objects."""
 	def __init__(self):
 		super(BrokeredInfoInfo,self).__init__("BrokeredInfoInfo Singleton")
-		self._key = BaseRef(meta=self,key=(),code="ROOT")
+		BaseRef.__init__(self, meta=self,key=(),code="ROOT")
+		self._key = self
 
 broker_info_meta = BrokeredInfoInfo()
 BrokeredInfo._meta = broker_info_meta
-
-@codec_adapter
-class common_InfoMeta(object):
-	cls = BrokeredInfoInfo
-	clsname = "_ROOT"
-	
-	@staticmethod
-	def encode(obj, include=False):
-		return {}
-	
-	@staticmethod
-	def decode(**attr):
-		return broker_info_meta
 

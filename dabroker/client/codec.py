@@ -72,6 +72,9 @@ def baseclass_for(*k):
 	return proc
 
 class ClientBrokeredInfo(BrokeredInfo):
+	"""\
+		This is the base class for client-side meta objects.
+		"""
 	def __init__(self,*a,**k):
 		super(ClientBrokeredInfo,self).__init__(*a,**k)
 		self.searches = WeakValueDictionary()
@@ -79,7 +82,7 @@ class ClientBrokeredInfo(BrokeredInfo):
 
 	def class_(self,is_meta):
 		"""\
-			Determine which base class to use for these objects
+			Determine which class to use for objects with this as metaclass
 			"""
 		ClientObj = self._class[is_meta]
 		if ClientObj is not None:
@@ -149,16 +152,26 @@ class ClientBrokeredInfo(BrokeredInfo):
 		return ClientObj
 
 	def find(self, **kw):
-		return self.client.find(self,**kw)
-		
+		if self.cached is None:
+			raise RuntimeError("You cannot search this class")
+		for r in self.client.find(self, _cached=self.cached, **kw):
+			if not isinstance(r,BaseObj):
+				r = r()
+			yield r
+
 	def get(self, **kw):
-		res = self.find(_limit = 2, **kw)
+		if self.cached is None:
+			raise RuntimeError("You cannot search this class")
+		res = list(self.client.find(self, _limit=2,_cached=self.cached, **kw))
 		if len(res) == 0:
 			raise NoData
 		elif len(res) == 2:
 			raise ManyData
 		else:
-			return res[0]
+			res = res[0]
+			if not isinstance(res,BaseObj):
+				res = res()
+			return res
 
 class ClientBrokeredInfoInfo(ClientBrokeredInfo,BrokeredInfoInfo):
 	"""\
@@ -244,7 +257,10 @@ class backref_handler(object):
 
 	def __getitem__(self,i):
 		obj,ref = self._deref()
-		return obj._meta._dab.send("backref_idx",obj, self.name,i)
+		res = obj._meta._dab.send("backref_idx",obj, self.name,i)
+		if isinstance(res,BaseRef):
+			res = res()
+		return res
 
 	def __len__(self):
 		obj,ref = self._deref()
@@ -297,15 +313,14 @@ class ClientBaseRef(BaseRef):
 
 	def __call__(self):
 		return self._dab.get(self)
-
+	
 @codec_adapter
 class client_BaseRef(common_BaseRef):
 	cls = ClientBaseRef
 
 	@staticmethod
 	def decode(k,c=None):
-		res = ClientBaseRef(key=tuple(k),code=c)
-		return res
+		return ClientBaseRef(key=tuple(k),code=c)
 
 @codec_adapter
 class client_BaseObj(common_BaseObj):
@@ -328,11 +343,20 @@ class client_BaseObj(common_BaseObj):
 			Decode a reference.
 			"""
 		k = ClientBaseRef(key=k,code=c)
+		mc = None
+		if m is None:
+			if r and '_meta' in r:
+				m = r['_meta']
+				if not isinstance(m,BaseObj):
+					r['_meta'] = m = m()
 		if m is not None:
-			res = m.class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
-		elif r and '_meta' in r:
-			r['_meta'] = m = current_service.top.get(r['_meta'])
-			res = m.class_(_is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
+			if isinstance(m,ClientBaseRef):
+				m = current_service.top.get(m)
+			mc = getattr(m.__class__,'class_',None)
+		if mc is not None:
+			res = mc(m, _is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
+			if _is_meta:
+				res.__name__ += str("."+f['name'])
 		else:
 			res = ClientBaseObj
 
@@ -366,4 +390,18 @@ class client_InfoObj(client_BaseObj):
 		res = client_BaseObj.decode(_is_meta=True, k=k,c=c,f=f,**kw)
 		res.client = current_service.top
 		return res
+
+@codec_adapter
+class client_InfoMeta(object):
+    cls = ClientBrokeredInfoInfo
+    clsname = "_ROOT"
+
+    @staticmethod
+    def encode(obj, include=False):
+        return {}
+
+    @staticmethod
+    def decode(**attr):
+        return client_broker_info_meta
+
 

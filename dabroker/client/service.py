@@ -342,10 +342,12 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 
 	def get(self, key):
 		"""Get an object, from cache or from the server."""
+		logger.debug("Lookup A: %s",key)
 
 		# Step 1: if we locally changed the object, return our copy.
 		chg = self.obj_chg.get(key,None)
 		if chg is not None:
+			logger.debug("Lookup B: %s",chg.obj)
 			return chg.obj
 
 		# Step 2: Get it from cache.
@@ -354,6 +356,7 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 		if obj is not None:
 			if isinstance(obj,AsyncResult):
 				obj = obj.get(timeout=RETR_TIMEOUT)
+			logger.debug("Lookup C: %s",obj)
 			return obj
 
 		# Step 3: Get it from the network.
@@ -366,7 +369,8 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 			# Owch.
 			# Remove the AsyncResult from cache, and forward the exception to any waiters
 			arx = self._cache.pop(key)
-			assert ar == arx
+			logger.exception("Ouch %r %r",ar,arx)
+			assert ar is arx, (ar,arx)
 			ar.set_exception(e)
 			# As `ar` is unused beyond this point, its value might already
 			# gone from the cache (weak reference!) if we just use the
@@ -374,7 +378,9 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 			raise
 		else:
 			# The deserializer has already added the object to the cache (or it should have)
-			assert self._cache.get(key,None) is obj
+			cobj = self._cache.get(key,None)
+			assert cobj is obj, (cobj,obj,key)
+			logger.debug("Lookup D: %s",obj)
 			return obj
 		
 	def obj_new(self,cls,**kw):
@@ -418,21 +424,25 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 		chg = self.obj_chg; self.obj_chg = {}
 		self._rollback(chg)
 	
-	def find(self, typ, _limit=None, **kw):
+	def find(self, typ, _cached=False,_limit=None, **kw):
 		"""Find objects by keyword"""
-		kws = search_key(None,kw)
-		ks = typ.searches.get(kws,None)
-		if ks is not None and (not ks.limit or (_limit and _limit <= len(ks.res))):
-			self._cache[ks.ckey] # update the access counter
-			if _limit:
-				return ks.res[:_limit]
-			else:
-				return ks.res
+		if _cached:
+			kws = search_key(None,kw)
+			ks = typ.searches.get(kws,None)
+			if ks is not None and (not ks.limit or (_limit and _limit <= len(ks.res))):
+				self._cache[ks.ckey] # update the access counter
+				if _limit:
+					return ks.res[:_limit]
+				else:
+					return ks.res
 		
-		skw = {'k':kw}
+		kw['_obj'] = typ
 		if _limit is not None:
-			skw['lim'] = _limit
-		res = self.send("find",typ._key, **skw)
+			kw['_limit'] = _limit
+		res = self.send("search", **kw)
+		if not _cached:
+			return res
+
 		ckey = " ".join(str(x) for x in typ._key.key)+":"+kws
 
 		if _limit and len(res) < _limit:
@@ -484,6 +494,11 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 		if obj is None:
 			# logger.warn("metadata not found: %s for %s",_meta,_key)
 			return
+		if isinstance(obj,AsyncResult):
+			logger.debug("inval_key: wait for %r",_meta)
+			obj = obj.get(timeout=RETR_TIMEOUT)
+			logger.debug("inval_key: wait for %r: got %r",_meta,obj)
+
 		obsolete = set()
 
 		# What this does: a search checks a number of keys for specific

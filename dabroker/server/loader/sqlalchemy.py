@@ -115,17 +115,7 @@ class SQLInfo(BrokeredInfo):
 			self.fixup(r)
 		return res
 	find.include = True
-
-	@with_session
-	def obj_find(self,session,_limit=None, **kw):
-		res = session.query(self.model).filter_by(**kw)
-		if _limit is not None:
-			res = res[:_limit]
-		res = list(res)
-		for r in res:
-			self.fixup(r)
-		return res
-	find.include = True
+	obj_find=find
 
 	@with_session
 	def get(self, session,*key, **kw):
@@ -204,8 +194,8 @@ class SQLLoader(BaseLoader):
 			m = BrokeredMeta("sql")
 			self.model_meta.append(m)
 			if rw:
-				#m.add(Callable("get", cached=True))
-				#m.add(Callable("find", cached=True))
+				m.add(Callable("get", cached=True))
+				m.add(Callable("find", cached=True))
 				m.session = session
 				if rw > 1:
 					m.add(Callable("new"))

@@ -156,12 +156,6 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 			attrs = k
 		self.send_updated(obj, attrs)
 
-	def do_find(self, key, lim=None, k={}):
-		"""Search for objects"""
-		logger.debug("find %r %r",key,k)
-		return key.obj_find(_limit=lim,**k)
-	do_find.include = True
-		
 	def do_backref_idx(self, obj, name,idx):
 		"""Get an item from the backref list. This is severely suboptimal."""
 		return obj._meta.backref_idx(obj,name,idx)
@@ -215,6 +209,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 
 	def recv(self, msg):
 		"""Receive a message. Usually called as a separate thread."""
+		incl = False
 		with self.env:
 			logger.debug("recv raw %r",msg)
 
@@ -229,16 +224,19 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 
 				try:
 					if o is not None:
-						assert m in o._meta.calls,"You cannot call method {} of {}".format(m,o)
+						if m == "search" and getattr(o,'cached',None) is not None:
+							incl = msg.get('_limit',99) < 10
+						else:
+							assert m in o._meta.calls,"You cannot call method {} of {}".format(m,o)
 						proc = getattr(o,m)
 					else:
 						proc = getattr(self,'do_'+m)
 				except AttributeError:
-					raise UnknownCommandError((m,o))
+					raise UnknownCommandError((m,o,a))
 				msg = proc(*a,**msg)
 				logger.debug("reply %r",msg)
 				try:
-					msg = self.codec.encode(msg, include = getattr(proc,'include',False))
+					msg = self.codec.encode(msg, include = getattr(proc,'include',incl))
 				except Exception:
 					print("RAW was",rmsg,file=sys.stderr)
 					print("MSG is",msg,file=sys.stderr)

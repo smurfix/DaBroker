@@ -103,6 +103,7 @@ class Test25_server(BrokerServer):
 		res = self.obj_new(P,*key,**kw)
 		logger.debug("mangle: new done")
 		return res
+	do_mangle_new.include = True
 
 	def do_mangle_update(self,p,**kw):
 		logger.debug("mangle: update: %s %r",p,kw)
@@ -196,7 +197,7 @@ class Test25_client(TestClient):
 		a1 = p1.addrs[0]
 		a2 = A.get(street="Rubble Way")
 
-		assert a1 is a2
+		assert a1 is a2,(a1,a2)
 		assert len(q1.addrs) == 0
 
 		self.send("mangle_update",p1,name="Freddy Firestone")

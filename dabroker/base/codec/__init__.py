@@ -254,6 +254,12 @@ class BaseCodec(object):
 			if obj is None:
 				raise NotImplementedError("I don't know how to encode %s: %r"%(repr(data.__class__),data,))
 			data = obj.encode(data, include=include)
+			if isinstance(data,tuple):
+				obj,data = data
+			else:
+				obj = obj.clsname
+		else:
+			obj = None
 
 		res = type(data)()
 		for k,v in data.items():
@@ -261,10 +267,11 @@ class BaseCodec(object):
 				nk = '_o_'+k[2:]
 			else:
 				nk = k
-			# if `include` is None, keep that value.
-			res[nk] = self._encode(v,objcache,objref, include=False if include else include)
-		if type(odata) is not dict:
-			res['_o'] = obj.clsname
+			# if `include` is None, or if packing a toplevel non-object
+			# (or an object field that's not a ref), keep that value.
+			res[nk] = self._encode(v,objcache,objref, include=False if (include and obj is not None and k != 'f') else include)
+		if obj is not None:
+			res['_o'] = obj
 		if objref is not None:
 			res['_oi'] = oid
 		objcache[did] = (oid,res)

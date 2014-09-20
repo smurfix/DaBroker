@@ -103,6 +103,7 @@ class Test24_server(BrokerServer):
 		res = self.obj_new(P,*key,**kw)
 		logger.debug("mangle: new done")
 		return res
+	do_mangle_new.include = True
 
 	def do_mangle_update(self,p,**kw):
 		logger.debug("mangle: update: %s %r",p,kw)

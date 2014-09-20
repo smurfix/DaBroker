@@ -28,9 +28,12 @@ logger_s = test_init("test.21.objbase.server")
 
 class SearchBrokeredInfo(BrokeredInfo):
 	objs = []
+	cached = True
+
 	def obj_add(self,obj):
 		self.objs.append(obj)
-	def obj_find(self,_limit=None,**kw):
+
+	def search(self,_limit=None,**kw):
 		res = []
 		for obj in self.objs:
 			for k,v in kw.items():
@@ -39,6 +42,7 @@ class SearchBrokeredInfo(BrokeredInfo):
 			else:
 				res.append(obj)
 		return res
+	search.include=True
 
 class Test21_server(TestServer):
 	@cached_property
@@ -124,6 +128,10 @@ class Test21_client(TestClient):
 			assert root._meta.name == "rootMeta" # again, to check caching
 			assert cid==self.cid, (cid,self.cid)
 
+			assert root.ops.rev("test123") == "321tset"
+			assert cid!=self.cid
+			cid=self.cid
+
 			assert root.ops.revc("test123") == "321tset"
 			assert cid!=self.cid
 			cid=self.cid
@@ -133,8 +141,7 @@ class Test21_client(TestClient):
 			cid=self.cid
 
 			assert root.ops.revc("test123") == "321tset"
-			assert cid==self.cid
-			cid=self.cid
+			assert cid==self.cid, (cid,self.cid)
 
 			res = root.ops.revc("test1234")
 			assert res == "4321tset", res
@@ -157,13 +164,13 @@ class Test21_client(TestClient):
 			assert not hasattr(root.ops,"calls")
 
 			o1 = Op.get(hell="Two")
-			assert o1.hell == "Two", o1
-			os = Op.find(hell="Two2")
+			assert o1.hell == "Two", (o1,o1.hell)
+			os = list(Op.find(hell="Two2"))
 			assert len(os) == 0, os
 
 			# 'get' will use limit=2
 			cid=self.cid
-			os = Op.find(hell="Two")
+			os = list(Op.find(hell="Two"))
 			assert len(os) == 1, os
 			assert os[0] is o1, (os,o1)
 			assert cid==self.cid
@@ -172,9 +179,9 @@ class Test21_client(TestClient):
 			self.send("trigger",2)
 			self.go_on.wait()
 
-			os = Op.find(hell="Two")
+			os = list(Op.find(hell="Two"))
 			assert len(os) == 0, os
-			os = Op.find(hell="Two2")
+			os = list(Op.find(hell="Two2"))
 			assert len(os) == 1, os
 
 			global done

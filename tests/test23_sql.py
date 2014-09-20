@@ -79,8 +79,10 @@ class Test23_server(BrokerServer):
 		sql = SQLLoader(DBSession,self)
 		sql.add_model(Person,root.data)
 		self.loader.add_loader(sql)
+		self.hello = "Step 0"
 
 		return root
+	root.include=True
 
 	def do_trigger(self,msg):
 		self.seq += 1
@@ -93,6 +95,7 @@ class Test23_server(BrokerServer):
 		res = self.obj_new(P,*key,**kw)
 		logger.debug("mangle: new done")
 		return res
+	do_mangle_new.include = True
 
 	def do_mangle_update(self,p,**kw):
 		logger.debug("mangle: update: %s %r",p,kw)
