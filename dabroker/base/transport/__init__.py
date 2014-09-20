@@ -66,7 +66,7 @@ class BaseTransport(object):
 		self.cfg.update(cfg)
 		self.callbacks = callbacks
 
-	def connect(self):
+	def connect(self, purge=False):
 		"""Connect. (Synchronously.)
 		
 		Do not override!
@@ -74,6 +74,8 @@ class BaseTransport(object):
 		assert self.callbacks is not None
 		assert self.connection is None
 		self.connect1()
+		if purge:
+			self.purge_all()
 		self.connect2()
 
 	def connect1(self):
@@ -107,6 +109,16 @@ class BaseTransport(object):
 			Do not reconnect from here; do that in your .reconnect"""
 		logger.debug("disconnected: %r",self)
 	
+	def purge_all(self):
+		"""
+			Clear this transport's message queue.
+
+			This should only be called when client and server are known to
+			be idle AND when you suspect an unprocessable message might
+			clog the queue.
+			"""
+		pass
+
 	def send(self,msg):
 		raise NotImplementedError("You need to override {}.send()".format(self.__class__.__name__))
 	

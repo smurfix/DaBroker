@@ -70,8 +70,8 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 	def register_codec(self,adapter):
 		self.codec.register(adapter)
 
-	def start(self):
-		self.transport.connect()
+	def start(self,purge=False):
+		self.transport.connect(purge=purge)
 
 	def stop(self):
 		self.transport.disconnect()

@@ -78,6 +78,9 @@ class TestServer(BrokerServer):
 		self.add_static(root,2,30)
 		return root
 
+	def start(self):
+		super(TestServer,self).start(purge=True)
+		
 	def __init__(self,*a,**k):
 		super(TestServer,self).__init__(*a,**k)
 

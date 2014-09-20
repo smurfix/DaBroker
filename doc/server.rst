@@ -9,16 +9,20 @@ Connecting to DaBroker is easy:
     from dabroker.server import BrokerServer
     broker = BrokerServer(cfg={…})
     broker.root = root
-    broker.start()
+    broker.start(purge=False)
 
-Of course, this begs the question how to construct the root object (or
-others).
+`purge=False` is the default. Set it to True if you cannot restart the
+whole system after a crash/reconfiguration because of old messages in the
+server's queue. This should not usually happen.
+
+Of course, this begs the question how to construct the root (or
+any other objects, for that matter).
 
 Serving objects
 ---------------
 
 `DaBroker` supports strongly-typed objects. It distinguishes attributes
-which refer to other DaBroker single objects (`*-to-one` relationships) or
+which refer to single other DaBroker objects (`*-to-one` relationships) or
 lists (`one-to-many` relationships), methods which the client can call to
 execute code on the server, and "other" data (integers, strings, or
 structured data for which you have registered a codec).

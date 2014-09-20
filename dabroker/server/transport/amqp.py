@@ -39,6 +39,10 @@ class Transport(AmqpTransport):
 		ch.basic_publish(msg=msg, exchange='', routing_key=props['reply_to'])
 		ch.basic_ack(delivery_tag = delivery_info['delivery_tag'])
 
+	def purge_all(self):
+		super(Transport,self).purge_all()
+		self.channel.queue_purge(queue=self.cfg['rpc_queue'])
+
 	def setup_channels(self):
 		self.channel = self.connection.channel()
 		self.channel.queue_declare(queue=self.cfg['rpc_queue'], auto_delete=False, passive=False)
