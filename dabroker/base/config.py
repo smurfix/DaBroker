@@ -15,8 +15,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 import os
 
 default_config = dict(
-    transport="amqp",
-    codec="bson",
+    transport="local",
+    codec="null",
     SECRET_KEY="You really should change this",
 )
 # More defaults are located in the modules which actually use the settings.

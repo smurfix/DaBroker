@@ -19,9 +19,9 @@ Common parameters
         `dabroker.base.codec.NAME.Codec`, or a compound name
         which will be regarded as an object and instantiated directly.
 
-        Default: bson.
+        Default: null, which only works with the "local" transport.
         
-        Transports which accept list+dict can use "null".
+        Available: bson json marshal
 
     *   transport
 
@@ -31,7 +31,12 @@ Common parameters
         `dabroker.server.transport.NAME.Transport`, or a compound name
         which will be regarded as an object and instantiated directly.
 
-        Default: amqp.
+        The default transport will only exchange messages within the same
+        process and requires 
+
+        Default: local.
+
+        Available: amqp.
 
     *   username
 
