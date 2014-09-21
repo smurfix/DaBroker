@@ -46,7 +46,14 @@ class BaseRef(object):
 		@code: a secret has to ensure that the client got the code legally
 			(no object enumeration, possibly includes access rights).
 		"""
-	def __init__(self, key, meta=None, code=None):
+	def __init__(self, key=None, meta=None, code=None, **k):
+		# if this is a hybrid BaseObj+BaseRef thing (like BrokeredInfoInfo),
+		# some arguments have been eaten
+		if key is None:
+			key=self._key
+		if meta is None:
+			meta=getattr(self,'_meta',None)
+
 		self.meta = meta
 		self.key = tuple(key)
 		self.code = code
@@ -77,11 +84,12 @@ class BaseObj(object):
 		@meta (BrokeredInfo): describes this element's class
 		@key (BaseRef): required to load this element
 		"""
-	def __init__(self, meta=None,key=None):
+	def __init__(self, meta=None,key=None, **k):
 		if meta is not None:
 			self._meta = meta
 		if key is not None:
 			self._key = key
+		super(BaseObj,self).__init__(**k)
 
 	def _attr_key(self,k):
 		res = getattr(self,k,None)
@@ -102,8 +110,6 @@ class common_BaseRef(object):
 		assert not include
 		res = {}
 		res['k'] = ref.key
-#		if meta is not None: # set by the server to tag ref types
-#			res['m'] = meta.key
 		if ref.code is not None and include is not None:
 			if ref.code == "ROOT":
 				raise RuntimeError("The root object is never referenced")
@@ -168,8 +174,8 @@ class BrokeredInfo(BaseObj):
 	_meta = None
 	cached = None
 
-	def __init__(self,name=None):
-		super(BrokeredInfo,self).__init__()
+	def __init__(self,name=None, **k):
+		super(BrokeredInfo,self).__init__(**k)
 		if name is not None:
 			self.name = name
 		elif self.name is None:
@@ -259,8 +265,8 @@ class CallableAdapter(AttrAdapter):
 
 class BrokeredMeta(BrokeredInfo):
 	class_ = BrokeredInfo
-	def __init__(self,name):
-		super(BrokeredMeta,self).__init__(name)
+	def __init__(self,name, **k):
+		super(BrokeredMeta,self).__init__(name=name, **k)
 		self.add(Field("name"))
 		self.add(Field("fields"))
 		self.add(Field("refs"))
@@ -270,9 +276,8 @@ class BrokeredMeta(BrokeredInfo):
 
 class BrokeredInfoInfo(BrokeredMeta,BaseRef):
 	"""This singleton is used for metadata about BrokeredInfo objects."""
-	def __init__(self):
-		super(BrokeredInfoInfo,self).__init__("BrokeredInfoInfo Singleton")
-		BaseRef.__init__(self, meta=self,key=(),code="ROOT")
+	def __init__(self, **k):
+		super(BrokeredInfoInfo,self).__init__(name="BrokeredInfoInfo Singleton", meta=self,key=(),code="ROOT", **k)
 		self._key = self
 
 broker_info_meta = BrokeredInfoInfo()
