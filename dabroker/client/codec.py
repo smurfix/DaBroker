@@ -153,7 +153,7 @@ class ClientBrokeredInfo(BrokeredInfo):
 
 	def find(self, **kw):
 		if self.cached is None:
-			raise RuntimeError("You cannot search this class")
+			raise RuntimeError("You cannot search "+repr(self))
 		for r in self.client.find(self, _cached=self.cached, **kw):
 			if not isinstance(r,BaseObj):
 				r = r()
@@ -161,7 +161,7 @@ class ClientBrokeredInfo(BrokeredInfo):
 
 	def get(self, **kw):
 		if self.cached is None:
-			raise RuntimeError("You cannot search this class")
+			raise RuntimeError("You cannot search "+repr(self))
 		res = list(self.client.find(self, _limit=2,_cached=self.cached, **kw))
 		if len(res) == 0:
 			raise NoData
