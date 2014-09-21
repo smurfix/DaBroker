@@ -201,8 +201,8 @@ class BaseCodec(object):
 		if cls.clsname is not None:
 			self.name2cls[cls.clsname] = cls
 		
-	def _encode(self, data, objcache,objref, include=False):
-		# @objcache: dict: id(obj) => (seqnum,encoded)
+	def _encode(self, data, objcache,objref, include=False, p=None,off=None):
+		# @objcache: dict: id(obj) => (seqnum,encoded,selfref)
 		#            `encoded` will be set to the encoded object so that
 		#            the seqnum can be removed later if it turns out not to
 		#            be needed.
@@ -226,32 +226,41 @@ class BaseCodec(object):
 			# Yes.
 			if objref is None:
 				raise ComplexObjectError(data)
+			if oid[1] is None: # it's incomplete: mark as recursive structure.
+				oid[2] = -1
+
 			# Point to it.
 			oid = oid[0]
 			objref.add(oid)
 			return {'_or':oid}
-		# No. Generate a seqnum for it.
+
+		# No, this is a new object.
+		# Generate a new ID for it.
+		# (There's other stuff in objcache, but that's harmless.)
 		oid = 1+len(objcache)
-		objcache[did] = (oid,None)
+		objcache[did] = [oid,None,False]
 		
 		if isinstance(data,(list,tuple)):
-			# A toplevel list will keep its "include" state
-			data = type(data)(self._encode(x,objcache,objref,include) for x in data)
-			if objref is None:
-				return data
+			# A list will keep its "include" state
+			res = []
+			i = 0
+			for x in data:
+				res.append(self._encode(x,objcache,objref,include, p=res,off=i))
+				i += 1
 
+			if objref is None:
+				return res
 
 			if self.try_simple >= 1000:
-				res = data
 				objcache[did] = None
 			else:
-				res = { '_o':'LIST','_oi':oid,'_d':data }
-				objcache[did] = (oid,res)
+				res = { '_o':'LIST','_oi':oid,'_d':res }
+				objcache[did] = [oid,res,False]
 			return res
 
 		odata = data
 		inc = 2
-		# Marker to use the field key
+		# Marker to use the field key: include 'f' values (data fields)
 
 		if type(data) is not dict:
 			obj = self.type2cls.get(type(data),None)
@@ -272,19 +281,25 @@ class BaseCodec(object):
 
 		res = type(data)()
 		for k,v in data.items():
-			if k.startswith('_o'):
-				nk = '_o_'+k[2:]
-			else:
-				nk = k
-			# if `include` is None, or if packing a toplevel non-object
-			# (or an object field that's not a ref), keep that value.
+			# Transparent encoding: _ofoo => _o_foo, undone in the decoder
+			# so that our _o and _oi values don't clash with whatever
+			nk = '_o_'+k[2:] if k.startswith('_o') else k
 
-			res[nk] = self._encode(v,objcache,objref, include=((k == "f") if (inc == 2) else inc))
+			# inc==2: include regular data values, but not refs or whatever
+			res[nk] = self._encode(v,objcache,objref, include=((k == "f") if (inc == 2) else inc), p=res,off=k)
+
 		if obj is not None:
 			res['_o'] = obj
 		if objref is not None:
+			# need expensive encoding.
 			res['_oi'] = oid
-		objcache[did] = (oid,res)
+			did = objcache[did]
+			did[1] = res
+			if not did[2]:
+				# order non-recursive objects by completion time
+				d = objcache['done']
+				did[2] = (d,p,off)
+				objcache['done'] = d-1
 		return res
 
 	def encode(self, data, include=False):
@@ -312,20 +327,29 @@ class BaseCodec(object):
 
 		if self.try_simple < 1000:
 			# No, not yet / did not work: slower path
-			objcache = {}
+			objcache = {"done":-1}
 			objref = set()
 			res = self._encode(data, objcache,objref, include=include)
+			del objcache['done']
 
 			if objref:
 				# At least one reference was required.
 				self.try_simple = 0
-				for i,v in objcache.values():
+				dl = []
+				for i,v,f in sorted(objcache.values(), key=lambda x: (-x[2][0] if type(x[2]) is tuple else -99999999)):
 					if i not in objref:
 						del v['_oi']
+					elif isinstance(f,tuple):
+						f[1][f[2]] = {'_or':i}
+						dl.append(v)
+
+				# Seed the incomplete refs
+				if dl:
+					res['_oc'] = dl
 			else:
 				# No, this was a proper tree after all.
 				self.try_simple += 1
-				for i,v in objcache.values():
+				for i,v,f in objcache.values():
 					del v['_oi']
 		return res
 	
@@ -361,13 +385,14 @@ class BaseCodec(object):
 		# @p, @off: parent object and index which refer to this object.
 		#
 		# During decoding, information to recover an object may not be
-		# available, i.e. we encounter an object reference before or even
-		# while decoding the data it refers to. The @objtodo array records
-		# where the actual result is supposed to be stored, as soon as we
-		# have it.
-		#
-		# TODO: This process does not yet work with object references
-		# within other objects. To be implemented if needed.
+		# available, i.e. we encounter an object reference while decoding
+		# the data it refers to.
+		# The @objtodo array records where the actual result is supposed to
+		# be stored, as soon as we have it.
+		# 
+		# This process does not work with recursive object references
+		# within other objects. That'd require a more expensive/intrusive
+		# decoding framework. TODO: Detect this case.
 
 		if isinstance(data, scalar_types):
 			return data
@@ -430,16 +455,22 @@ class BaseCodec(object):
 			
 			Reverse everything the encoder does as cleanly as possible.
 			"""
-		if type(data) is dict and '_error' in data:
-			real_error = error_list.get(data.get('id','*'),ServerError)
-			if real_error is ServerError:
-				raise ServerError(data['_error'],data.get('typ',None),data.get('tb',None))
-			else:
-				raise real_error(data['_error'])
-
 		objcache = {}
 		objtodo = []
-		res = self._decode(data,objcache,objtodo)
+
+		if type(data) is dict:
+			if '_error' in data:
+				real_error = error_list.get(data.get('id','*'),ServerError)
+				if real_error is ServerError:
+					raise ServerError(data['_error'],data.get('typ',None),data.get('tb',None))
+				else:
+					raise real_error(data['_error'])
+
+			for obj in data.pop('_oc',()):
+				self._decode(obj, objcache,objtodo)
+				# side effect: populate objcache
+
+		res = self._decode(data, objcache,objtodo)
 		self._cleanup(objcache,objtodo)
 		if isinstance(res,DecodeRef):
 			res = objcache[res.oid]
