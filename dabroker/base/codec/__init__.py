@@ -245,41 +245,41 @@ class BaseCodec(object):
 				i += 1
 
 			res = { '_o':'LIST','_d':res }
-			objcache[did][1] = res
-			return res
 
-		odata = data
-		inc = 2
-		# Marker to use the field key: include 'f' values (data fields)
-
-		if type(data) is not dict:
-			obj = self.type2cls.get(type(data),None)
-			if obj is None:
-				raise NotImplementedError("I don't know how to encode %s: %r"%(repr(data.__class__),data,))
-			inc = getattr(obj,"include",inc)
-			data = obj.encode(data, include=include)
-			if isinstance(data,tuple):
-				obj,data = data
-			else:
-				obj = obj.clsname
 		else:
-			obj = None
-			inc = True
-		if not include:
-			# override with existing None/False values
-			inc = include
+			odata = data
+			inc = 2
+			# Marker to use the field key: include 'f' values (data fields)
 
-		res = type(data)()
-		for k,v in data.items():
-			# Transparent encoding: _ofoo => _o_foo, undone in the decoder
-			# so that our _o and _oi values don't clash with whatever
-			nk = '_o_'+k[2:] if k.startswith('_o') else k
+			if type(data) is not dict:
+				obj = self.type2cls.get(type(data),None)
+				if obj is None:
+					raise NotImplementedError("I don't know how to encode %s: %r"%(repr(data.__class__),data,))
+				inc = getattr(obj,"include",inc)
+				data = obj.encode(data, include=include)
+				if isinstance(data,tuple):
+					obj,data = data
+				else:
+					obj = obj.clsname
+			else:
+				obj = None
+				inc = True
+			if not include:
+				# override with existing None/False values
+				inc = include
 
-			# inc==2: include regular data values, but not refs or whatever
-			res[nk] = self._encode(v,objcache,objref, include=((k == "f") if (inc == 2) else inc), p=res,off=k)
+			res = type(data)()
+			for k,v in data.items():
+				# Transparent encoding: _ofoo => _o_foo, undone in the decoder
+				# so that our _o and _oi values don't clash with whatever
+				nk = '_o_'+k[2:] if k.startswith('_o') else k
 
-		if obj is not None:
-			res['_o'] = obj
+				# inc==2: include regular data values, but not refs or whatever
+				res[nk] = self._encode(v,objcache,objref, include=((k == "f") if (inc == 2) else inc), p=res,off=k)
+
+			if obj is not None:
+				res['_o'] = obj
+
 		did = objcache[did]
 		did[1] = res
 		if did[2] is None:
