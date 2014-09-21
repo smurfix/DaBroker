@@ -409,7 +409,8 @@ class BaseCodec(object):
 				try:
 					res = self.name2cls[obj].decode(**res)
 				except Exception:
-					logger.error("Decoding: %s: %r %r",obj,self.name2cls[obj],res)
+					logger.error("Decoding: %s: %r %r",obj,data,res)
+					logger.error("Decoding:: %r",self.name2cls[obj])
 					raise
 			if oid is not None:
 				objcache[oid] = res
