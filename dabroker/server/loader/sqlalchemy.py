@@ -192,11 +192,11 @@ class SQLLoader(BaseLoader):
 		self.model_meta = []
 		for rw in range(3):
 			m = BrokeredMeta("sql")
+			m.session = session
 			self.model_meta.append(m)
 			if rw:
 				m.add(Callable("get", cached=True))
 				m.add(Callable("find", cached=True))
-				m.session = session
 				if rw > 1:
 					m.add(Callable("new"))
 					m.add(Callable("delete"))
