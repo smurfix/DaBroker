@@ -14,7 +14,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # The sqlalchemy object loader
 
-from ...base import BrokeredInfo,BrokeredMeta, Field,Ref,BackRef,Callable, get_attrs
+from ...base import BrokeredInfo,BrokeredMeta,BaseRef, Field,Ref,BackRef,Callable, get_attrs
 from ...util import cached_property
 from ...util.thread import local_object
 from ...util.sqlalchemy import with_session
@@ -182,17 +182,25 @@ class SQLInfo(BrokeredInfo):
 		i=inspect(obj)
 		return self.loader.set_key(obj,i.class_.__name__,obj.id)
 
+class SQLMeta(BrokeredMeta):
+	"""Parent class for SQL table info"""
+	def __init__(self,id):
+		super(SQLMeta,self).__init__("SQL:"+id)
+		self._key = BaseRef(key=(id,))
+
 class SQLLoader(BaseLoader):
 	"""A loader which reads from SQL"""
 	id="sql"
 	def __init__(self, session, server,id=None):
 		self.tables = {}
+		self.meta = []
 		super(SQLLoader,self).__init__(id=id)
 
 		self.model_meta = []
 		for rw in range(3):
 			m = BrokeredMeta("sql")
 			m.session = session
+			m._key = BaseRef(key=(self.id,"_meta",rw))
 			self.model_meta.append(m)
 			if rw:
 				m.add(Callable("get", cached=True))
@@ -200,7 +208,7 @@ class SQLLoader(BaseLoader):
 				if rw > 1:
 					m.add(Callable("new"))
 					m.add(Callable("delete"))
-			server.loader.static.new(m,"_sql",self.id,rw)
+			self.meta.append(m)
 		self.session = session
 		self.loader = server.loader
 		self.server = server
@@ -215,6 +223,8 @@ class SQLLoader(BaseLoader):
 		return r
 
 	def get(self,*key):
+		if key[0] == "_meta":
+			return self.meta[key[1]]
 		m = self.tables[key[0]]
 		if len(key) == 1:
 			return m
@@ -226,4 +236,4 @@ class SQLLoader(BaseLoader):
 		else:
 			key = getattr(obj,'_meta',obj.__class__._meta)._key.key[1]
 		self.tables[key].new(obj, key[1:] if key else ())
-	
+
