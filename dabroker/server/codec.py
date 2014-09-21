@@ -82,14 +82,12 @@ class server_BaseRef(common_BaseRef):
 		return common_BaseRef.encode(obj, include=include)
 
 	@staticmethod
-	def decode(k=None,m=None,c=None):
+	def decode(k=None,c=None):
 		res = BaseRef(key=k,code=c)
 		if c is None:
 			return res
 		assert c == make_secret(k)
 		res = current_service.top.get(res)
-		if m:
-			assert m is res._meta,(m,res._meta)
 		return res
 
 @codec_adapter

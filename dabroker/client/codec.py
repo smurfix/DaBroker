@@ -71,6 +71,45 @@ def baseclass_for(*k):
 		return fn
 	return proc
 
+class ClientBaseObj(BaseObj):
+	"""base for all DaBroker-controlled objects on the client."""
+	_obsolete = False
+
+	def __init__(self):
+		super(ClientBaseObj,self).__init__()
+		self._refs = {}
+	
+	def _attr_key(self,k):
+		return self._refs[k]
+
+class ClientBaseRef(BaseRef):
+	"""DaBroker-controlled references to objects on the client."""
+	def __init__(self,*a,**k):
+		super(ClientBaseRef,self).__init__(*a,**k)
+		self._dab = current_service.top
+
+	def __call__(self):
+		return self._dab.get(self)
+	
+class _ClientData(ClientBaseObj):
+	"""Mix-in class for remote objects"""
+	_key = None
+
+	def __init__(self,*a,**k):
+		self.call_cache = WeakValueDictionary()
+		super(_ClientData,self).__init__(*a,**k)
+	def __repr__(self):
+		res = "<ClientData"
+		n = self.__class__.__name__
+		if n != "ClientObj":
+			res += ":"+n
+		n = self._key
+		if n is not None:
+			res += ":"+str(n)
+		res += ">"
+		return res
+	__str__=__repr__
+
 class ClientBrokeredInfo(BrokeredInfo):
 	"""\
 		This is the base class for client-side meta objects.
@@ -84,72 +123,38 @@ class ClientBrokeredInfo(BrokeredInfo):
 		"""\
 			Determine which class to use for objects with this as metaclass
 			"""
-		ClientObj = self._class[is_meta]
-		if ClientObj is not None:
-			return ClientObj
-		if not is_meta:
-			ClientObj = _registry.get(self._key.key,None)
-		if ClientObj is not None:
-			if getattr(ClientObj,'_processed',False):
-				return ClientObj
-		else:
-			class ClientObj(ClientBaseObj):
-				_valid = True
-				_key = None
+		cls = self._class[is_meta]
+		if cls is not None:
+			return cls
+		cls = _registry.get(self._key.key,object)
 
-				def __init__(self,*a,**k):
-					self.call_cache = WeakValueDictionary()
-					ClientBaseObj.__init__(self,*a,**k)
-				def __repr__(self):
-					res = "<ClientObj"
-					n = self.__class__.__name__
-					if n != "ClientObj":
-						res += ":"+n
-					n = self._key
-					if n is not None:
-						res += ":"+str(n)
-					res += ">"
-					return res
-				__str__=__repr__
-
-			if is_meta:
-				_ClientObj = ClientObj
-				class ClientObj(_ClientObj,ClientBrokeredInfo):
-					_name = None
-					def __init__(self):
-						_ClientObj.__init__(self)
-						ClientBrokeredInfo.__init__(self)
-					def __repr__(self):
-						res = "<ClientInfo"
-						n = self.name
-						if n is not None:
-							res += ":"+n
-						else:
-							n = self._key
-							if n is not None:
-								res += ":"+str(n)
-						res += ">"
-						return res
-					__str__=__repr__
-
-			self._class[is_meta] = ClientObj
 		if is_meta:
+			class ClientInfo(_ClientInfo,cls):
+				pass
+			cls = ClientInfo
+
 			for k in self.refs.keys():
-				if k != '_meta' and not hasattr(ClientObj,k):
-					setattr(ClientObj,k,handle_related(k))
+				if k != '_meta' and not hasattr(cls,k):
+					setattr(cls,k,handle_related(k))
 		else:
+			class ClientData(_ClientData,cls):
+				pass
+			cls = ClientData
+
 			for k in self.fields.keys():
-				if not hasattr(ClientObj,k):
-					setattr(ClientObj,k,handle_data(k))
+				if not hasattr(cls,k):
+					setattr(cls,k,handle_data(k))
 			for k in self.refs.keys():
-				if k != '_meta' and not hasattr(ClientObj,k):
-					setattr(ClientObj,k,handle_ref(k))
+				if k != '_meta' and not hasattr(cls,k):
+					setattr(cls,k,handle_ref(k))
 			for k,v in self.backrefs.items():
-				setattr(ClientObj,k,handle_backref(k,v))
+				setattr(cls,k,handle_backref(k,v))
+
 		for k,v in self.calls.items():
-			setattr(ClientObj,k,call_proc(v))
-		ClientObj._processed = True
-		return ClientObj
+			setattr(cls,k,call_proc(v))
+
+		self._class[is_meta] = cls
+		return cls
 
 	def find(self, **kw):
 		if self.cached is None:
@@ -172,6 +177,24 @@ class ClientBrokeredInfo(BrokeredInfo):
 			if not isinstance(res,BaseObj):
 				res = res()
 			return res
+
+class _ClientInfo(_ClientData,ClientBrokeredInfo):
+	"""Mix-in class for meta objects"""
+	_name = None
+	def __init__(self,*a,**k):
+		super(_ClientInfo,self).__init__(*a,**k)
+	def __repr__(self):
+		res = "<ClientInfo"
+		n = self.name
+		if n is not None:
+			res += ":"+n
+		else:
+			n = self._key
+			if n is not None:
+				res += ":"+str(n)
+		res += ">"
+		return res
+	__str__=__repr__
 
 class ClientBrokeredInfoInfo(ClientBrokeredInfo,BrokeredInfoInfo):
 	"""\
@@ -296,24 +319,6 @@ class call_proc(object):
 		c.__name__ = str(self.name)
 		return c
 
-class ClientBaseObj(BaseObj):
-	"""The base of all DaBroker-controlled objects on the client."""
-	_obsolete = False
-
-	def __init__(self):
-		self._refs = {}
-	
-	def _attr_key(self,k):
-		return self._refs[k]
-
-class ClientBaseRef(BaseRef):
-	def __init__(self,*a,**k):
-		super(ClientBaseRef,self).__init__(*a,**k)
-		self._dab = current_service.top
-
-	def __call__(self):
-		return self._dab.get(self)
-	
 @codec_adapter
 class client_BaseRef(common_BaseRef):
 	cls = ClientBaseRef
@@ -338,31 +343,23 @@ class client_BaseObj(common_BaseObj):
 	
 
 	@classmethod
-	def decode(cls, k,c=None,f=None,r=None,m=None, _is_meta=None):
+	def decode(cls, k,c=None,f=None,r=None, _is_meta=False):
 		"""\
-			Decode a reference.
+			Convert this object to a class
 			"""
-		k = ClientBaseRef(key=k,code=c)
-		mc = None
-		if m is None:
-			if r and '_meta' in r:
-				m = r['_meta']
-				if not isinstance(m,BaseObj):
-					r['_meta'] = m = m()
-		if m is not None:
-			if isinstance(m,ClientBaseRef):
-				m = current_service.top.get(m)
-			mc = getattr(m.__class__,'class_',None)
-		if mc is not None:
-			res = mc(m, _is_meta if _is_meta is not None else issubclass(cls.cls,BrokeredInfo))
-			if _is_meta:
-				res.__name__ += str("."+f['name'])
-		else:
-			res = ClientBaseObj
 
-		res = res()
+		k = ClientBaseRef(key=k,code=c)
+		if not r or '_meta' not in r:
+			raise RuntimeError("Object without meta data")
+
+		m = r['_meta']
+		if not isinstance(m,ClientBrokeredInfo):
+			# assume it's a reference, so resolve it
+			r['_meta'] = m = m()
+		res = m.class_(_is_meta)()
 		res._key = k
 
+		# Got the class, now fill it with data
 		if f:
 			for k,v in f.items():
 				setattr(res,k,v)
@@ -383,10 +380,10 @@ class client_InfoObj(client_BaseObj):
 	@staticmethod
 	def decode(k=None,c=None,f=None, **kw):
 		if f is None:
-			# We always need the data, but this is something like a ref
+			# We always need the data, but this is something like a ref,
 			# so we need to go and get the real thing.
 			# NOTE this assumes that the codec doesn't throw away empty lists.
-			return current_service.top.get(ClientBaseRef(key=k,code=c))
+			return ClientBaseRef(key=k,code=c)()
 		res = client_BaseObj.decode(_is_meta=True, k=k,c=c,f=f,**kw)
 		res.client = current_service.top
 		return res
