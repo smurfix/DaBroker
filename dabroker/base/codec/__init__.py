@@ -176,7 +176,6 @@ class BaseCodec(object):
 		@adapters is a list of additional adapters which are to be
 		registered.
 		"""
-	try_simple = 1000
 
 	def __init__(self,loader,adapters=(), cfg={}):
 		super(BaseCodec,self).__init__()
@@ -207,7 +206,7 @@ class BaseCodec(object):
 		#            the seqnum can be removed later if it turns out not to
 		#            be needed.
 		# 
-		# @objref: set: the seqnums which are actually required for proper
+		# @objref: dict: seqnum => oid: objects which are actually required for proper
 		#          encoding. If `None`, try to do simple encoding.
 		
 		# Scalars (integers, strings) do not refer to other objects and
@@ -224,21 +223,18 @@ class BaseCodec(object):
 		oid = objcache.get(did,None)
 		if oid is not None:
 			# Yes.
-			if objref is None:
-				raise ComplexObjectError(data)
 			if oid[1] is None: # it's incomplete: mark as recursive structure.
-				oid[2] = -1
+				oid[2] = False
 
 			# Point to it.
 			oid = oid[0]
-			objref.add(oid)
+			objref[oid] = did
 			return {'_or':oid}
 
-		# No, this is a new object.
-		# Generate a new ID for it.
+		# No, this is a new object: Generate a new ID for it.
 		# (There's other stuff in objcache, but that's harmless.)
 		oid = 1+len(objcache)
-		objcache[did] = [oid,None,False]
+		objcache[did] = [oid,None,None]
 		
 		if isinstance(data,(list,tuple)):
 			# A list will keep its "include" state
@@ -248,14 +244,8 @@ class BaseCodec(object):
 				res.append(self._encode(x,objcache,objref,include, p=res,off=i))
 				i += 1
 
-			if objref is None:
-				return res
-
-			if self.try_simple >= 1000:
-				objcache[did] = None
-			else:
-				res = { '_o':'LIST','_oi':oid,'_d':res }
-				objcache[did] = [oid,res,False]
+			res = { '_o':'LIST','_d':res }
+			objcache[did][1] = res
 			return res
 
 		odata = data
@@ -290,67 +280,50 @@ class BaseCodec(object):
 
 		if obj is not None:
 			res['_o'] = obj
-		if objref is not None:
-			# need expensive encoding.
-			res['_oi'] = oid
-			did = objcache[did]
-			did[1] = res
-			if not did[2]:
-				# order non-recursive objects by completion time
-				d = objcache['done']
-				did[2] = (d,p,off)
-				objcache['done'] = d-1
+		did = objcache[did]
+		did[1] = res
+		if did[2] is None:
+			# order non-recursive objects by completion time.
+			# Need to mangle the offset
+			d = objcache['done']
+			did[2] = (d,p,('_o_'+off[2:] if isinstance(off,string_types) and off.startswith('_o') else off))
+			objcache['done'] = d+1
 		return res
 
 	def encode(self, data, include=False):
 		"""\
-			Encode this data structure.
+			Encode this data structure. Recursive structures or
+			multiply-used objects are handled correctly, but not in
+			combination.
 
-			This code first tries to monitor whether the data structure in
-			question is a proper tree (`try_simple` is 1000).
-
-			If it encounters one that is not, it resets `try_simple` to
-			zero and uses the full reference-tagging approach.
-		
 			@include: a flag telling the system to encode an object's data,
 			          not just a reference. Used server>client. If None,
 			          send object keys without retrieval info. This is used
 			          e.g. when broadcasting, so as to not leak data access.
 			"""
-		if self.try_simple >= 1000:
-			# Try to do a faster encoding pass
-			try:
-				objcache = {}
-				res = self._encode(data, objcache,None, include=include)
-			except ComplexObjectError:
-				self.try_simple = 0
+		# No, not yet / did not work: slower path
+		objcache = {"done":1}
+		objref = {}
+		res = self._encode(data, objcache,objref, include=include)
+		del objcache['done']
 
-		if self.try_simple < 1000:
-			# No, not yet / did not work: slower path
-			objcache = {"done":-1}
-			objref = set()
-			res = self._encode(data, objcache,objref, include=include)
-			del objcache['done']
+		if objref:
+			# At least one reference was required.
+			dl = []
+			def _sorter(k):
+				c,d,e = objcache[k]
+				if type(e) is not tuple: return 9999999999
+				return e[0]
+			for d in sorted(objref.values(), key=_sorter):
+				oid,v,f = objcache[d]
+				v['_oi']=oid
+				if isinstance(f,tuple):
+					f[1][f[2]] = {'_or':oid}
+					dl.append(v)
 
-			if objref:
-				# At least one reference was required.
-				self.try_simple = 0
-				dl = []
-				for i,v,f in sorted(objcache.values(), key=lambda x: (-x[2][0] if type(x[2]) is tuple else -99999999)):
-					if i not in objref:
-						del v['_oi']
-					elif isinstance(f,tuple):
-						f[1][f[2]] = {'_or':i}
-						dl.append(v)
-
-				# Seed the incomplete refs
-				if dl:
-					res['_oc'] = dl
-			else:
-				# No, this was a proper tree after all.
-				self.try_simple += 1
-				for i,v,f in objcache.values():
-					del v['_oi']
+			# Seed with the incomplete refs
+			if dl:
+				res['_oc'] = dl
 		return res
 	
 	def encode_error(self, err, tb=None):
