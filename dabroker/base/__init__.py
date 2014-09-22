@@ -67,10 +67,12 @@ class BaseRef(object):
 		return self.key.__hash__()
 	
 	def __eq__(self,other):
+		other = getattr(other,'_key',other)
 		other = getattr(other,'key',other)
 		return self.key.__eq__(other)
 
 	def __ne__(self,other):
+		other = getattr(other,'_key',other)
 		other = getattr(other,'key',other)
 		return self.key.__ne__(other)
 
@@ -95,6 +97,15 @@ class BaseObj(object):
 		if key is not None:
 			self._key = key
 		super(BaseObj,self).__init__(**k)
+
+	def __hash__(self):
+		self = getattr(self,'_key',self)
+		self = getattr(self,'key',self)
+		return self.__hash__()
+	def __eq__(self,other):
+		return self._key.__eq__(other)
+	def __ne__(self,other):
+		return self._key.__ne__(other)
 
 	def _attr_key(self,k):
 		res = getattr(self,k,None)
@@ -189,10 +200,14 @@ class BrokeredInfo(BaseObj):
 		self.refs = dict()
 		self.backrefs = dict()
 		self.calls = dict()
+		self._names = set()
 
 		self.add(Ref("_meta"))
 
 	def add(self, f):
+		if f in self._names:
+			raise RuntimeError("Dup field",f)
+		self._names.add(f)
 		if isinstance(f,Field):
 			self.fields[f.name] = f
 		elif isinstance(f,Ref):
