@@ -53,28 +53,6 @@ class SupD(dict):
 			raise KeyError(k)
 		return default
 
-class ServerError(Exception):
-	"""An encapsulation for a server error (with traceback)"""
-	def __init__(self,err,name,tb):
-		self.err = err
-		self.name = name
-		self.tb = tb
-
-	def __repr__(self):
-		return "{}({})".format(self.name or "ServerError", repr(self.err))
-
-	def __str__(self):
-		r = repr(self)
-		if self.tb is None: return r
-		return r+"\n"+"".join(self.tb)
-
-error_list = {
-	'*': ServerError,
-	'_n': NoData,
-	'_m': ManyData,
-}
-error_rev = dict((v,k) for k,v in error_list.items())
-
 _basics = []
 def codec_adapter(cls):
 	"""A decorator for an adapter class which translates serializer to whatever."""
@@ -159,6 +137,63 @@ class _attrdict(object):
 	@staticmethod
 	def decode(**k):
 		return attrdict(**k)
+
+### Error handling / forwarding
+
+class ServerError(Exception):
+	name = "ServerError"
+	_traceback = None
+	_repr = None
+
+	def __repr__(self):
+		return self._repr
+
+	def __str__(self):
+		r = self.__repr__()
+		if self._traceback is None: return r
+		return r+"\n"+"".join(self._traceback)
+
+known_errors = {
+	"NoData":NoData,
+	"ManyData":ManyData,
+}
+
+@codec_adapter
+class _exc(object):
+	cls = Exception
+	clsname = "exc"
+
+	@staticmethod
+	def encode(obj, include=False):
+		res = dict((k,repr(v)) for k,v in obj.__dict__.items())
+		res['_t'] = obj.__class__.__name__
+		res['_r'] = repr(obj)
+		return res
+
+	@staticmethod
+	def decode(**k):
+		t = k.pop('_t',"Exception")
+		r = k.pop('_r',"??")
+
+		e = known_errors.get(t,None)
+		if e is None:
+			if t.endswith("Error") or t.endswith("Exception") or t.endswith("Warning"):
+				e = getattr(__builtins__,t,None)
+		if e is None:
+			e = Exception
+
+		class _Error(ServerError,e):
+			pass
+		_Error.__name__ = t
+
+		if e is not None:	
+			t = None
+
+		err = _Error()
+		err.__dict__.update(k)
+		err.name = t
+		err._repr = r
+		return err
 
 scalar_types = {type(None),float,bytes}
 from six import string_types,integer_types
@@ -334,13 +369,11 @@ class BaseCodec(object):
 			data should be strings (or, in case of the traceback, a list of
 			strings).
 			"""
-		res = {'id': error_rev.get(type(err),'*')}
+		res = {}
 
 		if isinstance(err,string_types):
-			res['_error'] = err
-		else:
-			res['_error'] = str(err)
-			res['typ'] = err.__class__.__name__
+			err = Exception(err)
+		res['_error'] = self.encode(err)
 
 		if tb is not None:
 			if hasattr(tb,'tb_frame'):
@@ -434,11 +467,11 @@ class BaseCodec(object):
 
 		if type(data) is dict:
 			if '_error' in data:
-				real_error = error_list.get(data.get('id','*'),ServerError)
-				if real_error is ServerError:
-					raise ServerError(data['_error'],data.get('typ',None),data.get('tb',None))
-				else:
-					raise real_error(data['_error'])
+				real_error = self.decode(data['_error'])
+				tb = data.get('tb',None)
+				if tb:
+					real_error._traceback = tb
+				raise real_error
 
 			for obj in data.pop('_oc',()):
 				self._decode(obj, objcache,objtodo)

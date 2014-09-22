@@ -20,9 +20,14 @@ class UnknownCommandError(Exception):
 	def __str__(self):
 		return "Unknown command: {}".format(repr(self.cmd))
 
-class NoData(RuntimeError):
+class DataError(RuntimeError):
+	def __init__(self,**kw):
+		self.__dict__.update(kw)
+	def __repr__(self):
+		return "{}({})".format(self.__class__.__name__, ",".join("{}={}".format(k,v) for k,v in self.__dict__.items() if not k.startswith("_") and v is not None))
+class NoData(DataError):
     pass
-class ManyData(RuntimeError):
+class ManyData(DataError):
     pass
 
 def get_attrs(obj, meta=None):
@@ -217,12 +222,13 @@ class Field(_attr):
 	pass
 
 class Ref(_attr):
-	"""A reference to another BrokeredBase object.
+	"""A reference to another BrokeredBase object (many-to-one).
 		Set the "hidden" attribute to True if you don't want this value broadcast."""
 	pass
 
 class BackRef(_attr):
-	"""A reference from another BrokeredBase object type"""
+	"""A reference from another BrokeredBase object type (one-to-many).
+		If you want client-side caching, TODO."""
 	pass
 
 class Callable(_attr):

@@ -14,13 +14,14 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # The sqlalchemy object loader
 
-from ...base import BrokeredInfo,BrokeredMeta,BaseRef, Field,Ref,BackRef,Callable, get_attrs
+from ...base import BrokeredInfo,BrokeredMeta,BaseRef, Field,Ref,BackRef,Callable, get_attrs,NoData
 from ...util import cached_property
 from ...util.thread import local_object
 from ...util.sqlalchemy import with_session
 from . import BaseLoader
 from ..codec import server_BaseObj
 from sqlalchemy.inspection import inspect
+from sqlalchemy.orm.exc import NoResultFound
 
 import logging
 logger = logging.getLogger("dabroker.server.loader.sqlalchemy")
@@ -122,7 +123,11 @@ class SQLInfo(BrokeredInfo):
 		assert len(key) == 1 or kw and not key
 		if key:
 			kw['id'] = key[0]
-		res = session.query(self.model).filter_by(**kw).one()
+		try:
+			res = session.query(self.model).filter_by(**kw).one()
+		except NoResultFound:
+			raise NoData(table=self.name,key=kw)
+			
 		self.fixup(res)
 		return res
 	get.include = True
