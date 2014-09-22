@@ -78,6 +78,8 @@ class attrdict(dict):
 		self._done = set()
 
 	def __getattr__(self,a):
+		if a.startswith('_'):
+			return super(attrdict,self).__getattr__(a)
 		return self[a]
 	def __setattr__(self,a,b):
 		if a.startswith("_"):
@@ -90,7 +92,7 @@ class attrdict(dict):
 class cached_property(object):
 	"""A decorator that converts a function into a lazy property.
 
-	Copied from werkzeug.
+	Copied from werkzeug, extended to deal with async calls.
 	"""
 
 	def __init__(self, func, name=None, doc=None):
@@ -99,21 +101,21 @@ class cached_property(object):
 		self.__doc__ = doc or func.__doc__
 		self.func = func
 		self.value = _missing
+		self.in_progress = dict()
 
 	def __get__(self, obj, type=None):
 		if obj is None:
 			return self
 		value = obj.__dict__.get(self.__name__, _missing)
 		if value is _missing:
-			value = self.value
+			value = self.in_progress.get(id(obj),_missing)
 			if value is _missing:
-				self.value = AsyncResult()
+				self.in_progress[id(obj)] = ar = AsyncResult()
 				value = self.func(obj)
-
-				ar,self.value = self.value,value
 				ar.set(value)
 				obj.__dict__[self.__name__] = value
-			elif isinstance(self.value, AsyncResult):
-				value = self.value.get()
+				del self.in_progress[id(obj)]
+			elif isinstance(value, AsyncResult):
+				value = value.get()
 		return value
 
