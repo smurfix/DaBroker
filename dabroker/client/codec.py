@@ -137,8 +137,8 @@ class ClientBrokeredInfo(BrokeredInfo):
 			cls = ClientInfo
 
 			for k in self.refs.keys():
-				if k != '_meta' and not hasattr(cls,k):
-					setattr(cls,k,handle_related(k))
+				if k != '_meta':
+					setattr(cls, '_dab_'+k if hasattr(cls,k) else k,handle_related(k))
 		else:
 			class ClientData(_ClientData,cls):
 				pass
@@ -146,15 +146,16 @@ class ClientBrokeredInfo(BrokeredInfo):
 
 			for k in self.fields.keys():
 				if not hasattr(cls,k):
-					setattr(cls,k,handle_data(k))
+					setattr(cls, '_dab_'+k if hasattr(cls,k) else k,handle_data(k))
 			for k in self.refs.keys():
 				if k != '_meta' and not hasattr(cls,k):
-					setattr(cls,k,handle_ref(k))
+					setattr(cls, '_dab_'+k if hasattr(cls,k) else k,handle_ref(k))
 			for k,v in self.backrefs.items():
-				setattr(cls,k,handle_backref(k,v))
+				setattr(cls, '_dab_'+k if hasattr(cls,k) else k,handle_backref(k))
 
 		for k,v in self.calls.items():
-			setattr(cls,k,call_proc(v))
+			if not hasattr(cls,k):
+				setattr(cls,k,call_proc(v))
 
 		self._class[is_meta] = cls
 		return cls
