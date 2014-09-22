@@ -29,11 +29,13 @@ _sqlite_warned = False
 @contextmanager
 def session_wrapper(obj):
 	"""Provide a transactional scope around a series of operations."""
-	s_name = obj._dab.loader.id
+	loader = obj._dab.loader
+
+	s_name = loader.id
 	s = getattr(_session,s_name,None)
 	if s is None:
 		logger.debug("new session")
-		s = obj._meta.session()
+		s = loader.session()
 		setattr(_session,s_name,s)
 		if s.transaction is None:
 			s.begin()
