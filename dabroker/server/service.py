@@ -119,9 +119,9 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 	def do_root(self):
 		logger.debug("Get root")
 		res = self.root
-		if not hasattr(res,'_key'):
+		if '_key' not in res.__dict__:
 			self.add_static(res,'root')
-		if not hasattr(res._meta,'_key'):
+		if '_key' not in res._meta.__dict__:
 			self.add_static(res._meta,'root','meta')
 		return res
 	do_root.include = True

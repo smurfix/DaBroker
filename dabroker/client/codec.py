@@ -27,8 +27,11 @@ class CacheProxy(object):
 		self.data = data
 
 def kstr(v):
-	if hasattr(v,'_key'):
-		return '.'.join(str(x) for x in v._key.key)
+	k = getattr(v,'__dict__',None)
+	if k is not None:
+		k = k.get('_key',None)
+	if k is not None:
+		return '.'.join(str(x) for x in k.key)
 	else:
 		return str(v)
 

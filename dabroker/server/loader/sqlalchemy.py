@@ -33,12 +33,12 @@ class server_SQLobject(server_BaseObj):
 
 	@staticmethod
 	def encode(obj, include=False):
-		if not hasattr(obj,'_key'):
+		if '_key' not in obj.__dict__:
 			obj.__class__._dab.fixup(obj)
 		return server_BaseObj.encode(obj, include=include)
 
 	def encode_ref(obj, include=False):
-		if not hasattr(obj,'_key'):
+		if '_key' not in obj.__dict__:
 			obj.__class__._dab.fixup(obj)
 		return server_BaseObj.encode_ref(obj, include=include)
 
