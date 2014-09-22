@@ -250,8 +250,16 @@ class BaseCodec(object):
 		# The only case where that would help is long strings which are
 		# referred to multiple times from the same object tree. This is too
 		# unlikely to be worth the bother.
+
+		# Numbers and strings are never encoded by this
 		if isinstance(data,scalar_types):
 			return data
+
+		# If this is a Werkzeug localproxy, dereference it
+		# before doing anything else
+		ac = getattr(data,'_get_current_object',None)
+		if ac is not None:
+			data = ac()
 
 		# Have I seen that before?
 		did = id(data)
