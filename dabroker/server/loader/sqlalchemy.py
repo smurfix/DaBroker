@@ -148,6 +148,7 @@ class SQLInfo(BrokeredInfo):
 		session.add(obj)
 		session.flush()
 		self.fixup(obj)
+		self.server.send_created(obj,kw)
 		return obj
 	new.include = True
 
@@ -173,7 +174,7 @@ class SQLInfo(BrokeredInfo):
 
 	def delete(self, obj):
 		assert obj._meta.rw
-		self.server.obj_delete(obj)
+		self.obj_delete(obj)
 
 	@with_session
 	def local_delete(self, session, *key):
