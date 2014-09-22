@@ -439,7 +439,7 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 		kw['_obj'] = typ
 		if _limit is not None:
 			kw['_limit'] = _limit
-		res = self.send("search", **kw)
+		res = self.send("_dab_search", **kw)
 		if not _cached:
 			return res
 

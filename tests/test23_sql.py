@@ -43,6 +43,7 @@ Base = declarative_base()
 
 class Person(Base):
 	__tablename__ = 'person'
+	_dab_cached = True
 	# Here we define columns for the table person
 	# Notice that each column is also a normal Python instance attribute.
 	id = Column(Integer, primary_key=True)
@@ -148,7 +149,7 @@ class Test23_client(TestClient):
 		assert res.hello == "Step 1", res.hello
 		P = res.data['Person']
 		assert P.name == 'Person',P.name
-		r = P.find()
+		r = list(P.find())
 		assert len(r) == 0, r
 
 		# A: create

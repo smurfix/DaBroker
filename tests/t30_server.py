@@ -36,6 +36,7 @@ Base = declarative_base()
 
 class Person(Base):
 	__tablename__ = 'person'
+	_dab_cached=True
 	# Here we define columns for the table person
 	# Notice that each column is also a normal Python instance attribute.
 	id = Column(Integer, primary_key=True)
@@ -43,6 +44,7 @@ class Person(Base):
  
 class Address(Base):
 	__tablename__ = 'address'
+	_dab_cached=True
 	# Here we define columns for the table address.
 	# Notice that each column is also a normal Python instance attribute.
 	id = Column(Integer, primary_key=True)

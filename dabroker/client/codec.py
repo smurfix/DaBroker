@@ -151,7 +151,7 @@ class ClientBrokeredInfo(BrokeredInfo):
 				if k != '_meta' and not hasattr(cls,k):
 					setattr(cls, '_dab_'+k if hasattr(cls,k) else k,handle_ref(k))
 			for k,v in self.backrefs.items():
-				setattr(cls, '_dab_'+k if hasattr(cls,k) else k,handle_backref(k))
+				setattr(cls, '_dab_'+k if hasattr(cls,k) else k,handle_backref(k,v))
 
 		for k,v in self.calls.items():
 			if not hasattr(cls,k):
@@ -161,17 +161,17 @@ class ClientBrokeredInfo(BrokeredInfo):
 		return cls
 
 	def find(self, **kw):
-		if self.cached is None:
+		if self._dab_cached is None:
 			raise RuntimeError("You cannot search "+repr(self))
-		for r in self.client.find(self, _cached=self.cached, **kw):
+		for r in self.client.find(self, _cached=self._dab_cached, **kw):
 			if not isinstance(r,BaseObj):
 				r = r()
 			yield r
 
 	def get(self, **kw):
-		if self.cached is None:
+		if self._dab_cached is None:
 			raise RuntimeError("You cannot search "+repr(self))
-		res = list(self.client.find(self, _limit=2,_cached=self.cached, **kw))
+		res = list(self.client.find(self, _limit=2,_cached=self._dab_cached, **kw))
 		if len(res) == 0:
 			raise NoData
 		elif len(res) == 2:

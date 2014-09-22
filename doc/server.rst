@@ -103,6 +103,21 @@ You can now do this
 
 on the client as well as on the server.
 
+Searching
+---------
+
+DaBroker's built-in search handles equality-based `get` (returns one record
+or raises an error) and `find` requests. In the meta object which shall
+support searching, you need to set the `_dab_cached` attribute to some
+non-`None` value, and add a method
+
+    def _dab_search(self, _limit=None,**kw):
+        # a sample which finds nothing
+        if False:
+            yield None
+
+which returns the objects in question, up to the given limit.
+
 Databases
 ---------
 
@@ -126,7 +141,9 @@ This creates and registers a loader, and creates info objects for your models,
 The "Person" entry is added to root.data (or any other dictionary;
 presumably so that the client may directly access the model).
 
-The `rw` parameter can hold three values. The default is `False` (read-only),
+The `_dab_cached` attribute is supported.
+
+TODO: The `rw` parameter can hold three values. The default is `False` (read-only),
 which means that the client can call `.get()` and `.find()` methods on the
 class object to retrieve records. `True` adds `.new()`, `.delete()` and
 `update()` (which is usually done by syncing the client).
@@ -148,7 +165,7 @@ The client will immediately see this change:
     >>> print root.status.health
     poor
 
-Alternately, you can send a new object:
+Alternately, you can send a new object and update the root:
 
     old_status = root.status
     new_status = broker.obj_new(Status, health="poor")
@@ -156,8 +173,8 @@ Alternately, you can send a new object:
     broker.obj_update(root, status=new_status)
     broker.obj_delete(old_status)
 
-The client would then need to refresh the root object to see the new
-status:
+The client would then need to refresh its copy of the root object to see
+the new status:
 
     >>> root = root._key()
     >>> print root.status.health

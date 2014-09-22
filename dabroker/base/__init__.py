@@ -177,7 +177,7 @@ class BrokeredInfo(BaseObj):
 		"""
 	name = None
 	_meta = None
-	cached = None
+	_dab_cached = None
 
 	def __init__(self,name=None, **k):
 		super(BrokeredInfo,self).__init__(**k)
@@ -278,7 +278,7 @@ class BrokeredMeta(BrokeredInfo):
 		self.add(Field("refs"))
 		self.add(Field("backrefs"))
 		self.add(Field("calls"))
-		self.add(Field("cached"))
+		self.add(Field("_dab_cached"))
 
 class BrokeredInfoInfo(BrokeredMeta,BaseRef):
 	"""This singleton is used for metadata about BrokeredInfo objects."""

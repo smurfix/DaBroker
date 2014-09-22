@@ -67,7 +67,7 @@ class TestClient(BrokerClient):
 		self.jump(1,0)
 
 		assert P.name == 'Person',P.name
-		r = P.find()
+		r = list(P.find())
 		assert len(r) == 0, r
 
 		# A: create

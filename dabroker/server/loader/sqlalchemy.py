@@ -55,6 +55,8 @@ def keyfix(self,*a,**k):
 
 class SQLInfo(BrokeredInfo):
 	"""This class represents a single SQL table"""
+	_dab_cached = None
+
 	def __new__(cls, server, meta, model, loader, rw=False, hide=()):
 		if hasattr(model,'_dab'):
 			return model._dab
@@ -86,6 +88,7 @@ class SQLInfo(BrokeredInfo):
 		self.name = i.class_.__name__
 		self._meta = meta
 		self._dab = self
+		self._dab_cached = getattr(i.class_,'_dab_cached',None)
 		model._dab = self
 		model._key = cached_property(keyfix)
 		model._attrs = property(_get_attrs)
@@ -117,6 +120,7 @@ class SQLInfo(BrokeredInfo):
 		return res
 	find.include = True
 	obj_find=find
+	_dab_search = find
 
 	@with_session
 	def get(self, session,*key, **kw):

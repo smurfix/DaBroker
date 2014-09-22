@@ -28,12 +28,12 @@ logger_s = test_init("test.21.objbase.server")
 
 class SearchBrokeredInfo(BrokeredInfo):
 	objs = []
-	cached = True
+	_dab_cached = True
 
 	def obj_add(self,obj):
 		self.objs.append(obj)
 
-	def search(self,_limit=None,**kw):
+	def _dab_search(self,_limit=None,**kw):
 		res = []
 		for obj in self.objs:
 			for k,v in kw.items():
@@ -42,7 +42,7 @@ class SearchBrokeredInfo(BrokeredInfo):
 			else:
 				res.append(obj)
 		return res
-	search.include=True
+	_dab_search.include=True
 
 class Test21_server(TestServer):
 	@cached_property
