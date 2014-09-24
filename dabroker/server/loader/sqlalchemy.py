@@ -136,6 +136,10 @@ class SQLInfo(BrokeredInfo):
 		return res
 	get.include = True
 
+	def new_setup(self,obj,**kw):
+		"""Method to override, to add interesting things to an object"""
+		pass
+
 	@with_session
 	def new(self, session, obj=None, *key, **kw):
 		if obj is None:
@@ -145,6 +149,7 @@ class SQLInfo(BrokeredInfo):
 		else:
 			# called with an existing object
 			assert not kw
+		self.new_setup(obj,**kw)
 		session.add(obj)
 		session.flush()
 		self.fixup(obj)
