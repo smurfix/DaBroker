@@ -162,7 +162,9 @@ class Test23_client(TestClient):
 		assert res.hello == "Step 4", res.hello
 
 		# D: refresh and check
+		assert p1._obsolete
 		p2 = p1._key()
+		assert not p2._obsolete
 		assert p1.name == "Fred Flintstone", p1.name
 		assert p2.name == "Freddy Firestone", p2.name
 

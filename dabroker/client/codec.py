@@ -84,6 +84,11 @@ class ClientBaseObj(BaseObj):
 	
 	def _attr_key(self,k):
 		return self._refs[k]
+	
+	def _obsoleted(self):
+		"""Called from the server to mark this object as changed or deleted.
+			To determine which, try to fetch the new version via `self._key()`."""
+		self._obsolete = True
 
 class ClientBaseRef(BaseRef):
 	"""DaBroker-controlled references to objects on the client."""

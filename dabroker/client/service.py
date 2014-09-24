@@ -206,6 +206,7 @@ class CacheDict(CountedCache):
 		if obj is None:
 			return
 		obj._obsolete = True
+		obj._obsoleted()
 		
 
 class ChangeData(object):
@@ -478,7 +479,7 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 	def do_invalid_key(self,_key=None,_meta=None, **k):
 		"""Invalidate an object, plus whatever might have been used to search for it.
 		
-			@key the object (or None if the object is new)
+			@key the updated/deleted object (or None if the object is new)
 			@meta the object's metadata key (search results hang off metadata)
 			@k: a key=>(value,…) dict. A search is obsoleted when one
 									   of the search keys matches one of the values.
