@@ -174,7 +174,7 @@ class SQLInfo(BrokeredInfo):
 
 	def delete(self, obj):
 		assert obj._meta.rw
-		self.obj_delete(obj)
+		self.server.obj_delete(obj)
 
 	@with_session
 	def local_delete(self, session, *key):
