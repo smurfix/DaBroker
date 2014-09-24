@@ -15,7 +15,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # Some sqlalchemy helpers. They should be in dabroker.server.loader.sqlalchemy,
 # but the separation makes sense (setup there / production code here).
 
-from .thread import local_object
+from .thread import local_object,aux_cleanup
 from sqlalchemy.inspection import inspect
 from functools import wraps
 from contextlib import contextmanager
@@ -26,21 +26,41 @@ logger = logging.getLogger("dabroker.server.loader.sqlalchemy")
 _session = local_object()
 _sqlite_warned = False
 
-@contextmanager
-def session_wrapper(obj):
-	"""Provide a transactional scope around a series of operations."""
-	loader = obj._dab.loader
-
-	s_name = loader.id
-	s = getattr(_session,s_name,None)
+def session_maker(maker,name=None):
+	if name is None:
+		name = "sql"
+	s = getattr(_session,name,None)
 	if s is None:
 		logger.debug("new session")
-		s = loader.session()
-		setattr(_session,s_name,s)
+		s = maker()
+		setattr(_session,name,s)
 		if s.transaction is None:
 			s.begin()
-		s._dab_wrapped = 1
-	elif not s._dab_wrapped:
+		s._dab_wrapped = 0
+	return s
+
+def session_closer(name=None):
+	if name is None:
+		name = "sql"
+	s = getattr(_session,name,None)
+	if s is None:
+		return
+	s.close()
+	delattr(_session,name)
+aux_cleanup.append(session_closer)
+
+@contextmanager
+def session_wrapper(obj, maker=None):
+	"""Provide a transactional scope around a series of operations."""
+	if maker is None:
+		loader = obj._dab.loader
+
+		s_name = loader.id
+		maker = loader.session
+	else:
+		s_name = None
+	s = session_maker(maker,s_name)
+	if not s._dab_wrapped:
 		if s.transaction is None:
 			s.begin()
 		s._dab_wrapped = 1
@@ -68,11 +88,23 @@ def session_wrapper(obj):
 		s.commit()
 	finally:
 		s._dab_wrapped -= 1
+	# The session is _not_ destroyed at this point, object attribute access
+	# needs to be available until the thread dies.
 
 def with_session(fn):
-	@wraps(fn)
-	def wrapper(self,*a,**k):
-		with session_wrapper(self) as s:
-			return fn(self,s, *a,**k)
-	return wrapper
+	if isinstance(fn,type(session_wrapper)):
+		@wraps(fn)
+		def wrapper(self,*a,**k):
+			with session_wrapper(self) as s:
+				return fn(self,s, *a,**k)
+		return wrapper
+	else:
+		maker = fn.session
+		def wrapper2(fn):
+			@wraps(fn)
+			def wrapper(self,*a,**k):
+				with session_wrapper(self,maker) as s:
+					return fn(self,s, *a,**k)
+			return wrapper
+		return wrapper2
 
