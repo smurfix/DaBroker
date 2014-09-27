@@ -68,6 +68,9 @@ def baseclass_for(*k):
 			class MyRoot(ClientBaseObj):
 				def check_me(self):
 					return "This is a client-specific class"
+
+		You can use `None` as the last value (only), which behaves like an
+		any-single value placeholder.
 		"""
 	def proc(fn):
 		_registry[k] = fn
@@ -134,7 +137,11 @@ class ClientBrokeredInfo(BrokeredInfo):
 		cls = self._class[is_meta]
 		if cls is not None:
 			return cls
-		cls = _registry.get(self._key.key,object)
+		k = self._key.key
+		cls = _registry.get(k,None)
+		if cls is None:
+			# Allow a single wildcard at the end
+			cls = _registry.get((k[:-1])+(None,),object)
 
 		if is_meta:
 			class ClientInfo(_ClientInfo,cls):
