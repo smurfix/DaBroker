@@ -57,16 +57,17 @@ class SQLInfo(BrokeredInfo):
 	"""This class represents a single SQL table"""
 	_dab_cached = None
 
-	def __new__(cls, server, meta, model, loader, rw=False, hide=()):
+	def __new__(cls,mcls, id, server, model, loader, rw=False, hide=()):
 		if hasattr(model,'_dab'):
 			return model._dab
 		return object.__new__(cls)
-	def __init__(self, server, meta, model, loader, rw=False, hide=()):
+	def __init__(self,mcls, id, server, model, loader, rw=False, hide=()):
 		if hasattr(model,'_dab'):
 			return
 		super(SQLInfo,self).__init__()
-
 		i = inspect(model)
+		meta = mcls(id,self,i.class_.__name__, rw)
+
 		for k in i.column_attrs:
 			if k not in hide:
 				self.add(Field(k.key))
@@ -110,54 +111,6 @@ class SQLInfo(BrokeredInfo):
 		return len(getattr(obj,name))
 
 	@with_session
-	def find(self,session,_limit=None, **kw):
-		res = session.query(self.model).filter_by(**kw)
-		if _limit is not None:
-			res = res[:_limit]
-		res = list(res)
-		for r in res:
-			self.fixup(r)
-		return res
-	find.include = True
-	obj_find=find
-	_dab_search = find
-
-	@with_session
-	def get(self, session,*key, **kw):
-		assert len(key) == 1 or kw and not key
-		if key:
-			kw['id'] = key[0]
-		try:
-			res = session.query(self.model).filter_by(**kw).one()
-		except NoResultFound:
-			raise NoData(table=self.name,key=kw)
-			
-		self.fixup(res)
-		return res
-	get.include = True
-
-	def new_setup(self,obj,**kw):
-		"""Method to override, to add interesting things to an object"""
-		pass
-
-	@with_session
-	def new(self, session, obj=None, *key, **kw):
-		if obj is None:
-			# called to make a new object
-			assert kw and not key
-			obj = self.model(**kw)
-		else:
-			# called with an existing object
-			assert not kw
-		self.new_setup(obj,**kw)
-		session.add(obj)
-		session.flush()
-		self.fixup(obj)
-		self.server.send_created(obj,kw)
-		return obj
-	new.include = True
-
-	@with_session
 	def update(self, session, obj, **kw):
 		assert obj._meta.rw
 		obj = session.merge(obj, load=False)
@@ -197,39 +150,83 @@ class SQLInfo(BrokeredInfo):
 		i=inspect(obj)
 		return self.loader.set_key(obj,i.class_.__name__,obj.id)
 
+	@with_session
+	def _dab_search(self,session,_limit=None, **kw):
+		res = session.query(self.model).filter_by(**kw)
+		if _limit is not None:
+			res = res[:_limit]
+		res = list(res)
+		for r in res:
+			self.fixup(r)
+		return res
+	_dab_search.include = True
+
+	@with_session
+	def get(self, session,*key, **kw):
+		assert len(key) == 1 or kw and not key
+		if key:
+			kw['id'] = key[0]
+		try:
+			res = session.query(self.model).filter_by(**kw).one()
+		except NoResultFound:
+			raise NoData(table=self.name,key=kw)
+			
+		self.fixup(res)
+		return res
+	get.include = True
+
+	def new_setup(self,obj,**kw):
+		"""Method to override, to add interesting things to an object"""
+		pass
+
+	@with_session
+	def new(self, session, obj=None, *key, **kw):
+		if obj is None:
+			# called to make a new object
+			assert kw and not key
+			obj = self.model(**kw)
+		else:
+			# called with an existing object
+			assert not kw
+		self.new_setup(obj,**kw)
+		session.add(obj)
+		session.flush()
+		self.fixup(obj)
+		self.server.send_created(obj,kw)
+		return obj
+	new.include = True
+
 class SQLMeta(BrokeredMeta):
 	"""Parent class for SQL table info"""
-	def __init__(self,id):
+	def __init__(self,id,info,name, rw):
 		super(SQLMeta,self).__init__("SQL:"+id)
-		self._key = BaseRef(key=(id,))
+		self._key = BaseRef(key=(id,'_meta',name))
+		self.info = info
+		if rw is not None:
+			#self.add(Callable("get", cached=True))
+			#self.add(Callable("find", cached=True))
+			if rw:
+				self.add(Callable("new"))
+				self.add(Callable("delete"))
 
 class SQLLoader(BaseLoader):
 	"""A loader which reads from SQL"""
 	id="sql"
 	def __init__(self, session, server,id=None):
 		self.tables = {}
-		self.meta = []
+		self.meta = {}
+		if id is None: id = self.id
+		else: self.id = id
 		super(SQLLoader,self).__init__(id=id)
 
-		self.model_meta = []
-		for rw in range(3):
-			m = BrokeredMeta("sql")
-			m.session = session
-			m._key = BaseRef(key=(self.id,"_meta",rw))
-			self.model_meta.append(m)
-			if rw:
-				m.add(Callable("get", cached=True))
-				m.add(Callable("find", cached=True))
-				if rw > 1:
-					m.add(Callable("new"))
-					m.add(Callable("delete"))
-			self.meta.append(m)
 		self.session = session
 		self.loader = server.loader
 		self.server = server
 
-	def add_model(self, model, root=None, cls=SQLInfo, rw=False, hide=()):
-		r = cls(meta=self.model_meta[0 if rw is None else rw+1], server=self.server, model=model, loader=self, rw=rw, hide=hide)
+	def add_model(self, model, root=None, cls=SQLInfo, mcls=SQLMeta, rw=False, hide=()):
+		r = cls(id=self.id, mcls=mcls, server=self.server, model=model, loader=self, rw=rw, hide=hide)
+		self.meta[r.name]=r._meta
+
 		if root is not None:
 			root[r.name] = r
 
