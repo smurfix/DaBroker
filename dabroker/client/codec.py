@@ -107,7 +107,7 @@ class _ClientData(ClientBaseObj):
 	_key = None
 
 	def __init__(self,*a,**k):
-		self.call_cache = WeakValueDictionary()
+		self._call_cache = WeakValueDictionary()
 		super(_ClientData,self).__init__(*a,**k)
 	def __repr__(self):
 		res = "<ClientData"
@@ -321,7 +321,7 @@ class call_proc(object):
 					kws = self.name+':'+search_key(a,k)
 					ckey = " ".join(str(x) for x in obj._key.key)+":"+kws
 
-					res = obj.call_cache.get(kws,_NotGiven)
+					res = obj._call_cache.get(kws,_NotGiven)
 					if res is not _NotGiven:
 						res = res.data
 						current_service.top._cache[ckey] # Lookup to increase counter
@@ -329,7 +329,7 @@ class call_proc(object):
 				res = obj._meta._dab.call(obj,self.name, a,k)
 				if self.cached and not obj._obsolete:
 					rc = CacheProxy(res)
-					obj.call_cache[kws] = rc
+					obj._call_cache[kws] = rc
 					current_service.top._cache[ckey] = rc
 				return res
 		c.__name__ = str(self.name)
