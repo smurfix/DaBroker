@@ -12,6 +12,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
+from six import string_types,integer_types
+
 class UnknownCommandError(Exception):
 	def __init__(self, cmd):
 		self.cmd = cmd
@@ -43,6 +45,10 @@ def get_attrs(obj, meta=None):
 		res[k] = obj._attr_key(k)
 	return res
 
+class BadKeyComponentError(RuntimeError):
+	pass
+scalar_types=integer_types+string_types
+
 class BaseRef(object):
 	"""\
 		A basic (reference to an) object.
@@ -56,6 +62,10 @@ class BaseRef(object):
 		# some arguments have been eaten
 		if key is None:
 			key=self._key
+		else:
+			for k in key:
+				if not isinstance(k,scalar_types):
+					raise BadKeyComponentError(k,key)
 		if meta is None:
 			meta=getattr(self,'_meta',None)
 
@@ -63,6 +73,14 @@ class BaseRef(object):
 		self.key = tuple(key)
 		self.code = code
 	
+	### BaseRef objects "are" their keys.
+
+	def __len__(self):
+		return len(self.key)
+
+	def __getitem__(self,k):
+		return self.key[k]
+
 	def __hash__(self):
 		return self.key.__hash__()
 	
