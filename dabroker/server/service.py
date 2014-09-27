@@ -15,7 +15,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # This implements the main broker server.
 
 from .loader import Loaders
-from ..base import UnknownCommandError,BaseRef
+from ..base import UnknownCommandError,BaseRef, Field,Ref,BackRef,Callable, AttrAdapter, BrokeredInfo
 from ..util import import_string
 from ..base.config import default_config
 from ..base.transport import BaseCallbacks
@@ -25,9 +25,15 @@ from .codec import adapters as default_adapters
 import sys
 from traceback import format_exc
 from itertools import chain
+from six import string_types
+from inspect import ismethod,isfunction
 
 import logging
 logger = logging.getLogger("dabroker.server.service")
+
+class _NotGiven: pass
+
+_export_seq = 0
 
 class BrokerServer(BrokerEnv, BaseCallbacks):
 	"""\
@@ -258,4 +264,114 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 
 			msg = self.codec.encode(msg, include=include)
 			self.transport.send(msg)
+
+	############# Convenience methods for exporting stuff
+
+	def export_object(self, obj, attrs=None, vars=None, refs=None, backrefs=None, funcs=None, name=None, key=None, classkey=None, metacls=BrokeredInfo):
+		"""\
+			Convenience method to export a single object via DaBroker.
+			The object's class must not already be exported.
+
+			This works by calling export_class on the object's class, but
+			adds the _meta attribute to the object instead. Thus, you need
+			to explicitly add object-level attributes.
+			"""
+		meta = self.export_class(obj.__class__, attrs=attrs, vars=vars, refs=refs, backrefs=backrefs, funcs=funcs, classfuncs=_NotGiven, name=name, key=classkey, metacls=metacls, _set=obj)
+		return meta
+
+	def export_class(self, cls, attrs=None, vars=None, refs=None, backrefs=None, funcs=None, classfuncs=None, name=None, key=None, classkey=None, metacls=BrokeredInfo, _set=None):
+		"""\
+			Convenience method to export a class via DaBroker.
+			@cls: the class to export.
+			@attrs: A list of attributes to exports. They will be looked up in the class to determine their type.
+			@name: The client-visible name of this class. Defaults to the Python classname.
+			@key, @classkey: well-known keys for the class. Will otherwise be allocated.
+			@vars @refs @backrefs @funcs @classfuncs: Attributes to export, will not be looked up in the class.
+
+			Note that auto-detecting attributes works on the class, i.e.
+			the un-nitialized object. You need to add attributes manually
+			if they are added only when the object is created.
+			"""
+
+		if getattr(cls,'_meta',None) is not None:
+			raise RuntimeError("Class '{}' already has a '_meta' member".format(repr(cls)))
+
+		# Build
+		known = set()
+		def make_set(s):
+			res = set()
+			if s is None:
+				return res
+
+			if isinstance(s,string_types):
+				s = s.split(' ')
+			for m in s:
+				if m:
+					res.add(m)
+					known.add(m)
+			return res
+
+		# known types
+		vars = make_set(vars)
+		refs = make_set(refs)
+		backrefs = make_set(backrefs)
+		funcs = make_set(funcs)
+		if classfuncs is not _NotGiven:
+			classfuncs = make_set(classfuncs)
+
+		if attrs is not None:
+			if isinstance(attrs,string_types):
+				if attrs == '*':
+					attrs = (x for x in dir(cls) if not x.startswith('_'))
+				else:
+					attrs = attrs.split(' ')
+			for a in attrs:
+				if a in known:
+					continue
+				if isinstance(a,AttrAdapter):
+					vars.add(a) # doesn't matter which kind
+					continue
+				m = getattr(cls,a)
+				if isfunction(m): # PY3 unbound method, or maybe a static function
+					funcs.add(a)
+				elif hasattr(m,'_meta'): # another DaBroker object
+					refs.add(a)
+				elif not ismethod(m): # data, probably
+					vars.add(a)
+				elif getattr(m,'__self__',None) is cls: # classmethod, py2+py3
+					classfuncs.add(a)
+				else: # must be a PY2 unbound method
+					funcs.add(a)
+		
+		if name:
+			clsname = name
+		else:
+			clsname = cls.__name__
+			global _export_seq
+			_export_seq += 1
+			name = '_exp_'+str(_export_seq)
+
+		meta = metacls(name)
+
+		if classfuncs is not _NotGiven and classfuncs:
+			mmeta = BrokeredInfo("meta_"+name)
+			for f in classfuncs:
+				if not isinstance(f,AttrAdapter):
+					f = Callable(f)
+				mmeta.add(f)
+			if classkey is None:
+				classkey = (self.loader.static.id, '_ecm',name)
+			self.loader.add(mmeta,*classkey)
+			meta._meta = mmeta
+
+		for f in vars: meta.add(f,Field)
+		for f in refs: meta.add(f,Ref)
+		for f in backrefs: meta.add(f,BackRef)
+		for f in funcs: meta.add(f,Callable)
+		cls._meta = meta
+		setattr(cls if _set is None else _set, '_meta', meta)
+		if key is None:
+			key = (self.loader.static.id, '_ec',name)
+		self.loader.add(meta,*key)
+		return meta
 

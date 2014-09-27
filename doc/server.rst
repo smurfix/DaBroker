@@ -47,11 +47,19 @@ with
         servers = ("joe","curly","moe")
         load = {'joe':0.1, 'curly':None, 'moe':2.5}
         health = "OK"
-    
+
 The client obtains a root object once; it's therefore a good idea to move
 mutable data to another object. You'll see how to publish updates later.
 
-Construct the info objects:
+    broker.export_class(Status, 'servers load health')
+    root = MyRoot()
+    broker.export_object(root, 'version_string version_tuple login', refs='status')
+    broker.add_static(root,"root")
+    # export_class does not override 
+
+You can also pass in an iterable. Class inspection is only used 
+
+You can of course do all of this manually:
 
     from dabroker.base import BrokeredInfo, Field,Ref,Callable
 
@@ -69,7 +77,7 @@ Construct the info objects:
     MyRoot._meta = rootInfo
     Status._meta = statusInfo
 
-Next, add unique keys:
+    # Next, add unique keys:
 
     broker.add_static(rootInfo,"root","meta")
     broker.add_static(statusInfo,"status","meta")
@@ -84,6 +92,7 @@ Next, add unique keys:
     broker.loader.static.add(root.status,"status")
 
 because DaBroker supports multiple loaders.
+
 Thus:
 
     >>> print root._key
@@ -92,7 +101,7 @@ shows
 
     R:('static','root')‹ABCDEFGH›
 
-You can now do this
+You can now do this on the client:
 
     >>> print broker.root.status.health
     OK
