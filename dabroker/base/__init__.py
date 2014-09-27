@@ -218,14 +218,19 @@ class BrokeredInfo(BaseObj):
 		self.refs = dict()
 		self.backrefs = dict()
 		self.calls = dict()
-		self._names = set()
+		self._fields = set()
 
 		self.add(Ref("_meta"))
 
-	def add(self, f):
-		if f in self._names:
-			raise RuntimeError("Dup field",f)
-		self._names.add(f)
+	def add(self, f, cls=None):
+		"""Add a field named 'f' to me."""
+		if isinstance(f,string_types):
+			f = cls(f)
+		elif cls is not None:
+			assert isinstance(f,cls),(f,cls)
+		if f in self._fields:
+			raise RuntimeError("Field already exists",f)
+		self._fields.add(f)
 		if isinstance(f,Field):
 			self.fields[f.name] = f
 		elif isinstance(f,Ref):
@@ -281,6 +286,15 @@ class AttrAdapter(object):
 	@classmethod
 	def decode(cls,**attr):
 		return cls.cls(**attr)
+	
+	# fields should compare with their names
+	def __hash__(self):
+		return self.name.__hash__()
+	def __eq__(self,other):
+		return self.name.__eq__(getattr(other,'name',other))
+	def __ne__(self,other):
+		return self.name.__ne__(getattr(other,'name',other))
+
 
 @codec_adapter
 class FieldAdapter(AttrAdapter):
