@@ -36,7 +36,7 @@ class Loaders(object):
 
 		self.static = StaticLoader()
 		self.add_loader(self.static)
-		self.static.new(broker_info_meta)
+		self.static.add(broker_info_meta)
 
 	def add_loader(self,loader):
 		"""Register a loader."""
@@ -71,7 +71,7 @@ class Loaders(object):
 			key = key[0]._key.key
 		self.loaders[key[0]].delete(*key[1:])
 
-	def new(self, obj, *key):
+	def add(self, obj, *key):
 		"""\
 			Add an object. Gets the correct loader from the object's class.
 			"""
@@ -80,7 +80,7 @@ class Loaders(object):
 		else:
 			k = getattr(obj,'_meta',obj.__class__._meta)._key.key[0]
 
-		self.loaders[k].new(obj, key[1:] if key else ())
+		self.loaders[k].add(obj, *(key[1:] if key else ()))
 
 class BaseLoader(object):
 	id=None
@@ -100,7 +100,7 @@ class BaseLoader(object):
 	def delete(self,*key):
 		raise NotImplementedError("You need to override {}.delete()".format(self.__class__.__name__))
 
-	def new(self, obj):
+	def add(self, obj):
 		raise NotImplementedError("You need to override {}.new()".format(self.__class__.__name__))
 		
 	def set_key(self, obj, *key):
@@ -108,8 +108,14 @@ class BaseLoader(object):
 		if obj is broker_info_meta:
 			return broker_info_meta._key
 
-		# getattr() might use the class property, which recurses back here
-		kx = obj.__dict__.get('_key',None)
+		if len(key) == 1 and isinstance(key[0],BaseRef):
+			kx = key[0]
+			assert obj.__dict__.get('_key',kx) is kx, (key,kx)
+			key = None
+		else:
+			# getattr() calls the class' ._key property, which would recurse back here :-/
+			kx = obj.__dict__.get('_key',None)
+
 		if kx is not None:
 			k = kx.key
 			assert k[0] == self.id, (k,self.id)
@@ -133,7 +139,7 @@ class StaticLoader(BaseLoader):
 	def delete(self,*key):
 		del self.objects[key]
 
-	def new(self,obj, *key):
+	def add(self,obj, *key):
 		assert key not in self.objects or self.objects[key] is obj,(key, obj, self.objects[key])
 		self.set_key(obj,*key)
 		self.objects[key] = obj
