@@ -22,7 +22,7 @@ from dabroker.server.service import BrokerServer
 from dabroker.server.loader.sqlalchemy import SQLLoader
 from dabroker.base import BrokeredInfo, Field, BaseObj
 from dabroker.client.service import BrokerClient
-from dabroker.util import cached_property
+from dabroker.util import cached_property,client_callable
 
 from gevent import spawn
 from gevent.event import AsyncResult
@@ -48,6 +48,10 @@ class Person(Base):
 	# Notice that each column is also a normal Python instance attribute.
 	id = Column(Integer, primary_key=True)
 	name = Column(String(250), nullable=False)
+
+	@client_callable
+	def namename(self):
+		return self.name+self.name
  
 try:
 	os.unlink('/tmp/test23.db')
@@ -167,6 +171,7 @@ class Test23_client(TestClient):
 		assert not p2._obsolete
 		assert p1.name == "Fred Flintstone", p1.name
 		assert p2.name == "Freddy Firestone", p2.name
+		assert p2.namename() == "Freddy FirestoneFreddy Firestone", p2.namename()
 
 		self.jump(0,2) # goto E
 

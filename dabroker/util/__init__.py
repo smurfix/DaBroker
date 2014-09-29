@@ -119,3 +119,11 @@ class cached_property(object):
 				value = value.get()
 		return value
 
+def client_callable(fn):
+	"""\
+		Convenience helper to mark a method as exported to the client
+		Used by the sqlalchemy loader
+		"""
+	fn._dab_callable = True
+	return fn
+

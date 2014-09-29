@@ -15,7 +15,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # This implements the main broker server.
 
 from .loader import Loaders
-from ..base import UnknownCommandError,BaseRef, Field,Ref,BackRef,Callable, AttrAdapter, BrokeredInfo
+from . import ServerBrokeredInfo
+from ..base import UnknownCommandError,BaseRef, Field,Ref,BackRef,Callable, AttrAdapter
 from ..util import import_string
 from ..base.config import default_config
 from ..base.transport import BaseCallbacks
@@ -267,7 +268,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 
 	############# Convenience methods for exporting stuff
 
-	def export_object(self, obj, attrs=None, vars=None, refs=None, backrefs=None, funcs=None, name=None, key=None, classkey=None, metacls=BrokeredInfo):
+	def export_object(self, obj, attrs=None, vars=None, refs=None, backrefs=None, funcs=None, name=None, key=None, classkey=None, metacls=ServerBrokeredInfo):
 		"""\
 			Convenience method to export a single object via DaBroker.
 			The object's class must not already be exported.
@@ -279,7 +280,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 		meta = self.export_class(obj.__class__, attrs=attrs, vars=vars, refs=refs, backrefs=backrefs, funcs=funcs, classfuncs=_NotGiven, name=name, key=classkey, metacls=metacls, _set=obj)
 		return meta
 
-	def export_class(self, cls, attrs=None, vars=None, refs=None, backrefs=None, funcs=None, classfuncs=None, name=None, key=None, classkey=None, metacls=BrokeredInfo, _set=None):
+	def export_class(self, cls, attrs=None, vars=None, refs=None, backrefs=None, funcs=None, classfuncs=None, name=None, key=None, classkey=None, metacls=ServerBrokeredInfo, _set=None):
 		"""\
 			Convenience method to export a class via DaBroker.
 			@cls: the class to export.
@@ -354,7 +355,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 		meta = metacls(name)
 
 		if classfuncs is not _NotGiven and classfuncs:
-			mmeta = BrokeredInfo("meta_"+name)
+			mmeta = ServerBrokeredInfo("meta_"+name)
 			for f in classfuncs:
 				if not isinstance(f,AttrAdapter):
 					f = Callable(f)
@@ -374,4 +375,3 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 			key = (self.loader.static.id, '_ec',name)
 		self.loader.add(meta,*key)
 		return meta
-

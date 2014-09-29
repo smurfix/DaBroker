@@ -14,7 +14,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # The sqlalchemy object loader
 
-from ...base import BrokeredInfo,BrokeredMeta,BaseRef, Field,Ref,BackRef,Callable, get_attrs,NoData
+from .. import ServerBrokeredInfo
+from ...base import BrokeredMeta,BaseRef, Field,Ref,BackRef,Callable, get_attrs,NoData
 from ...util import cached_property
 from ...util.thread import local_object
 from ...util.sqlalchemy import with_session
@@ -53,7 +54,7 @@ def keyfix(self,*a,**k):
 	self.__class__._dab.fixup(self)
 	return self.__dict__.get('_key')
 
-class SQLInfo(BrokeredInfo):
+class SQLInfo(ServerBrokeredInfo):
 	"""This class represents a single SQL table"""
 	_dab_cached = None
 
@@ -97,6 +98,7 @@ class SQLInfo(BrokeredInfo):
 			cls = model
 		load_me.__name__ = str("codec_sql_"+self.name)
 
+		self.add_callables(model)
 		server.codec.register(load_me)
 
 	def __call__(self, **kw):
