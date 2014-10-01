@@ -28,17 +28,31 @@ from flask._compat import string_types
 	
 logger = logging.getLogger("dabroker.util.thread")
 
-local_objects = LocalManager()
+class CloningLocalManager(LocalManager):
+	"""\
+		A LocalManager with a copy function which copies items from another context.
+		The idea is to have contexts which survive a spawn().
+		"""
+	def copy_from(self,ident):
+		for local in self.locals:
+			storage = local.__storage__
+			if ident in storage:
+				storage[local.__ident_func__()] = storage[ident]
+
+local_objects = CloningLocalManager()
+cloned_local_objects = CloningLocalManager()
 class local_object(Local):
 	def __init__(self):
 		super(local_object,self).__init__()
 		local_objects.locals.append(self)
+class cloned_local_object(Local):
+	def __init__(self):
+		super(cloned_local_object,self).__init__()
+		cloned_local_objects.locals.append(self)
 class local_stack(LocalStack):
 	def __init__(self):
 		super(local_stack,self).__init__()
 		local_objects.locals.append(self)
-
-local_info = local_object()
 
 aux_cleanup = []
 
@@ -57,19 +71,21 @@ class Thread(object):
 	def code(self, *a,**k):
 		raise RuntimeError("You forgot to override %s.code()"%(self.__class__.__name__,))
 
-	def run(self):
+	def run(self,parent_ident):
+		cloned_local_objects.copy_from(parent_ident)
 		try:
 			return self.code(*self.a,**self.k)
 		except gevent.GreenletExit:
 			pass
 		finally:
 			local_objects.cleanup()
+			cloned_local_objects.cleanup()
 			for p in aux_cleanup:
 				p()
 			
 	def start(self):
 		assert self.job is None
-		self.job = gevent.spawn(self.run)
+		self.job = gevent.spawn(self.run,gevent.getcurrent())
 		return self
 		
 	def stop(self):
