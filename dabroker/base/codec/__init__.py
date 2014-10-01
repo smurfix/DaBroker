@@ -14,12 +14,12 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 import sys
 from time import mktime
-from ...util import TZ,UTC, format_dt
+from ...util import TZ,UTC, format_dt,pformat
 from ..config import default_config
 from .. import NoData,ManyData
 import datetime as dt
 from collections import namedtuple
-from dabroker.util import attrdict
+from dabroker.util import attrdict,pformat
 
 from traceback import format_tb
 import logging
@@ -453,7 +453,7 @@ class BaseCodec(object):
 				try:
 					res = self.name2cls[obj].decode(**res)
 				except Exception:
-					logger.error("Decoding: %s: %r %r",obj,data,res)
+					logger.error("Decoding: %s:\n%s\n%s",obj,pformat(data), pformat(res))
 					logger.error("Decoding:: %r",self.name2cls[obj])
 					raise
 			if oid is not None:
