@@ -16,6 +16,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from importlib import import_module
 from pprint import pformat
+from six import PY2,PY3, string_types,text_type
 
 from .thread import AsyncResult
 
@@ -23,6 +24,66 @@ import pytz
 UTC = pytz.UTC
 with open("/etc/localtime", 'rb') as tzfile:
 	TZ = pytz.tzfile.build_tzinfo(str('local'), tzfile)
+
+# a prettyprinter which skips these pesky u'' prefixes (PY2)
+# and which emits UTF8 instead of escaping everything under the sun
+# and which ignores OrderedDict
+from pprint import PrettyPrinter,_safe_repr
+import datetime as _dt
+from io import StringIO as _StringIO
+
+class UTFPrinter(PrettyPrinter,object):
+	def _format(self, object, *a,**k):
+		typ = type(object)
+		if hasattr(object,"values"):
+			object = dict(object.items())
+		return super(UTFPrinter,self)._format(object, *a,**k)
+
+	def format(self, object, *a,**k):
+		typ = type(object)
+		if isinstance(object, string_types):
+			if PY2 and isinstance(typ,str):
+				object = object.decode("utf-8")
+		elif typ is _dt.datetime:
+			return "DT( %s )"%(format_dt(object),),True,False
+		else:
+			return super(UTFPrinter,self).format(object,*a,**k)
+
+		s = repr(object)
+		if '\\' not in s:
+			if s[0] in ('"',"'"):
+				return s,True,False
+			else:
+				return s[1:],True,False
+
+		# more work here
+		if "'" in object and '"' not in object:
+			closure = '"'
+			quotes = {'"': '\\"'}
+		else:
+			closure = "'"
+			quotes = {"'": "\\'"}
+		qget = quotes.get
+		sio = _StringIO()
+		write = sio.write
+		for char in object:
+			char = text_type(char)
+			if not char.isalpha():
+				char = qget(char, text_type(repr(char)))
+				if char[0] == 'u':
+					char = char[2:-1]
+				else:
+					char = char[1:-1]
+			write(char)
+		return ("%s%s%s" % (closure, sio.getvalue(), closure)), True, False
+
+def pprint(object, stream=None, indent=1, width=80, depth=None):
+	"""Pretty-print a Python object to a stream [default is sys.stdout]."""
+	UTFPrinter(stream=stream, indent=indent, width=width, depth=depth).pprint(object)
+
+def pformat(object, indent=1, width=80, depth=None):
+	"""Format a Python object into a pretty-printed representation."""
+	return UTFPrinter(indent=indent, width=width, depth=depth).pformat(object)
 
 # Default timeout for the cache.
 def format_dt(value, format='%Y-%m-%d %H:%M:%S'):
