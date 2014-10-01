@@ -180,6 +180,17 @@ class cached_property(object):
 				value = value.get()
 		return value
 
+#class client_callable_classmethod(classmethod):
+#	def __get__(self,*a,**k):
+#		res = super(client_callable_classmethod,self).__get__(*a,**k)
+#		res._dab_callable = True
+#		return res
+def client_callable_classmethod(fn):
+	fn = classmethod(fn)
+	if PY3:
+		fn._dab_callable = True
+	return fn
+
 def client_callable(fn):
 	"""\
 		Convenience helper to mark a method as exported to the client
