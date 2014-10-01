@@ -277,7 +277,10 @@ class BaseCodec(object):
 		# No, this is a new object: Generate a new ID for it.
 		# (There's other stuff in objcache, but that's harmless.)
 		oid = 1+len(objcache)
-		objcache[did] = [oid,None,None]
+		objcache[did] = [oid,None,None,data]
+		# we need to keep the data around.
+		# Otherwise the address may get reused (data gets dynamically build
+		# by encoding objects), so we get very interesting data corruption effects.
 		
 		if isinstance(data,(list,tuple)):
 			# A list will keep its "include" state
