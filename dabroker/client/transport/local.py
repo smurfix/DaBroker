@@ -14,18 +14,13 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # generic test setup
 
-from gevent import spawn,sleep,GreenletExit
-from weakref import ref, WeakValueDictionary
-
 import logging,sys,os
 logger = logging.getLogger("dabroker.client.transport.local")
 
-from dabroker.base import BaseObj,BrokeredInfo, Field,Ref,Callable
-from dabroker.base.config import default_config
 from dabroker.base.transport import BaseTransport
 from dabroker.base.transport.local import RPCmessage,Queue
 from dabroker.util import format_msg
-from dabroker.util.thread import Main, AsyncResult, spawned
+from dabroker.util.thread import AsyncResult, spawned
 from dabroker.client import BrokerClient
 from dabroker.client import service as cs
 from dabroker.server import BrokerServer

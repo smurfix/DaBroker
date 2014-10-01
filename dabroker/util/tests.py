@@ -14,7 +14,6 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # generic test setup
 
-from pprint import pformat
 from gevent import spawn,sleep,GreenletExit
 from weakref import ref, WeakValueDictionary
 
