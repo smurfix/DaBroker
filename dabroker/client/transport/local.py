@@ -21,9 +21,6 @@ from dabroker.base.transport import BaseTransport
 from dabroker.base.transport.local import RPCmessage,Queue
 from dabroker.util import format_msg
 from dabroker.util.thread import AsyncResult, spawned
-from dabroker.client import BrokerClient
-from dabroker.client import service as cs
-from dabroker.server import BrokerServer
 
 _client_id = 0
 
