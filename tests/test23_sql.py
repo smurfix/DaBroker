@@ -22,7 +22,7 @@ from dabroker.server.service import BrokerServer
 from dabroker.server.loader.sqlalchemy import SQLLoader
 from dabroker.base import BrokeredInfo, Field, BaseObj
 from dabroker.client.service import BrokerClient
-from dabroker.util import cached_property,client_callable
+from dabroker.util import cached_property,exported
 
 from gevent import spawn
 from gevent.event import AsyncResult
@@ -49,7 +49,7 @@ class Person(Base):
 	id = Column(Integer, primary_key=True)
 	name = Column(String(250), nullable=False)
 
-	@client_callable
+	@exported
 	def namename(self):
 		return self.name+self.name
  

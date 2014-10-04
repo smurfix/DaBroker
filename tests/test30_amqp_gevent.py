@@ -31,9 +31,7 @@ logger = test_init("test.30.amqp")
 cfg = {'transport':'amqp', 'codec':'marshal'}
 
 class ServerThread(Thread):
-	def run(self):
-		cfg=self.k['cfg']
-		ready=self.k['ready']
+	def code(self, cfg,ready):
 		from tests.t30_server import TestServer
 		logger.debug("Starting the server")
 		try:
@@ -50,8 +48,7 @@ class ServerThread(Thread):
 				raise
 	
 class ClientThread(Thread):
-	def run(self):
-		cfg=self.k['cfg']
+	def code(self,cfg):
 		from tests.t30_client import TestClient
 		logger.debug("Starting the client")
 		cfg = cfg.copy()

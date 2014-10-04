@@ -71,7 +71,7 @@ class Thread(object):
 	def code(self, *a,**k):
 		raise RuntimeError("You forgot to override %s.code()"%(self.__class__.__name__,))
 
-	def run(self,parent_ident):
+	def _run(self,parent_ident):
 		cloned_local_objects.copy_from(parent_ident)
 		try:
 			return self.code(*self.a,**self.k)
@@ -85,7 +85,7 @@ class Thread(object):
 			
 	def start(self):
 		assert self.job is None
-		self.job = gevent.spawn(self.run,gevent.getcurrent())
+		self.job = gevent.spawn(self._run,gevent.getcurrent())
 		return self
 		
 	def stop(self):
