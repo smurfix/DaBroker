@@ -79,18 +79,18 @@ class BaseTransport(object):
 		self.connect2()
 
 	def connect1(self):
-		"""Override to set up a connection.
+		"""Set up a connection.
 
-		Call super() before running your code."""
+		Call super() before your code."""
 
 		if self._job is not None:
 			raise RuntimeError("Already connected")
 		logger.debug("connecting: %r",self)
 
 	def connect2(self):
-		"""Override to add initial tasks, after you're connected.
+		"""Add initial tasks after a connection has been established.
 
-		Call super() after running your code."""
+		Call super() after your code."""
 		assert self._job is None
 		self._job = self._run_job()
 		self._job.start()
