@@ -184,7 +184,7 @@ class _exc(object):
 
 		class _Error(ServerError,e):
 			pass
-		_Error.__name__ = t
+		_Error.__name__ = str(t)
 
 		if e is not None:	
 			t = None
@@ -384,7 +384,8 @@ class BaseCodec(object):
 
 		if isinstance(err,string_types):
 			err = Exception(err)
-		res['_error'] = self.encode(err)
+		# don't use the normal 
+		res['_error'] = BaseCodec.encode(self,err)
 
 		if tb is not None:
 			if hasattr(tb,'tb_frame'):
@@ -478,7 +479,7 @@ class BaseCodec(object):
 
 		if type(data) is dict:
 			if '_error' in data:
-				real_error = self.decode(data['_error'])
+				real_error = BaseCodec.decode(self,data['_error'])
 				tb = data.get('tb',None)
 				if tb:
 					real_error._traceback = tb
