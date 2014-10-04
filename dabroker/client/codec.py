@@ -112,7 +112,7 @@ class _ClientData(ClientBaseObj):
 	def __repr__(self):
 		res = "<ClientData"
 		n = self.__class__.__name__
-		if n != "ClientObj":
+		if n not in ("ClientObj","ClientData"):
 			res += ":"+n
 		n = self._key
 		if n is not None:
