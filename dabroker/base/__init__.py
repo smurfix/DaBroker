@@ -57,7 +57,7 @@ class BaseRef(object):
 		@code: a secret has to ensure that the client got the code legally
 			(no object enumeration, possibly includes access rights).
 		"""
-	def __init__(self, key=None, meta=None, code=None, **k):
+	def __init__(self, key=None, meta=None, code=None):
 		# if this is a hybrid BaseObj+BaseRef thing (like BrokeredInfoInfo),
 		# some arguments have been eaten
 		if key is None:
