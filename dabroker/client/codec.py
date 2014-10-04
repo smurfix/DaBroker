@@ -93,11 +93,20 @@ class ClientBaseObj(BaseObj):
 			To determine which, try to fetch the new version via `self._key()`."""
 		self._obsolete = True
 
+_ref_cache = WeakValueDictionary()
 class ClientBaseRef(BaseRef):
 	"""DaBroker-controlled references to objects on the client."""
-	def __init__(self,*a,**k):
-		super(ClientBaseRef,self).__init__(*a,**k)
+	def __new__(cls, key=None, meta=None, code=None):
+		assert isinstance(key,tuple),key
+		self = _ref_cache.get(key,None)
+		if self is not None:
+			return self
+		return super(ClientBaseRef,cls).__new__(cls)
+	def __init__(self, key=None, meta=None, code=None):
+		if key in _ref_cache: return
+		super(ClientBaseRef,self).__init__(key=key,meta=meta,code=code)
 		self._dab = current_service.top
+		_ref_cache[key] = self
 
 	def __call__(self):
 		return self._dab.get(self)
