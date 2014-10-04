@@ -254,6 +254,14 @@ class _attr(object):
 		for k,v in kw.items():
 			setattr(self,k,v)
 
+	# fields should compare with their names
+	def __hash__(self):
+		return self.name.__hash__()
+	def __eq__(self,other):
+		return self.name.__eq__(getattr(other,'name',other))
+	def __ne__(self,other):
+		return self.name.__ne__(getattr(other,'name',other))
+
 class Field(_attr):
 	"""A standard data field; may be a dict/list.
 		Set the "hidden" attribute to True if you don't want this value broadcast."""
@@ -287,15 +295,6 @@ class AttrAdapter(object):
 	def decode(cls,**attr):
 		return cls.cls(**attr)
 	
-	# fields should compare with their names
-	def __hash__(self):
-		return self.name.__hash__()
-	def __eq__(self,other):
-		return self.name.__eq__(getattr(other,'name',other))
-	def __ne__(self,other):
-		return self.name.__ne__(getattr(other,'name',other))
-
-
 @codec_adapter
 class FieldAdapter(AttrAdapter):
 	cls = Field
