@@ -57,7 +57,7 @@ class UTFPrinter(PrettyPrinter,object):
 				return s[1:],True,False
 
 		# more work here
-		if "'" in object and '"' not in object:
+		if "'" in s[2:-1] and '"' not in s[2:-1]:
 			closure = '"'
 			quotes = {'"': '\\"'}
 		else:
@@ -67,13 +67,14 @@ class UTFPrinter(PrettyPrinter,object):
 		sio = _StringIO()
 		write = sio.write
 		for char in object:
-			char = text_type(char)
 			if not char.isalpha():
 				char = qget(char, text_type(repr(char)))
 				if char[0] == 'u':
 					char = char[2:-1]
 				else:
 					char = char[1:-1]
+			else:
+				char = text_type(char)
 			write(char)
 		return ("%s%s%s" % (closure, sio.getvalue(), closure)), True, False
 
