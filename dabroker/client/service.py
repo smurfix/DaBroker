@@ -343,12 +343,10 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 
 	def get(self, key):
 		"""Get an object, from cache or from the server."""
-		logger.debug("Lookup A: %s",key)
 
 		# Step 1: if we locally changed the object, return our copy.
 		chg = self.obj_chg.get(key,None)
 		if chg is not None:
-			logger.debug("Lookup B: %s",chg.obj)
 			return chg.obj
 
 		# Step 2: Get it from cache.
@@ -357,7 +355,6 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 		if obj is not None:
 			if isinstance(obj,AsyncResult):
 				obj = obj.get(timeout=RETR_TIMEOUT)
-			logger.debug("Lookup C: %s",obj)
 			return obj
 
 		# Step 3: Get it from the network.
@@ -381,7 +378,6 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 			# The deserializer has already added the object to the cache (or it should have)
 			cobj = self._cache.get(key,None)
 			assert cobj is obj, (cobj,obj,key)
-			logger.debug("Lookup D: %s",obj)
 			return obj
 		
 	def obj_new(self,cls,**kw):
