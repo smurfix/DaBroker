@@ -37,9 +37,9 @@ from dabroker.base import BaseObj,BrokeredInfo, Field,Ref,Callable
 from dabroker.base.config import default_config
 from dabroker.base.transport import BaseTransport
 from dabroker.util.thread import Main, AsyncResult, spawned
-from dabroker.client import BrokerClient
+from dabroker.client.service import BrokerClient
 from dabroker.client import service as cs
-from dabroker.server import BrokerServer
+from dabroker.server.service import BrokerServer
 
 cs.RETR_TIMEOUT=1 # except that we want 1000 when debugging
 cs.CACHE_SIZE=5

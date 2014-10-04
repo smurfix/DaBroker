@@ -18,7 +18,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 from dabroker import patch; patch()
 from dabroker.util.thread import spawned
 from dabroker.util import exported
-from dabroker.client.codec import baseclass_for, ClientBaseObj
+from dabroker.client import ClientBaseObj
+from dabroker.client.codec import baseclass_for
 
 from gevent import spawn
 

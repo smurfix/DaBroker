@@ -76,14 +76,15 @@ Client-side subclassing
 If you want to add your own client-side attributes or methods for client-local
 processing, the recommended way is to register it with `@baseclass_for`:
 
-    from dabroker.client.codec import baseclass_for, ClientBaseObj
+    from dabroker.client import ClientBaseObj
+    from dabroker.client.codec import baseclass_for
 
     @baseclass_for("static","root","meta")
     class my_root(ClientBaseObj):
         def test_me(self):
             logger.debug("Local call")
 
-    from dabroker.client import BrokerClient
+    from dabroker.client.service import BrokerClient
     broker = BrokerClient(cfg={…})
     broker.root.test_me()
 
