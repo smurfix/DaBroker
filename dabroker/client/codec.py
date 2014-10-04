@@ -174,7 +174,7 @@ class ClientBaseRef(BaseRef):
 
 	def _cleanup_receiver(self, receiver_ref):
 		"""Disconnect a receiver from all senders."""
-		self._disconnect(receiver_ref.receiver_id, ANY_ID)
+		self._disconnect(receiver_ref.receiver_id)
 
 class _ClientData(ClientBaseObj):
 	"""Mix-in class for remote objects"""
