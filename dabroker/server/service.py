@@ -42,6 +42,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 
 		"""
 	root = None
+	transport = None
 
 	def __init__(self, cfg={}, loader=None, adapters=()):
 		# the sender might be set later
@@ -54,7 +55,6 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 			loader = Loaders(server=self)
 		self.loader = loader
 		self.codec = self.make_codec(default_adapters)
-		self.transport = self.make_transport()
 		self.register_codec(adapters)
 		super(BrokerServer,self).__init__()
 
@@ -78,6 +78,8 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 		self.codec.register(adapter)
 
 	def start(self,purge=False):
+		if self.transport is None:
+			self.transport = self.make_transport()
 		self.transport.connect(purge=purge)
 
 	def stop(self):
