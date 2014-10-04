@@ -180,3 +180,49 @@ Specific serializations
 
         No special considerations. Not portable. About as fast as BSON.
 
+RPC
+---
+
+DaBroker interprets these fields when receiving a message:
+
+    *   _m  
+
+        The name of the method to be called.
+
+    *   _o
+
+        The object to send the message to. If missing, the server object's
+        method 'do_MSGNAME' is called.
+
+    *   _a
+
+        An array of un-named arguments.
+
+    *   _mt
+
+        A flag. This corresponds to the 'meta' flag of the `Callable`
+        element defining a method call and specifies that a class method is
+        called on the DaBroker object. If False or missing, the method will
+        be called on the class.
+
+All other fields are interpreted as named arguments.
+
+In order to prevent the client from calling arbitrary object methods, the
+method 'MSGNAME' needs to have a '_dab_callable' attribute whose value is true.
+
+Replies are transmitted directly. The transport is responsible for
+associating replies with the originating call.
+
+Specific transports
+-------------------
+
+    *   AMQP
+
+        Messages are sent to the queue 'dab_queue',
+        unless otherwise specified in the 'rpc_queue' configuration item.
+        Server replies use the AMQP correlation id to associate replies
+        with requests.
+
+        Server alerts are sent to the exchange 'dab_alert',
+        unless otherwise specified in the 'rpc_queue' configuration item,
+        with a routing key of 'dab_info'.

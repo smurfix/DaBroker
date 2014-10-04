@@ -118,6 +118,9 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 	def add_static(self, obj, *key):
 		self.loader.static.add(obj, *key)
 
+	def del_static(self, obj, *key):
+		self.loader.static.delete(obj, *key)
+
 	def get(self,*a,**k):
 		return self.loader.get(*a,**k)
 

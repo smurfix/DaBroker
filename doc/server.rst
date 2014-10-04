@@ -120,6 +120,7 @@ or raises an error) and `find` requests. In the meta object which shall
 support searching, you need to set the `_dab_cached` attribute to some
 non-`None` value, and add a method
 
+    @exported
     def _dab_search(self, _limit=None,**kw):
         # a sample which finds nothing
         if False:
@@ -146,41 +147,55 @@ SQLAlchemy and its ORM is supported directly:
     sql.add_model(Person, root.data, rw=True)
     sql.add_model(Address)
 
-This creates and registers a loader, and creates info objects for your models,
+This creates and registers a loader, and builds info objects for your models.
 The "Person" entry is added to root.data (or any other dictionary;
 presumably so that the client may directly access the model).
 
 The `_dab_cached` attribute is supported.
 
-TODO: The `rw` parameter can hold three values. The default is `False` (read-only),
+The `rw` parameter can hold three values. The default is `False` (read-only),
 which means that the client can call `.get()` and `.find()` methods on the
-class object to retrieve records. `True` adds `.new()`, `.delete()` and
-`update()` (which is usually done by syncing the client).
+class object to retrieve records (both are translated to calling
+`_dab_search` on the server).
+`True` adds `.new()` and `.delete()` (which is usually done by syncing the client).
 
 If `rw` is `None`, neither of these methods is available; the client can
-only read attributes (and call methods which you explicitly export).
+only read attributes, and call methods which you explicitly export.
 
-By default, all relationship attributes known to SQLAlchemy are exported.
+By default, all attributes known to SQLAlchemy are exported.
 Add a `hide` parameter with a set of field names to exclude if you want to
 block access to some fields.
 
 Updating an object
 ------------------
 
+Notify your clients.
+
     broker.obj_update(status, health="poor")
+
+Client objects are _not_ updated in-place. Instead, they are invalidated so
+that accessing them via some reference will retrieve them from the server.
 
 The client will immediately see this change:
 
     >>> print root.status.health
     poor
 
-Alternately, you can send a new object and update the root:
+If you replace objects and the references pointing to them,
+you need to invalidate the reference's container:
 
+    class Status(BaseObj):
+        seq = 0
+        [...]
     old_status = root.status
+    old_seq = Status.seq
+    Status.seq += 1
+
     new_status = broker.obj_new(Status, health="poor")
-    broker.add_static(new_status, "status","new")
+    broker.add_static(new_status, "status",Status.seq)
     broker.obj_update(root, status=new_status)
     broker.obj_delete(old_status)
+    broker.del_static(new_status, "status",old_seq)
 
 The client would then need to refresh its copy of the root object to see
 the new status:
