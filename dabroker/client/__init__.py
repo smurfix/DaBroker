@@ -63,8 +63,8 @@ class ClientBaseRef(BaseRef):
 			receiver_ref = receiver
 		self._receivers.setdefault(receiver_id, receiver_ref)
 	
-	def _send(self, sig, **k):
-		"""Send a signal."""
+	def send(self, sig, **k):
+		"""Distribute a signal locally."""
 		receivers = getattr(self,'_receivers',None)
 		if receivers is None:
 			return
