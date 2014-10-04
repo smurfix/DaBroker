@@ -365,7 +365,7 @@ class client_BaseObj(common_BaseObj):
 			Convert this object to a class
 			"""
 
-		k = ClientBaseRef(key=k,code=c)
+		k = ClientBaseRef(key=tuple(k),code=c)
 		if not r or '_meta' not in r:
 			raise RuntimeError("Object without meta data")
 
