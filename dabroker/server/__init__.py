@@ -17,7 +17,7 @@ from types import FunctionType
 
 class ServerBrokeredInfo(BrokeredInfo):
 	model = None
-	def add_callables(self,model):
+	def add_callables(self,model, hide=()):
 		# TODO: this should be in a more generic location
 		# and probably somewhat unified with .server.export_class()
 		if self.model is None:
@@ -25,7 +25,7 @@ class ServerBrokeredInfo(BrokeredInfo):
 		else:
 			assert self.model is model, (self.model,model)
 		for a in dir(model):
-			if a.startswith('_'): continue
+			if a.startswith('_') or a in hide: continue
 			m = getattr(model,a)
 			if not getattr(m,'_dab_callable',False): continue
 			if getattr(m,'__self__',None) is model: # classmethod
@@ -36,7 +36,7 @@ class ServerBrokeredInfo(BrokeredInfo):
 				self.add(Callable(m.__name__))
 
 		for a in dir(self):
-			if a.startswith('_'): continue
+			if a.startswith('_') or a in hide: continue
 			m = getattr(self,a)
 			if not getattr(m,'_dab_callable',False): continue
 			self._meta.add(Callable(m.__name__, meta=True))

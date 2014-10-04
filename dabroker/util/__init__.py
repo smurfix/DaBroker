@@ -17,6 +17,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 from importlib import import_module
 from pprint import pformat
 from six import PY2,PY3, string_types,text_type
+from functools import wraps
 
 from .thread import AsyncResult
 

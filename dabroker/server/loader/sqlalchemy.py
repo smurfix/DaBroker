@@ -100,7 +100,7 @@ class SQLInfo(ServerBrokeredInfo):
 			cls = model
 		load_me.__name__ = str("codec_sql_"+self.name)
 
-		self.add_callables(model)
+		self.add_callables(model,hide=('update','delete','new'))
 		server.codec.register(load_me)
 
 	def __call__(self, **kw):
