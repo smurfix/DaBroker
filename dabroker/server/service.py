@@ -243,7 +243,6 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 							o = o.model
 						proc = getattr(o,m)
 						if not getattr(proc,'_dab_callable',False):
-							import pdb;pdb.set_trace()
 							raise UnknownCommandError((m,o,a))
 					else:
 						proc = getattr(self,'do_'+m)
