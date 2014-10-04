@@ -229,7 +229,7 @@ class BrokeredInfo(BaseObj):
 		elif cls is not None:
 			assert isinstance(f,cls),(f,cls)
 		if f in self._fields:
-			raise RuntimeError("Field already exists",f)
+			raise RuntimeError("Field already exists",(f.name,f))
 		self._fields.add(f)
 		if isinstance(f,Field):
 			self.fields[f.name] = f
