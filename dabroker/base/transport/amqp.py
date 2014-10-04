@@ -21,7 +21,7 @@ logger = logging.getLogger("dabroker.server.transport.amqp")
 
 class AmqpTransport(BaseTransport):
 	"""Talk using RabbitMQ or another AMQP-compabible messaging system."""
-	defaults = dict(host='localhost', user='', password='', virtual_host='/', rpc_queue='rpc_queue', exchange='dab_alert')
+	defaults = dict(host='localhost', user='', password='', virtual_host='/', rpc_queue='dab_queue', rpc_exchange='dab_alert')
 	connection = None
 	content_type = None
 

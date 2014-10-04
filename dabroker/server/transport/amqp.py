@@ -50,9 +50,9 @@ class Transport(AmqpTransport):
 		logger.debug("Listen RPC %s",self.cfg['rpc_queue'])
 		self.channel.basic_consume(callback=self.on_rpc, queue=self.cfg['rpc_queue'])
 
-		self.channel.exchange_declare(exchange=self.cfg['exchange'], type='fanout', auto_delete=False, passive=False)
+		self.channel.exchange_declare(exchange=self.cfg['rpc_exchange'], type='fanout', auto_delete=False, passive=False)
 
 	def send(self, msg):
 		msg = self.encode_msg(msg)
-		self.channel.basic_publish(msg=msg, exchange=self.cfg['exchange'], routing_key='dab_info')#typ)
+		self.channel.basic_publish(msg=msg, exchange=self.cfg['rpc_exchange'], routing_key='dab_info')#typ)
 		

@@ -84,9 +84,9 @@ class Transport(AmqpTransport):
 #		self.rpc_channel.queue_declare(queue=self.cfg['rpc_queue'], auto_delete=False, passive=True)
 
 #		self.info_channel = self.connection.channel()
-		self.channel.exchange_declare(exchange=self.cfg['exchange'], type='fanout', auto_delete=False)
+		self.channel.exchange_declare(exchange=self.cfg['rpc_exchange'], type='fanout', auto_delete=False)
 
 		res = self.channel.queue_declare(exclusive=True)
-		self.channel.queue_bind(exchange=self.cfg['exchange'], queue=res.queue)
+		self.channel.queue_bind(exchange=self.cfg['rpc_exchange'], queue=res.queue)
 		self.channel.basic_consume(callback=self.on_info_msg, queue=res.queue, no_ack=True)
 
