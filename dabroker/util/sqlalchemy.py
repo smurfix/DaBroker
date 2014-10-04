@@ -15,18 +15,29 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # Some sqlalchemy helpers. They should be in dabroker.server.loader.sqlalchemy,
 # but the separation makes sense (setup there / production code here).
 
-from .thread import local_object,aux_cleanup
+from .thread import local_object
 from sqlalchemy.inspection import inspect
 from functools import wraps
 from contextlib import contextmanager
 
 import logging
-logger = logging.getLogger("dabroker.server.loader.sqlalchemy")
+logger = logging.getLogger("dabroker.util.sqlalchemy")
 
-_session = local_object()
+class local_session_object(local_object):
+	"""sqlalchemy caches things. Thus simply releasing a session from local
+		context doesn't dereference it, hence doesn't roll it back.
+		So we do this here."""
+	def __release_local__(self):
+		sess = self.__storage__.pop(self.__ident_func__(), None)
+		if sess is not None:
+			for s in sess.values():
+				s.rollback()
+
+_session = local_session_object()
 _sqlite_warned = False
 
 def session_maker(maker,name=None):
+	"""Create a thread-local session, if it doesn't exist already"""
 	if name is None:
 		name = "sql"
 	s = getattr(_session,name,None)
@@ -38,16 +49,6 @@ def session_maker(maker,name=None):
 			s.begin()
 		s._dab_wrapped = 0
 	return s
-
-def session_closer(name=None):
-	if name is None:
-		name = "sql"
-	s = getattr(_session,name,None)
-	if s is None:
-		return
-	s.close()
-	delattr(_session,name)
-aux_cleanup.append(session_closer)
 
 @contextmanager
 def session_wrapper(obj, maker=None):
