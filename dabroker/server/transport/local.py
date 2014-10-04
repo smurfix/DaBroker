@@ -27,7 +27,7 @@ logger = logging.getLogger("dabroker.server.transport.local")
 class Transport(BaseTransport):
 	"""Server side of the LocalQueue transport"""
 	def __init__(self,callbacks,cfg):
-		logger.debug("Server: setting up")
+		#logger.debug("Server: setting up")
 		self.callbacks = callbacks
 		self.p = LocalQueue(cfg)
 		self.p.server = ref(self) # for clients to find me
@@ -43,7 +43,7 @@ class Transport(BaseTransport):
 		logger.debug("Server: wait for messages")
 		while self.p.request_q is not None:
 			msg = self.p.request_q.get()
-			logger.debug("Server: received %r",msg)
+			#logger.debug("Server: received %r",msg)
 			self._process(msg)
 
 	def send(self,msg):

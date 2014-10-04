@@ -224,13 +224,13 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 		"""Receive a message. Usually called as a separate thread."""
 		incl = False
 		with self.env:
-			logger.debug("recv raw %r",msg)
+			#logger.debug("recv raw %r",msg)
 
 			rmsg=msg
 			try:
 				msg = self.codec.decode(msg)
 
-				logger.debug("recv %r",msg)
+				#logger.debug("recv %r",msg)
 				m = msg.pop('_m')
 				o = msg.pop('_o',None)
 				a = msg.pop('_a',())
@@ -254,7 +254,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 				except AttributeError:
 					raise UnknownCommandError((m,o,a))
 				msg = proc(*a,**msg)
-				logger.debug("reply %r",msg)
+				#logger.debug("reply %r",msg)
 				try:
 					msg = self.codec.encode(msg, include = getattr(proc,'include',incl))
 				except Exception:
@@ -269,7 +269,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 	def send(self, action, *a, **k):
 		"""Broadcast a message to all clients"""
 		with self.env:
-			logger.debug("bcast %s %r %r",action,a,k)
+			#logger.debug("bcast %s %r %r",action,a,k)
 			msg = k
 			include = k.pop('_include',False)
 			msg['_m'] = action

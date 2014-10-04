@@ -60,13 +60,13 @@ class Transport(BaseTransport):
 		while self.p.server is not None and self.p.server() is not None:
 			msg = self.reply_q.get()
 			if msg.msgid < 0:
-				logger.debug("Client: get msg %s",msg.msgid)
+				#logger.debug("Client: get msg %s",msg.msgid)
 				self.run_recv(msg.msg)
 			else:
 				r = self.q.pop(msg.msgid,None)
 				if r is not None:
 					m = msg.msg
-					logger.debug("Client: get msg %s",msg.msgid)
+					#logger.debug("Client: get msg %s",msg.msgid)
 					r.set(m)
 			
 	def send(self,msg):

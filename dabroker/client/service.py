@@ -556,7 +556,7 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 	def send(self, action, *a,**kw):
 		"""Generic method for RPCing the server"""
 		_obj = kw.pop('_obj',None)
-		logger.debug("send %s %r %r %r",action,_obj,a,kw)
+		#logger.debug("send %s %r %r %r",action,_obj,a,kw)
 		assert '_a' not in kw
 		assert '_m' not in kw
 		assert '_o' not in kw
@@ -567,17 +567,17 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 		if a:
 			kw['_a'] = a
 		msg = self._send(kw)
-		logger.debug("recv %r",msg)
+		#logger.debug("recv %r",msg)
 		return msg
 	
 	def _send(self,msg):
 		"""Low-level message sender"""
 		with self.env:
-			logger.debug("Send req: %r",msg)
+			#logger.debug("Send req: %r",msg)
 			msg = self.codec.encode(msg)
 			msg = self.transport.send(msg)
 			msg = self.codec.decode(msg)
-			logger.debug("Recv reply: %r",msg)
+			#logger.debug("Recv reply: %r",msg)
 			return msg
 
 	@spawned
@@ -592,7 +592,7 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 				self.end()
 				return
 
-			logger.debug("bcast %r",msg)
+			#logger.debug("bcast %r",msg)
 			m = msg.pop('_m')
 			a = msg.pop('_a',())
 
