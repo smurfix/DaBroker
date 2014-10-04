@@ -16,7 +16,7 @@ import os
 import sys
 from dabroker.server.service import BrokerServer
 from dabroker.base import BrokeredInfo, Field,Callable, BaseObj
-from dabroker.util import cached_property
+from dabroker.util import cached_property,exported
 from dabroker.util.thread import AsyncResult
 
 from dabroker.util.tests import test_init
@@ -36,6 +36,7 @@ class TestServer(BrokerServer):
 			hello = "Hello!"
 			data = {}
 
+			@exported
 			def pling(self,msg,**k):
 				return {'info':"Yes I know", 'root':k['root']}
 

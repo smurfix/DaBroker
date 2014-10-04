@@ -228,6 +228,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 				m = msg.pop('_m')
 				o = msg.pop('_o',None)
 				a = msg.pop('_a',())
+				mt = msg.pop('_mt',False)
 
 				try:
 					if o is not None:
@@ -235,7 +236,12 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 							incl = msg.get('_limit',99) < 10
 						else:
 							assert m in o._meta.calls,"You cannot call method {} of {}".format(m,o)
+						if not mt and m[0] != '_' and isinstance(o,ServerBrokeredInfo):
+							o = o.model
 						proc = getattr(o,m)
+						if not getattr(proc,'_dab_callable',False):
+							import pdb;pdb.set_trace()
+							raise UnknownCommandError((m,o,a))
 					else:
 						proc = getattr(self,'do_'+m)
 				except AttributeError:

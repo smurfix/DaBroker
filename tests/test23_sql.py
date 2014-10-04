@@ -19,10 +19,10 @@ import os
 import sys
 from dabroker import patch; patch()
 from dabroker.server.service import BrokerServer
-from dabroker.server.loader.sqlalchemy import SQLLoader
+from dabroker.server.loader.sqlalchemy import SQLLoader,SQLInfo
 from dabroker.base import BrokeredInfo, Field, BaseObj
 from dabroker.client.service import BrokerClient
-from dabroker.util import cached_property,exported
+from dabroker.util import cached_property,exported,exported_staticmethod,exported_classmethod
 
 from gevent import spawn
 from gevent.event import AsyncResult
@@ -49,10 +49,23 @@ class Person(Base):
 	id = Column(Integer, primary_key=True)
 	name = Column(String(250), nullable=False)
 
+	@exported_classmethod
+	def two(cls,txt):
+		return txt+" 2"
+ 
+	@exported_staticmethod
+	def three(txt):
+		return txt+" 3"
+ 
 	@exported
 	def namename(self):
 		return self.name+self.name
- 
+
+class PersonInfo(SQLInfo):
+	@exported
+	def four(self,txt):
+		return txt+" 4"
+
 try:
 	os.unlink('/tmp/test23.db')
 except EnvironmentError:
@@ -82,7 +95,7 @@ class Test23_server(BrokerServer):
 		self.add_static(root,2,23)
 
 		sql = SQLLoader(DBSession,self)
-		sql.add_model(Person,root.data)
+		sql.add_model(Person,root.data, cls=PersonInfo)
 		self.loader.add_loader(sql)
 		self.hello = "Step 0"
 
@@ -153,6 +166,9 @@ class Test23_client(TestClient):
 		assert res.hello == "Step 1", res.hello
 		P = res.data['Person']
 		assert P.name == 'Person',P.name
+		assert P.two("foo") == "foo 2"
+		assert P.three("foo") == "foo 3"
+		assert P.four("foo") == "foo 4"
 		r = list(P.find())
 		assert len(r) == 0, r
 

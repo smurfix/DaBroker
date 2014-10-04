@@ -181,22 +181,70 @@ class cached_property(object):
 				value = value.get()
 		return value
 
-#class client_callable_classmethod(classmethod):
-#	def __get__(self,*a,**k):
-#		res = super(client_callable_classmethod,self).__get__(*a,**k)
-#		res._dab_callable = True
-#		return res
-def client_callable_classmethod(fn):
-	fn = classmethod(fn)
-	if PY3:
-		fn._dab_callable = True
-	return fn
-
-def client_callable(fn):
+def exported(fn):
 	"""\
-		Convenience helper to mark a method as exported to the client
-		Used by the sqlalchemy loader
+		Decorator to mark a method as exported to the client
 		"""
+	# Functions allow arbitrary attributes, so this is easy
 	fn._dab_callable = True
 	return fn
+
+# Python doesn't support setting an attribute on MethodType,
+# and the thing is not subclass-able either,
+# so I need to implement my own.
+# Fortunately, this is reasonably easy.
+from types import MethodType 
+class _exported_classmethod(object):
+	_dab_callable = True
+	def __init__(self,f,s,c=None):
+		self.im_func = self.__func__ = f
+		self.im_self = self.__self__ = s
+		self.im_class = c
+		self.__name__ = f.__name__
+	def __call__(self,*a,**k):
+		return self.__func__(self.im_self,*a,**k)
+class _exported_staticmethod(_exported_classmethod):
+	def __call__(self,*a,**k):
+		return self.__func__(*a,**k)
+
+class exported_classmethod(classmethod):
+	_dab_callable = True
+	def __get__(self,i,t=None):
+		if i is not None:
+			# Ignore calls on objects
+			return classmethod.__get__(self,i,t)
+
+		# Otherwise we need to build this thing ourselves.
+		# TODO: use our data directly, rather than calling up.
+		res = classmethod.__get__(self,i,t)
+		if PY3:
+			return _exported_classmethod(res.__func__,res.__self__)
+		else:
+			return _exported_classmethod(res.im_func,res.im_self,res.im_class)
+
+class exported_staticmethod(classmethod):
+	_dab_callable = True
+	def __get__(self,i,t=None):
+		if i is not None:
+			# Ignore calls on objects
+			return staticmethod.__get__(self,i,t)
+
+		# same as classmethod (almost)
+		res = classmethod.__get__(self,i,t)
+		if PY3:
+			return _exported_staticmethod(res.__func__,res.__self__)
+		else:
+			return _exported_staticmethod(res.im_func,res.im_self,res.im_class)
+
+#class exported_staticmethod(staticmethod):
+#	_dab_callable = True
+#	def __new__(self,*a,**k):
+#		res = staticmethod.__new__(self,*a,**k)
+#	def __init__(self,*a,**k):
+#		res = staticmethod.__init__(self,*a,**k)
+#	def __get__(self,*a,**k):
+#		res = staticmethod.__get__(self,*a,**k)
+#		res._dab_callable = True
+#		return res
+
 

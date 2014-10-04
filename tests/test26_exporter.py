@@ -18,7 +18,7 @@ from dabroker import patch; patch()
 from dabroker.server.service import BrokerServer
 from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj,BaseRef
 from dabroker.client.service import BrokerClient
-from dabroker.util import cached_property
+from dabroker.util import cached_property,exported
 from dabroker.util.thread import Event
 
 from dabroker.util.tests import test_init,TestMain,TestClient,TestServer
@@ -33,6 +33,7 @@ class SearchBrokeredInfo(BrokeredInfo):
 	def obj_add(self,obj):
 		self.objs.append(obj)
 
+	@exported
 	def _dab_search(self,_limit=None,**kw):
 		res = []
 		for obj in self.objs:
@@ -54,6 +55,7 @@ class Test26_server(TestServer):
 			hell = None
 			def __init__(self, h="Oh?"):
 				self.hell = h
+			@exported
 			def rev(self,s):
 				s = [c for c in s]
 				s.reverse()

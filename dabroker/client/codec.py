@@ -310,6 +310,7 @@ class call_proc(object):
 	def __init__(self, proc):
 		self.name = proc.name
 		self.cached = getattr(proc,'cached',False)
+		self.meta = getattr(proc,'meta',False)
 
 	def __get__(self, obj, type=None):
 		if obj is None:
@@ -326,7 +327,7 @@ class call_proc(object):
 						res = res.data
 						current_service.top._cache[ckey] # Lookup to increase counter
 						return res
-				res = obj._meta._dab.call(obj,self.name, a,k)
+				res = obj._meta._dab.call(obj,self.name, a,k, _meta=self.meta)
 				if self.cached and not obj._obsolete:
 					rc = CacheProxy(res)
 					obj._call_cache[kws] = rc

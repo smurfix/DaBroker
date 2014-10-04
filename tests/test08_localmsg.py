@@ -21,6 +21,7 @@ from dabroker.util.thread import spawned
 from gevent import spawn
 
 from dabroker.util.tests import test_init,TestMain,TestRoot,TestClient,TestServer
+from dabroker.util import exported
 
 logger = test_init("test.08.localmsg")
 
@@ -28,6 +29,7 @@ counter = 0
 
 # Server's root object
 class Test08_root(TestRoot):
+	@exported
 	def callme(self,msg):
 		return msg*msg
 

@@ -15,14 +15,16 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # The sqlalchemy object loader
 
 from .. import ServerBrokeredInfo
-from ...base import BrokeredMeta,BaseRef, Field,Ref,BackRef,Callable, get_attrs,NoData
-from ...util import cached_property
+from ...base import BaseRef, Field,Ref,BackRef,Callable, get_attrs,NoData
+from ...util import cached_property,exported
 from ...util.thread import local_object
 from ...util.sqlalchemy import with_session
 from . import BaseLoader
+from .. import ServerBrokeredMeta
 from ..codec import server_BaseObj
 from sqlalchemy.inspection import inspect
 from sqlalchemy.orm.exc import NoResultFound
+from inspect import isfunction,ismethod
 
 import logging
 logger = logging.getLogger("dabroker.server.loader.sqlalchemy")
@@ -67,7 +69,7 @@ class SQLInfo(ServerBrokeredInfo):
 			return
 		super(SQLInfo,self).__init__()
 		i = inspect(model)
-		meta = mcls(id,self,i.class_.__name__, rw)
+		meta = mcls(id,self,i.class_, rw)
 
 		for k in i.column_attrs:
 			if k not in hide:
@@ -132,6 +134,7 @@ class SQLInfo(ServerBrokeredInfo):
 		session.flush()
 		self.fixup(obj)
 
+	@exported
 	def delete(self, obj):
 		assert obj._meta.rw
 		self.server.obj_delete(obj)
@@ -152,6 +155,7 @@ class SQLInfo(ServerBrokeredInfo):
 		i=inspect(obj)
 		return self.loader.set_key(obj,i.class_.__name__,obj.id)
 
+	@exported
 	@with_session
 	def _dab_search(self,session,_limit=None, **kw):
 		res = session.query(self.model).filter_by(**kw)
@@ -181,6 +185,7 @@ class SQLInfo(ServerBrokeredInfo):
 		"""Method to override, to add interesting things to an object"""
 		pass
 
+	@exported
 	@with_session
 	def new(self, session, obj=None, *key, **kw):
 		if obj is None:
@@ -198,18 +203,19 @@ class SQLInfo(ServerBrokeredInfo):
 		return obj
 	new.include = True
 
-class SQLMeta(BrokeredMeta):
+class SQLMeta(ServerBrokeredMeta):
 	"""Parent class for SQL table info"""
-	def __init__(self,id,info,name, rw):
+	def __init__(self,id,info,cls, rw):
 		super(SQLMeta,self).__init__("SQL:"+id)
-		self._key = BaseRef(key=(id,'_meta',name))
+		self._key = BaseRef(key=(id,'_meta',cls.__name__))
 		self.info = info
+		self.__name__ = "SQLMeta:"+cls.__name__
 		if rw is not None:
 			#self.add(Callable("get", cached=True))
 			#self.add(Callable("find", cached=True))
 			if rw:
-				self.add(Callable("new"))
-				self.add(Callable("delete"))
+				self.add(Callable("new",meta=True))
+				self.add(Callable("delete",meta=True))
 
 class SQLLoader(BaseLoader):
 	"""A loader which reads from SQL"""

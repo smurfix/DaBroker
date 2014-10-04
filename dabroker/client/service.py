@@ -453,7 +453,9 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 		self._cache[ckey] = ks
 		return res
 
-	def call(self, obj,name,a,k):
+	def call(self, obj,name,a,k, _meta=False):
+		if _meta:
+			k['_mt']=True
 		res = self.send(name,_obj=obj,*a,**k)
 		return res
 		

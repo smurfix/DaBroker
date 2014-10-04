@@ -17,6 +17,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from dabroker import patch; patch()
 from dabroker.util.thread import spawned
+from dabroker.util import exported
 from dabroker.client.codec import baseclass_for, ClientBaseObj
 
 from gevent import spawn
@@ -37,6 +38,7 @@ class my_root(ClientBaseObj):
 
 # Server's root object
 class Test11_root(TestRoot):
+	@exported
 	def callme(self,msg):
 		return msg*msg
 

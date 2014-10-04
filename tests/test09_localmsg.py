@@ -20,6 +20,7 @@ from dabroker import patch; patch()
 from gevent import spawn
 
 from dabroker.util.tests import test_init,TestMain,TestRoot,TestClient,TestServer
+from dabroker.util import exported
 
 logger = test_init("test.09.localmsg")
 
@@ -30,6 +31,7 @@ class Test09_root(TestRoot):
 	def __init__(self,server):
 		self._server = server
 		super(Test09_root,self).__init__()
+	@exported
 	def callme(self,msg):
 		self._server.send("more",msg*10)
 		return msg*msg
