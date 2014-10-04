@@ -185,9 +185,9 @@ class ClientBrokeredInfo(BrokeredInfo):
 			raise RuntimeError("You cannot search "+repr(self))
 		res = list(self.client.find(self, _limit=2,_cached=self._dab_cached, **kw))
 		if len(res) == 0:
-			raise NoData
+			raise NoData(cls=self,**kw)
 		elif len(res) == 2:
-			raise ManyData
+			raise ManyData(cls=self,**kw)
 		else:
 			res = res[0]
 			if not isinstance(res,BaseObj):
