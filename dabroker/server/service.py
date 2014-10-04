@@ -240,8 +240,10 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 						else:
 							assert m in o._meta.calls,"You cannot call method {} of {}".format(m,o)
 						if not mt and m[0] != '_' and isinstance(o,ServerBrokeredInfo):
-							o = o.model
-						proc = getattr(o,m)
+							do = o.model
+						else:
+							do = o
+						proc = getattr(do,m)
 						if not getattr(proc,'_dab_callable',False):
 							raise UnknownCommandError((m,o,a))
 					else:
