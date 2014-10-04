@@ -357,11 +357,11 @@ class BaseCodec(object):
 			# At least one reference was required.
 			dl = []
 			def _sorter(k):
-				c,d,e = objcache[k]
+				c,d,e,x = objcache[k]
 				if type(e) is not tuple: return 9999999999
 				return e[0]
 			for d in sorted(objref.values(), key=_sorter):
-				oid,v,f = objcache[d]
+				oid,v,f,x = objcache[d]
 				v['_oi']=oid
 				if isinstance(f,tuple):
 					f[1][f[2]] = {'_or':oid}
