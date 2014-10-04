@@ -178,8 +178,11 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 
 	def send_ping(self, msg):
 		self.send("ping",msg)
+	
+	def send_signal(self, obj, sig, **msg):
+		self.send("signal", _sig=sig, _obj=obj, **msg)
 		
-	# The next three broadcast messages are used for broadcastng object
+	# The next three broadcast messages are used for broadcasting object
 	# changes. They will invalidate possibly-matching search results.
 	def send_created(self, obj, attrs={}):
 		"""This object has been created."""

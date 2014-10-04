@@ -17,7 +17,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 RETR_TIMEOUT = 10
 CACHE_SIZE=10000
 
-from ..base import UnknownCommandError
+from ..base import UnknownCommandError,BaseRef
 from ..base.transport import BaseCallbacks
 from ..base.config import default_config
 from ..base.codec import ServerError
@@ -467,6 +467,11 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 	def do_pong(self):
 		# for completeness. The server doesn't send a broadcast on client request.
 		raise RuntimeError("This can't happen")
+
+	def do_signal(self, _obj,_sig, **data):
+		if not isinstance(_obj,BaseRef):
+			_obj = _obj._key
+		_obj._send(_sig,**data)
 
 	def do_invalid(self,*keys):
 		"""Directly invalidate these cache entries."""

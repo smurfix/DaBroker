@@ -22,6 +22,7 @@ from dabroker.util import cached_property,exported
 from dabroker.util.thread import Event
 
 from dabroker.util.tests import test_init,TestMain,TestClient,TestServer
+from gevent.event import AsyncResult
 
 logger = test_init("test.21.objbase")
 logger_s = test_init("test.21.objbase.server")
@@ -53,8 +54,13 @@ class Test21_server(TestServer):
 		rootMeta.add(Ref("ops"))
 		self.add_static(rootMeta,0,1)
 
+		someMeta = BrokeredInfo("rootMeta")
+		someMeta.add(Field("hello"))
+		self.add_static(someMeta,0,99)
+
 		opsMeta = SearchBrokeredInfo("opsMeta")
 		opsMeta.add(Callable("rev"))
+		opsMeta.add(Callable("trigger"))
 		opsMeta.add(Callable("revc", cached=True))
 		opsMeta.add(Field("hell"))
 		self.add_static(opsMeta,0,2)
@@ -63,10 +69,21 @@ class Test21_server(TestServer):
 			_meta = rootMeta
 			hello = "Hello!"
 
+		class SomeObj(BaseObj):
+			_meta = someMeta
+			foo="bar"
+
 		class OpsObj(BaseObj):
 			_meta = opsMeta
 			def __init__(self, h="Oh?"):
 				self.hell = h
+
+			@exported
+			def trigger(self,arg):
+				sig = SomeObj()
+				t.server.add_static(sig,12,99)
+				t.server.send_signal(self,sig, arg=arg)
+
 			@exported
 			def rev(self,s):
 				s = [c for c in s]
@@ -111,9 +128,16 @@ class Test21_server(TestServer):
 done=0
 
 class Test21_client(TestClient):
+
 	@property
 	def cid(self):
 		return self.transport.next_id
+
+	def sigrecv(self,obj,sig, arg=None,**k):
+		self.sig_arg = arg
+		self.sig_obj = obj
+		self.sig_sig = sig
+		self.got_it.set(None)
 
 	def do_go_on(self):
 		self.go_on.set()
@@ -129,6 +153,14 @@ class Test21_client(TestClient):
 			cid=self.cid
 			assert root._meta.name == "rootMeta" # again, to check caching
 			assert cid==self.cid, (cid,self.cid)
+
+			self.got_it = AsyncResult()
+			root.ops._key.connect(self.sigrecv)
+			root.ops.trigger("foobar")
+			self.got_it.get(timeout=1)
+			assert self.sig_arg == "foobar", self.sig_arg
+			assert self.sig_obj is root.ops._key, self.sig_obj
+			assert self.sig_sig.key == ('_s',12,99), self.sig_sig
 
 			assert root.ops.rev("test123") == "321tset"
 			assert cid!=self.cid
