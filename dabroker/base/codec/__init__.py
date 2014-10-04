@@ -156,6 +156,7 @@ class ServerError(Exception):
 known_errors = {
 	"NoData":NoData,
 	"ManyData":ManyData,
+	"IndexError":IndexError, # required for backref_idx call
 }
 
 @codec_adapter
