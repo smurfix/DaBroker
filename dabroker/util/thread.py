@@ -37,7 +37,7 @@ class CloningLocalManager(LocalManager):
 		for local in self.locals:
 			storage = local.__storage__
 			if ident in storage:
-				storage[local.__ident_func__()] = storage[ident]
+				storage[local.__ident_func__()] = storage[ident].copy()
 
 local_objects = CloningLocalManager()
 cloned_local_objects = CloningLocalManager()
