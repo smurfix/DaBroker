@@ -95,7 +95,7 @@ class BaseRef(object):
 		return self.key.__ne__(other)
 
 	def __repr__(self):
-		res = "‹R:"+'¦'.join(self.key)
+		res = "‹R:"+'¦'.join(str(x) for x in self.key)
 		if self.code is not None:
 			res += ':'+self.code
 		return res+'›'
