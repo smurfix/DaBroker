@@ -29,39 +29,65 @@ are translated to dictionaries with a couple of special elements.
         keys which originally start with `_o` get an underscore inserted as
         the third character. This is of course reversed during deserialization.
 
+The result is then wrapped as the `data` element of a dict. A `cache`
+element (optional) contains a list of completely-codeable objects which
+occur more than once. Incomplete objects (i.e. recursive data structures)
+are marked inline and will be patched when decoding.
+
 An example:
 
     >>> from dabroker.base.codec import BaseCodec as C
-    >>> c=C()
-    Traceback (most recent call last):
-    File "<stdin>", line 1, in <module>
-    TypeError: __init__() takes at least 2 arguments (1 given)
-    >>> c=C(())
     >>> c=C(None)
     >>> from pprint import pprint as p
     >>> from datetime import date
     >>> now=date(2014,7,4)
-    >>> p(c.encode({'one':e,'two':e,'now':now}))
-    {'now': {'_o': 'date', 'd': 735418, 's': '2014-07-04'},
-     'one': {'_or': 3},
-     'two': {'_d': ['Hello', 'there'], '_o': 'LIST', '_oi': 3}}
+    >>> e={"Hi":"there"}
+    >>> m=c.encode({'one':e,'two':e,'now':now}))
+    >>> p(m)
+    {u'cache': [{'Hi': 'there', u'_oi': 4}],
+     u'data': {'now': {u'_o': u'date', u'd': 735418, u's': '2014-07-04'},
+               'one': {u'_or': 4},
+               'two': {u'_or': 4}},
+     u'msgid': 42}
+    >>> mm=c.decode(m)
+    >>> p(mm)
+    {u'cache': [{'Hi': 'there', u'_oi': 4}],
+     u'data': {'now': {u'_o': u'date', u'd': 735418, u's': '2014-07-04'},
+               'one': {u'_or': 4},
+               'two': {u'_or': 4}},
+     u'msgid': 42}
+    >>> mmm=c.decode2(mm)
+    >>> p(mmm)
+    {'now': datetime.date(2014, 7, 4),
+    'one': {'Hi': 'there'},
+    'two': {'Hi': 'there'}}
+    >>> mmm['one'] is mmm['two']
+    True
+    >>> mmm['one'] is e
+    False
+    >>> mmm.msgid
+    42
+    >>> 
 
-The codec will not add `_oi` elements to dictionaries that don't need them.
-It may not actually pack lists in dicts if that is not necessary.
+The decoding step is a two-phase process because additional auxiliary
+attributes may be present in the message which may influence decoding;
+for instance, the DaBroker server sends the last broadcast's msgid in
+RPC replies so that processing the answer can be delayed until all
+intermediate broadcasts have been processed.
 
-    :note: Current implementation: References are tagged but not marked.
-    If/when it hits a data structure that's not a strict tree, it switches
-    to a "complicated" algorithm.
+These elements are _not_ subject to the encoding that's performed on the
+`data` or `error` members.
 
-Strings are always transmitted as plain strings, even if they are long
-enough to benefit from reference counting.
+Strings are always transmitted as plain text, even if they are
+repeated _and_ long enough to benefit from reference counting.
 
 Errors
 ------
 
-Error messages are propagated through RPC. Errors are sent as a dict with
-an `_error` key (with a string representation of the problem as the value).
-The decoder will raise the error when it encounters it.
+Error messages are propagated through RPC. Errors are sent as an object in
+the message's `error` attribute (with a string representation of the
+problem as the value). The (first step of the) decoder will raise the error
+when it encounters it.
 
 An optional `tb` element contains the traceback. It will be printed
 properly when the resulting error is logged on the client.
