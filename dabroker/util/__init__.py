@@ -185,34 +185,77 @@ class cached_property(object):
 				value = value.get()
 		return value
 
-def exported(fn):
+default_attrs = dict(_dab_callable=True, include=True)
+
+def exported(_fn,**attrs):
 	"""\
 		Decorator to mark a method as exported to the client
 		"""
+	if _fn is None:
+		def xfn(_fn):
+			return exported(_fn,**attrs)
 	# Functions allow arbitrary attributes, so this is easy
-	fn._dab_callable = True
-	return fn
+	if not attrs: attrs = default_attrs
+	for k,v in attrs.items():
+		setattr(_fn,k,v)
+	return _fn
 
 # Python doesn't support setting an attribute on MethodType,
 # and the thing is not subclass-able either,
 # so I need to implement my own.
 # Fortunately, this is reasonably easy.
 from types import MethodType 
-class _exported_classmethod(object):
+class _ClassMethodType(object):
 	_dab_callable = True
-	def __init__(self,f,s,c=None):
-		self.im_func = self.__func__ = f
-		self.im_self = self.__self__ = s
-		self.im_class = c
-		self.__name__ = f.__name__
+	def __init__(self,_func,_self,_cls=None, **attrs):
+		self.im_func = self.__func__ = _func
+		self.im_self = self.__self__ = _self
+		self.im_class = _cls
+		self.__name__ = _func.__name__
+		for k,v in attrs.items():
+			setattr(self,k,v)
 	def __call__(self,*a,**k):
 		return self.__func__(self.im_self,*a,**k)
-class _exported_staticmethod(_exported_classmethod):
+
+class _StaticMethodType(_ClassMethodType):
 	def __call__(self,*a,**k):
 		return self.__func__(*a,**k)
 
-class exported_classmethod(classmethod):
-	_dab_callable = True
+def exported_classmethod(_fn=None,**attrs):
+	"""\
+		A classmethod thing which supports attributed methods.
+
+		Usage:
+			class test(object):
+				@exported_classmethod(bar=42)
+				def foo(cls, …):
+					pass
+			assert test.foo.bar == 42
+		"""
+	if _fn is None:
+		def xfn(_fn):
+			return exported_classmethod(_fn,**attrs)
+		return xfn
+	res = _ClassMethodAttr(_fn)
+	if not attrs: attrs = default_attrs
+	for k,v in attrs.items():
+		setattr(res,k,v)
+	res._attrs = attrs
+	return res
+
+def exported_staticmethod(_fn=None,**attrs):
+	if _fn is None:
+		def xfn(_fn):
+			return exported_staticmethod(_fn,**attrs)
+		return xfn
+	res = _StaticMethodAttr(_fn)
+	if not attrs: attrs = default_attrs
+	for k,v in attrs.items():
+		setattr(res,k,v)
+	res._attrs = attrs
+	return res
+
+class _ClassMethodAttr(classmethod):
 	def __get__(self,i,t=None):
 		if i is not None:
 			# Ignore calls on objects
@@ -222,23 +265,22 @@ class exported_classmethod(classmethod):
 		# TODO: use our data directly, rather than calling up.
 		res = classmethod.__get__(self,i,t)
 		if PY3:
-			return _exported_classmethod(res.__func__,res.__self__)
+			return _ClassMethodType(res.__func__,res.__self__, **self._attrs)
 		else:
-			return _exported_classmethod(res.im_func,res.im_self,res.im_class)
+			return _ClassMethodType(res.im_func,res.im_self,res.im_class, **self._attrs)
 
-class exported_staticmethod(classmethod):
-	_dab_callable = True
+class _StaticMethodAttr(classmethod):
 	def __get__(self,i,t=None):
 		if i is not None:
 			# Ignore calls on objects
-			return staticmethod.__get__(self,i,t)
+			return classmethod.__get__(self,i,t)
 
 		# same as classmethod (almost)
 		res = classmethod.__get__(self,i,t)
 		if PY3:
-			return _exported_staticmethod(res.__func__,res.__self__)
+			return _StaticMethodType(res.__func__,res.__self__, **self._attrs)
 		else:
-			return _exported_staticmethod(res.im_func,res.im_self,res.im_class)
+			return _StaticMethodType(res.im_func,res.im_self,res.im_class, **self._attrs)
 
 #class exported_staticmethod(staticmethod):
 #	_dab_callable = True
