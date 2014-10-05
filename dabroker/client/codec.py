@@ -162,7 +162,7 @@ class ClientBrokeredInfo(BrokeredInfo):
 	def __repr__(self):
 		k=getattr(self,'_key',None)
 		if not k or not hasattr(self,'name'):
-			return super(ClientBaseObj,self).__repr__()
+			return super(ClientBrokeredInfo,self).__repr__()
 		return '‹I:{}:{}›'.format(self.name, '¦'.join(str(x) for x in k))
 	__str__=__unicode__=__repr__
 		
