@@ -66,6 +66,7 @@ class BaseTransport(object):
 		self.cfg = self.defaults.copy()
 		self.cfg.update(cfg)
 		self.callbacks = callbacks
+		self.trace = cfg.get('trace',0)
 
 	def connect(self, purge=False):
 		"""Connect. (Synchronously.)

@@ -276,6 +276,7 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 
 		self.cfg = default_config.copy()
 		self.cfg.update(cfg)
+		self.trace = cfg.get('trace',0)
 
 		self._cache = CacheDict()
 		self.codec = self.make_codec()
@@ -459,7 +460,8 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 		
 	def do_ping(self):
 		"""The server wants to know who's listening. So tell it."""
-		logger.debug("ping %r",msg)
+		if self.trace:
+			logger.debug("ping %r",msg)
 		self.send("pong")
 
 	def do_pong(self):
@@ -477,9 +479,7 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 			try:
 				self._cache.invalidate(k)
 			except KeyError:
-				logger.debug("inval: not found: %r",k)
-			else:
-				logger.debug("inval: dropped: %r",k)
+				pass
 
 	def do_invalid_key(self,_key=None,_meta=None, **k):
 		"""Invalidate an object, plus whatever might have been used to search for it.
@@ -585,7 +585,8 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 			if hasattr(msg,'msgid'):
 				msgid = msg.msgid
 				while self.last_msgid < msgid:
-					logger.debug("Waiting %d %d",self.last_msgid,msgid)
+					if self.trace:
+						logger.debug("Waiting %d %d",self.last_msgid,msgid)
 					if self.last_msgid_wait is None:
 						self.last_msgid_wait = AsyncResult()
 					chk = self.last_msgid_wait.get()
@@ -619,6 +620,8 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 				raise UnknownCommandError(m)
 			proc(*a,**msg)
 
+			if self.trace:
+				logger.debug("LastID %s %s",self.last_msgid,msgid)
 			if msgid and self.last_msgid < msgid:
 				self.last_msgid = msgid
 				x,self.last_msgid_wait = self.last_msgid_wait,None

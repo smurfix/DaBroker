@@ -28,6 +28,7 @@ class Transport(BaseTransport):
 	"""Server side of the LocalQueue transport"""
 	def __init__(self,callbacks,cfg):
 		#logger.debug("Server: setting up")
+		self.trace = cfg.get('trace,',0)
 		self.callbacks = callbacks
 		self.p = LocalQueue(cfg)
 		self.p.server = ref(self) # for clients to find me
@@ -47,11 +48,12 @@ class Transport(BaseTransport):
 
 	def send(self,msg):
 		m = msg
-		msg = RPCmessage(msg)
+		msg = RPCmessage(msg, _trace=self.trace)
 		self.last_msgid -= 1
 		msg.msgid = self.last_msgid
 
-		logger.debug("Server: send msg %s:\n%s",msg.msgid,format_msg(m))
+		if self.trace:
+			logger.debug("Server: send msg %s:\n%s",msg.msgid,format_msg(m))
 		for c in self.clients.values():
 			c.reply_q.put(msg)
 

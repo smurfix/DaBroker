@@ -130,7 +130,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 	# remote calls
 
 	def do_root(self):
-		logger.debug("Get root")
+		#logger.debug("Get root")
 		res = self.root
 		if '_key' not in res.__dict__:
 			self.add_static(res,'root')
@@ -152,7 +152,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 	def do_get(self, obj):
 		"""Fetch an object by its key"""
 		# … which the loader, most likely, has already taken care of
-		logger.debug("get %r",obj)
+		#logger.debug("get %r",obj)
 		if isinstance(obj,BaseRef):
 			raise RuntimeError("Not without code")
 		return obj

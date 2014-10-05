@@ -26,12 +26,14 @@ except ImportError:
 
 class RPCmessage(object):
 	msgid = None
-	def __init__(self,msg,q=None):
+	def __init__(self,msg,q=None,_trace=0):
 		self.msg = msg
 		self.q = q
+		self.trace=_trace
 
-	def reply(self,msg):
-		logger.debug("Reply to %s:\n%s", self.msgid,format_msg(msg))
+	def reply(self,msg, _trace=0):
+		if self.trace:
+			logger.debug("Reply to %s:\n%s", self.msgid,format_msg(msg))
 		msg = type(self)(msg,None)
 		msg.msgid = self.msgid
 		self.q.put(msg)

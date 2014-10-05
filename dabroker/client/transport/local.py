@@ -31,6 +31,7 @@ class Transport(BaseTransport):
 
 		self.reply_q = Queue()
 		self.q = {} # msgid => AsyncResult for the answer
+		self.trace = cfg.get('trace',0)
 
 		global _client_id
 		_client_id += 1
@@ -67,7 +68,7 @@ class Transport(BaseTransport):
 			
 	def send(self,msg):
 		m = msg
-		msg = RPCmessage(msg,self.reply_q)
+		msg = RPCmessage(msg,self.reply_q,_trace=self.trace)
 		res = AsyncResult()
 
 		self.last_msgid += 1
@@ -76,7 +77,8 @@ class Transport(BaseTransport):
 		msg.q = self.reply_q
 		self.q[msg.msgid] = res
 
-		logger.debug("Client: send msg %s:\n%s",msg.msgid,format_msg(m))
+		if self.trace:
+			logger.debug("Client: send msg %s:\n%s",msg.msgid,format_msg(m))
 		self.p.request_q.put(msg)
 		res = res.get()
 		return res

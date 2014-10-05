@@ -42,7 +42,7 @@ def session_maker(maker,name=None):
 		name = "sql"
 	s = getattr(_session,name,None)
 	if s is None:
-		logger.debug("new session")
+		#logger.debug("new session")
 		s = maker()
 		setattr(_session,name,s)
 		if s.transaction is None:
@@ -78,7 +78,7 @@ def session_wrapper(obj, maker=None):
 				s._dab_wrapped -= 1
 			return
 		else:
-			logger.debug("existing session")
+			#logger.debug("existing session")
 			s.begin_nested()
 	try:
 		yield s
