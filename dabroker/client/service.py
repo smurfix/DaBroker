@@ -467,7 +467,7 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 	def do_signal(self, _obj,_sig, **data):
 		if not isinstance(_obj,BaseRef):
 			_obj = _obj._key
-		_obj._send(_sig,**data)
+		_obj.send(_sig,**data)
 
 	def do_invalid(self,*keys):
 		"""Directly invalidate these cache entries."""
