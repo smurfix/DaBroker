@@ -334,6 +334,7 @@ class client_BaseObj(common_BaseObj):
 			# assume it's a reference, so resolve it
 			r['_meta'] = m = m()
 		res = m.class_(_is_meta)()
+		res.__class__.__name__ = str('Client:'+m.name)
 		res._key = k
 
 		# Got the class, now fill it with data
