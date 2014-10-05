@@ -127,6 +127,8 @@ class TestMain(Main):
 		self.cfg = test_cfg.copy()
 		self.cfg.update(test_cfg_local)
 		self.cfg.update(in_cfg)
+		if 'TRACE' in os.environ:
+			self.cfg['trace']=int(os.environ['TRACE'])
 
 		super(TestMain,self).__init__()
 
