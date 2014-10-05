@@ -20,10 +20,6 @@ import os
 import base64
 import amqp
 
-def random_id():
-	res = os.urandom(15)
-	return str(base64.b64encode(res))
-
 import logging
 logger = logging.getLogger("dabroker.client.transport.amqp")
 
@@ -63,7 +59,8 @@ class Transport(AmqpTransport):
 			res_dec.set_exception(e)
 
 	def send(self, msg):
-		msgid = random_id()
+		self.last_msgid += 1
+		msgid = str(self.last_msgid)
 		res = AsyncResult()
 		assert msgid not in self.replies
 		self.replies[msgid] = res

@@ -53,6 +53,7 @@ class Transport(AmqpTransport):
 		self.channel.exchange_declare(exchange=self.cfg['rpc_exchange'], type='fanout', auto_delete=False, passive=False)
 
 	def send(self, msg):
-		msg = self.encode_msg(msg)
+		self.last_msgid -= 1
+		msg = self.encode_msg(msg,correlation_id=str(self.last_msgid))
 		self.channel.basic_publish(msg=msg, exchange=self.cfg['rpc_exchange'], routing_key='dab_info')#typ)
 		

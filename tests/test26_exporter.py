@@ -103,7 +103,7 @@ done=0
 class Test26_client(TestClient):
 	@property
 	def cid(self):
-		return self.transport.next_id
+		return self.transport.last_msgid
 
 	def do_go_on(self):
 		self.go_on.set()

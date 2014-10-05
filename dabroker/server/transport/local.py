@@ -32,7 +32,6 @@ class Transport(BaseTransport):
 		self.p = LocalQueue(cfg)
 		self.p.server = ref(self) # for clients to find me
 		self.clients = WeakValueDictionary() # clients add themselves here
-		self.next_id = -1
 
 	@spawned
 	def _process(self,msg):
@@ -49,8 +48,9 @@ class Transport(BaseTransport):
 	def send(self,msg):
 		m = msg
 		msg = RPCmessage(msg)
-		msg.msgid = self.next_id
-		self.next_id -= 1
+		self.last_msgid -= 1
+		msg.msgid = self.last_msgid
+
 		logger.debug("Server: send msg %s:\n%s",msg.msgid,format_msg(m))
 		for c in self.clients.values():
 			c.reply_q.put(msg)

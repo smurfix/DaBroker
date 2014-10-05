@@ -131,7 +131,7 @@ class Test21_client(TestClient):
 
 	@property
 	def cid(self):
-		return self.transport.next_id
+		return self.transport.last_msgid
 
 	def sigrecv(self,obj,sig, arg=None,**k):
 		self.sig_arg = arg

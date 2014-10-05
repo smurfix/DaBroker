@@ -31,7 +31,6 @@ class Transport(BaseTransport):
 
 		self.reply_q = Queue()
 		self.q = {} # msgid => AsyncResult for the answer
-		self.next_id = 1
 
 		global _client_id
 		_client_id += 1
@@ -71,10 +70,11 @@ class Transport(BaseTransport):
 		msg = RPCmessage(msg,self.reply_q)
 		res = AsyncResult()
 
-		msg.msgid = self.next_id
+		self.last_msgid += 1
+		msg.msgid = self.last_msgid
+
 		msg.q = self.reply_q
-		self.q[self.next_id] = res
-		self.next_id += 1
+		self.q[msg.msgid] = res
 
 		logger.debug("Client: send msg %s:\n%s",msg.msgid,format_msg(m))
 		self.p.request_q.put(msg)

@@ -119,7 +119,7 @@ class Test22_client(TestClient):
 
 	@property
 	def cid(self):
-		return self.transport.next_id
+		return self.transport.last_msgid
 
 	def job1(self):
 		self.jump(1,0)

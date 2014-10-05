@@ -60,6 +60,7 @@ class BaseTransport(object):
 	_job = None
 	defaults = {}
 	connection = None
+	last_msgid = 0
 
 	def __init__(self,callbacks, cfg={}):
 		self.cfg = self.defaults.copy()
