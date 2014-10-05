@@ -143,7 +143,10 @@ class attrdict(dict):
 	def __getattr__(self,a):
 		if a.startswith('_'):
 			return super(attrdict,self).__getattr__(a)
-		return self[a]
+		try:
+			return self[a]
+		except KeyError:
+			raise AttributeError(a)
 	def __setattr__(self,a,b):
 		if a.startswith("_"):
 			super(attrdict,self).__setattr__(a,b)
