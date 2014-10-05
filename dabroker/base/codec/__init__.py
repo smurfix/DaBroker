@@ -370,7 +370,7 @@ class BaseCodec(object):
 		if _raw:
 			return res,cache
 
-		res = {'result':res}
+		res = {'data':res}
 		if cache:
 			res['cache'] = cache
 		if _mid:
@@ -504,7 +504,7 @@ class BaseCodec(object):
 
 		if _cache is None:
 			cache = data.pop('cache',())
-			data = data.result
+			data = data.data
 		else:
 			cache = _cache
 
