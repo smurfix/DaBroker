@@ -488,20 +488,21 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 									   of the search keys matches one of the values.
 			"""
 		if _key is not None:
-			logger.debug("inval_key: %r: %r",_key,k)
+			#logger.debug("inval_key: %r: %r",_key,k)
 			self._cache.invalidate(_key)
 
 		if _meta is None:
-			logger.warn("no metadata?")
+			#logger.warn("no metadata?")
 			return
 		obj = self._cache.get(_meta,None)
 		if obj is None:
-			# logger.warn("metadata not found: %s for %s",_meta,_key)
+			#logger.warn("metadata not found: %s for %s",_meta,_key)
 			return
 		if isinstance(obj,AsyncResult):
-			logger.debug("inval_key: wait for %r",_meta)
+			#logger.debug("inval_key: wait for %r",_meta)
 			obj = obj.get(timeout=RETR_TIMEOUT)
-			logger.debug("inval_key: wait for %r: got %r",_meta,obj)
+			#logger.debug("inval_key: wait for %r: got %r",_meta,obj)
+		#logger.warn("inval start %s %s",obj,k)
 
 		obsolete = set()
 
@@ -512,6 +513,7 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 		# if it's not an update.
 		# TODO: This loop is somewhat inefficient.
 		for ks,s in obj.searches.items():
+			#logger.warn("Scanning %s %s",ks,s)
 			keymatches = False
 			mismatches = False
 			is_update = False
@@ -528,8 +530,9 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 			if not mismatches if keymatches else not is_update:
 				obsolete.add(ks)
 		for ks in obsolete:
-			logger.debug("dropping %s",ks)
+			#logger.debug("dropping %s",ks)
 			obj.searches.pop(ks,None)
+		#logger.warn("inval done %s",obj)
 
 	@property
 	def root(self):
