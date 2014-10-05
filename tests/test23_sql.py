@@ -22,7 +22,7 @@ from dabroker.server.service import BrokerServer
 from dabroker.server.loader.sqlalchemy import SQLLoader,SQLInfo
 from dabroker.base import BrokeredInfo, Field, BaseObj
 from dabroker.client.service import BrokerClient
-from dabroker.util import cached_property,exported,exported_staticmethod,exported_classmethod
+from dabroker.util import cached_property,exported,exported_staticmethod,exported_classmethod,exported_property
 
 from gevent import spawn
 from gevent.event import AsyncResult
@@ -48,6 +48,7 @@ class Person(Base):
 	# Notice that each column is also a normal Python instance attribute.
 	id = Column(Integer, primary_key=True)
 	name = Column(String(250), nullable=False)
+	inix=None
 
 	@exported_classmethod
 	def two(cls,txt):
@@ -57,6 +58,22 @@ class Person(Base):
 	def three(txt):
 		return txt+" 3"
  
+	@exported_property
+	def nix(self):
+		return self.inix
+	@nix.setter
+	def nix(self,x):
+		# we also set the class's attribute here
+		# because the test which checks this will get a new copy from the
+		# database, so setting the object's attribute is pointless
+		
+		self.inix = x
+		self.__class__.inix = x
+	@nix.deleter
+	def nix(self):
+		del self.inix
+		self.__class__.inix = None # same reason as above
+	
 	@exported
 	def namename(self):
 		return self.name+self.name
@@ -118,6 +135,16 @@ class Test23_server(BrokerServer):
 	def do_mangle_update(self,p,**kw):
 		logger.debug("mangle: update: %s %r",p,kw)
 		self.obj_update(p,**kw)
+
+		assert p.inix is None,p.inix
+		assert p.nix is None,p.inix
+		p.nix=123
+		assert p.inix == 123,p.inix
+		assert p.nix == 123,p.nix
+		del p.nix
+		assert p.inix is None
+		p.nix=234
+
 		logger.debug("mangle: update done")
 
 	def do_mangle_delete(self,p):
@@ -182,12 +209,14 @@ class Test23_client(TestClient):
 		assert res.hello == "Step 4", res.hello
 
 		# D: refresh and check
+
 		assert p1._obsolete
 		p2 = p1._key()
 		assert not p2._obsolete
 		assert p1.name == "Fred Flintstone", p1.name
 		assert p2.name == "Freddy Firestone", p2.name
 		assert p2.namename() == "Freddy FirestoneFreddy Firestone", p2.namename()
+		assert p2.nix==234,p2.nix
 
 		self.jump(0,2) # goto E
 

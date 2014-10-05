@@ -244,6 +244,16 @@ def exported_classmethod(_fn=None,**attrs):
 	return res
 
 def exported_staticmethod(_fn=None,**attrs):
+	"""\
+		A classmethod thing which supports attributed methods.
+
+		Usage:
+			class test(object):
+				@exported_staticmethod(bar=42)
+				def foo(…):
+					pass
+			assert test.foo.bar == 42
+		"""
 	if _fn is None:
 		def xfn(_fn):
 			return exported_staticmethod(_fn,**attrs)
@@ -254,6 +264,55 @@ def exported_staticmethod(_fn=None,**attrs):
 		setattr(res,k,v)
 	res._attrs = attrs
 	return res
+
+def exported_property(fget=None,fset=None,fdel=None,doc=None,**attrs):
+	"""\
+		A classmethod thing which supports attributed methods.
+
+		Usage:
+			class test(object):
+				@exported_staticmethod(bar=42)
+				def foo(…):
+					pass
+			assert test.foo.bar == 42
+		"""
+	if fget is None and attrs is not None:
+		def xfn(fget=None,fset=None,fdel=None,doc=None):
+			return exported_property(fget=fget,fset=fset,fdel=fdel,doc=doc,**attrs)
+		return xfn
+	if not attrs: attrs = default_attrs
+	res = _PropertyAttr(fget=fget,fset=fset,fdel=fdel,doc=doc,**attrs)
+	return res
+
+class _PropertyAttr(property):
+	"""Yet another rewrite in Python."""
+	# The problem here is that
+	#	@exported_property
+	#	def x(self): …
+	#	@x.setter
+	#	def x(self,val): …
+	# will call exported_property() TWICE. (Or thrice if you also want a deleter.)
+	# Therefore we stash the attributes in the function.
+	# TODO: check if one of these has attributes which are not "ours"?
+
+	def __init__(self, fget=None,fset=None,fdel=None,doc=None,**attrs):
+		property.__init__(self,fget=fget,fset=fset,fdel=fdel,doc=doc)
+		f = fget
+		if not attrs:
+			if not f or not f.__dict__:
+				f = fset
+				if not f or not f.__dict__:
+					f = fdel
+			if f:
+				attrs = f.__dict__
+		for f in (fget,fset,fdel):
+			if f is None:
+				continue
+			for k,v in attrs.items():
+				setattr(f,k,v)
+		for k,v in attrs.items():
+			setattr(self,k,v)
+		self.__doc__=doc
 
 class _ClassMethodAttr(classmethod):
 	def __get__(self,i,t=None):

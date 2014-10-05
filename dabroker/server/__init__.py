@@ -12,7 +12,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-from ..base import BrokeredInfo,Callable,BrokeredInfoInfo,BrokeredMeta
+from ..base import BrokeredInfo,Callable,Field,BrokeredInfoInfo,BrokeredMeta
 from types import FunctionType
 
 class ServerBrokeredInfo(BrokeredInfo):
@@ -31,9 +31,11 @@ class ServerBrokeredInfo(BrokeredInfo):
 			if getattr(m,'__self__',None) is model: # classmethod
 				if self._meta is BrokeredInfoInfo:
 					raise RuntimeError("You need a separate metaclass if you want to add class methods")
-				self._meta.add(Callable(m.__name__))
+				self._meta.add(Callable(a))
+			elif isinstance(m,property): # normal method
+				self.add(Field(a))
 			else: # normal method
-				self.add(Callable(m.__name__))
+				self.add(Callable(a))
 
 		for a in dir(self):
 			if a.startswith('_') or a in hide: continue
