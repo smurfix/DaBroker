@@ -85,17 +85,6 @@ class _ClientData(ClientBaseObj):
 	def __init__(self,*a,**k):
 		self._call_cache = WeakValueDictionary()
 		super(_ClientData,self).__init__(*a,**k)
-	def __repr__(self):
-		res = "<ClientData"
-		n = self.__class__.__name__
-		if n not in ("ClientObj","ClientData"):
-			res += ":"+n
-		n = self._key
-		if n is not None:
-			res += ":"+str(n)
-		res += ">"
-		return res
-	__str__=__repr__
 
 class ClientBrokeredInfo(BrokeredInfo):
 	"""\
@@ -170,23 +159,18 @@ class ClientBrokeredInfo(BrokeredInfo):
 				res = res()
 			return res
 
+	def __repr__(self):
+		k=getattr(self,'_key',None)
+		if not k or not hasattr(self,'name'):
+			return super(ClientBaseObj,self).__repr__()
+		return '‹I:{}:{}›'.format(self.name, '¦'.join(str(x) for x in k))
+	__str__=__unicode__=__repr__
+		
 class _ClientInfo(_ClientData,ClientBrokeredInfo):
 	"""Mix-in class for meta objects"""
 	_name = None
 	def __init__(self,*a,**k):
 		super(_ClientInfo,self).__init__(*a,**k)
-	def __repr__(self):
-		res = "<ClientInfo"
-		n = self.name
-		if n is not None:
-			res += ":"+n
-		else:
-			n = self._key
-			if n is not None:
-				res += ":"+str(n)
-		res += ">"
-		return res
-	__str__=__repr__
 
 class ClientBrokeredInfoInfo(ClientBrokeredInfo,BrokeredInfoInfo):
 	"""\
@@ -364,7 +348,7 @@ class client_BaseObj(common_BaseObj):
 					res._refs[k] = v
 
 		return current_service.top._add_to_cache(res)
-
+	
 @codec_adapter
 class client_InfoObj(client_BaseObj):
 	cls = ClientBrokeredInfo

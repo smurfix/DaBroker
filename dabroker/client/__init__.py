@@ -117,3 +117,11 @@ class ClientBaseObj(BaseObj):
 			To determine which, try to fetch the new version via `self._key()`."""
 		self._obsolete = True
 
+	def __repr__(self):
+		m=getattr(self,'_meta',None)
+		k=getattr(self,'_key',None)
+		if not m or not k or not hasattr(m,'name'):
+			return super(ClientBaseObj,self).__repr__()
+		return '‹O:{}:{}›'.format(m.name, '¦'.join(str(x) for x in k))
+	__str__=__unicode__=__repr__
+

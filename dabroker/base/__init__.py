@@ -95,10 +95,10 @@ class BaseRef(object):
 		return self.key.__ne__(other)
 
 	def __repr__(self):
-		res = "R:"+repr(self.key)
+		res = "‹R:"+'¦'.join(self.key)
 		if self.code is not None:
-			res += "‹{}›".format(repr(str(self.code))[1:-1])
-		return res
+			res += ':'+self.code
+		return res+'›'
 	__str__ = __repr__
 
 class BaseObj(object):
