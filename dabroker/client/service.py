@@ -259,8 +259,11 @@ class ChangeDel(ChangeData):
 		super(ChangeDel,self).revert(server)
 
 class ChangeInvalid(ChangeData):
+	def __init__(self,server,obj,old):
+		super(ChangeInvalid,self).__init__(server,obj)
+		self.old = old
 	def send_commit(self,server):
-		raise RuntimeError("inconsistent data",self.obj,_key)
+		raise RuntimeError("inconsistent data",self.obj,_key,self.old)
 
 class BrokerClient(BrokerEnv, BaseCallbacks):
 	"""\
@@ -333,10 +336,10 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 			if chg is not None:
 				# Ugh. Yes.
 				for k in obj._meta.fields:
-					if k in chg.old_data:
+					if chg.old_data.get(k,None) != getattr(obj,k):
 						# No guarantee that the old data has not been used
 						# to generate the new, so error out.
-						self.obj_chg[key] = ChangeInvalid(chg)
+						self.obj_chg[key] = ChangeInvalid(self,obj,chg)
 						return old
 			else:
 				old.__dict__.update(obj.__dict__)
