@@ -337,21 +337,21 @@ class BaseCodec(object):
 			objcache['done'] = d+1
 		return res
 
-	def encode(self, data, include=False, _mid=None, _raw=False):
+	def encode(self, data, _include=False, _raw=False, **kw):
 		"""\
 			Encode this data structure. Recursive structures or
 			multiply-used objects are handled correctly, but not in
 			combination.
 
-			@include: a flag telling the system to encode an object's data,
-			          not just a reference. Used server>client. If None,
-			          send object keys without retrieval info. This is used
-			          e.g. when broadcasting, so as to not leak data access.
+			@_include: a flag telling the system to encode an object's data,
+			           not just a reference. Used server>client. If None,
+			           send object keys without retrieval info. This is used
+			           e.g. when broadcasting, so as to not leak data access.
 			"""
 		# No, not yet / did not work: slower path
 		objcache = {"done":1}
 		objref = {}
-		res = self._encode(data, objcache,objref, include=include)
+		res = self._encode(data, objcache,objref, include=_include)
 		del objcache['done']
 		cache = []
 
@@ -371,10 +371,9 @@ class BaseCodec(object):
 			return res,cache
 
 		res = {'data':res}
+		res.update(kw)
 		if cache:
 			res['cache'] = cache
-		if _mid:
-			res['msgid'] = _mid
 		return res
 	
 	def encode_error(self, err, tb=None):

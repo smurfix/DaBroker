@@ -260,7 +260,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 				msg = proc(*a,**msg)
 				#logger.debug("reply %r",msg)
 				try:
-					msg = self.codec.encode(msg, include = getattr(proc,'include',incl), _mid=self.last_msgid)
+					msg = self.codec.encode(msg, _include = getattr(proc,'include',incl), msgid=self.last_msgid)
 				except Exception:
 					print("RAW was",rmsg,file=sys.stderr)
 					print("MSG is",msg,file=sys.stderr)
@@ -282,7 +282,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 
 			msgid = self.last_msgid+1
 			self.last_msgid = msgid
-			msg = self.codec.encode(msg, include=include, _mid=msgid)
+			msg = self.codec.encode(msg, include=include, msgid=msgid)
 			self.transport.send(msg)
 
 	############# Convenience methods for exporting stuff
