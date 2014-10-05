@@ -337,7 +337,7 @@ class BaseCodec(object):
 			objcache['done'] = d+1
 		return res
 
-	def encode(self, data, include=False, _mid=None):
+	def encode(self, data, include=False, _mid=None, _raw=False):
 		"""\
 			Encode this data structure. Recursive structures or
 			multiply-used objects are handled correctly, but not in
@@ -353,10 +353,10 @@ class BaseCodec(object):
 		objref = {}
 		res = self._encode(data, objcache,objref, include=include)
 		del objcache['done']
+		cache = []
 
 		if objref:
 			# At least one reference was required.
-			dl = []
 			def _sorter(k):
 				c,d,e,x = objcache[k]
 				if type(e) is not tuple: return 9999999999
@@ -366,12 +366,13 @@ class BaseCodec(object):
 				v['_oi']=oid
 				if isinstance(f,tuple):
 					f[1][f[2]] = {'_or':oid}
-					dl.append(v)
+					cache.append(v)
+		if _raw:
+			return res,cache
 
-			# Seed with the incomplete refs
-			if dl:
-				res['_oc'] = dl
 		res = {'result':res}
+		if cache:
+			res['cache'] = cache
 		if _mid:
 			res['msgid'] = _mid
 		return res
@@ -389,7 +390,9 @@ class BaseCodec(object):
 		if isinstance(err,string_types):
 			err = Exception(err)
 		# don't use the normal 
-		res['_error'] = BaseCodec.encode(self,err)
+		res['error'],cache = BaseCodec.encode(self,err, _raw=True)
+		if cache:
+			res['cache'] = cache
 
 		if tb is not None:
 			if hasattr(tb,'tb_frame'):
@@ -474,29 +477,40 @@ class BaseCodec(object):
 		
 	def decode(self, data):
 		"""\
-			Decode the data.
-			
+			Decode the data:
 			Reverse everything the encoder does as cleanly as possible.
+
+			Step 1: unpack and return a top-level object.
 			"""
 
 		assert type(data) is dict
 		if 'error' in data:
-			real_error = BaseCodec.decode(self,data['error'])
+			real_error = self.decode2(data['error'], _cache=data.get('cache',()))
 			tb = data.get('tb',None)
 			if tb:
 				real_error._traceback = tb
 			raise real_error
 		return attrdict(data)
 
-	def decode2(self,data):
+	def decode2(self,data,_cache=None):
+		"""\
+			Decode the data:
+			Reverse everything the encoder does as cleanly as possible.
+
+			Step 2: re-object-ify the message contents.
+			"""
 		objcache = {}
 		objtodo = []
 
-		data = data.result
-		if isinstance(data,dict):
-			for obj in data.pop('_oc',()):
-				self._decode(obj, objcache,objtodo)
-				# side effect: populate objcache
+		if _cache is None:
+			cache = data.pop('cache',())
+			data = data.result
+		else:
+			cache = _cache
+
+		for obj in cache:
+			self._decode(obj, objcache,objtodo)
+			# side effect: populate objcache
 
 		res = self._decode(data, objcache,objtodo)
 		self._cleanup(objcache,objtodo)
