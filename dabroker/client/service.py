@@ -267,6 +267,8 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 		The basic client implementation.
 		"""
 	root_key = None
+	last_msgid = 0
+	last_msgid_wait = None
 
 	def __init__(self, cfg={}):
 		global client
@@ -580,7 +582,18 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 			msg = self.codec.encode(msg)
 			msg = self.transport.send(msg)
 			msg = self.codec.decode(msg)
+			if hasattr(msg,'msgid'):
+				msgid = msg.msgid
+				while self.last_msgid < msgid:
+					logger.debug("Waiting %d %d",self.last_msgid,msgid)
+					if self.last_msgid_wait is None:
+						self.last_msgid_wait = AsyncResult()
+					chk = self.last_msgid_wait.get()
+					if chk >= msgid:
+						break
+
 			#logger.debug("Recv reply: %r",msg)
+			msg = self.codec.decode2(msg)
 			return msg
 
 	@spawned
@@ -594,7 +607,8 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 				logger.exception("Server sends us an error. Shutting down.")
 				self.end()
 				return
-
+			msgid = msg.get('msgid',None)
+			msg = self.codec.decode2(msg)
 			#logger.debug("bcast %r",msg)
 			m = msg.pop('_m')
 			a = msg.pop('_a',())
@@ -604,5 +618,12 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 			except AttributeError:
 				raise UnknownCommandError(m)
 			proc(*a,**msg)
+
+			if msgid and self.last_msgid < msgid:
+				self.last_msgid = msgid
+				x,self.last_msgid_wait = self.last_msgid_wait,None
+				if x is not None:
+					x.set(msgid)
+
 
 client = None

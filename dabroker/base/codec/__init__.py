@@ -337,7 +337,7 @@ class BaseCodec(object):
 			objcache['done'] = d+1
 		return res
 
-	def encode(self, data, include=False):
+	def encode(self, data, include=False, _mid=None):
 		"""\
 			Encode this data structure. Recursive structures or
 			multiply-used objects are handled correctly, but not in
@@ -371,6 +371,9 @@ class BaseCodec(object):
 			# Seed with the incomplete refs
 			if dl:
 				res['_oc'] = dl
+		res = {'result':res}
+		if _mid:
+			res['msgid'] = _mid
 		return res
 	
 	def encode_error(self, err, tb=None):
@@ -475,17 +478,22 @@ class BaseCodec(object):
 			
 			Reverse everything the encoder does as cleanly as possible.
 			"""
+
+		assert type(data) is dict
+		if 'error' in data:
+			real_error = BaseCodec.decode(self,data['error'])
+			tb = data.get('tb',None)
+			if tb:
+				real_error._traceback = tb
+			raise real_error
+		return attrdict(data)
+
+	def decode2(self,data):
 		objcache = {}
 		objtodo = []
 
-		if type(data) is dict:
-			if '_error' in data:
-				real_error = BaseCodec.decode(self,data['_error'])
-				tb = data.get('tb',None)
-				if tb:
-					real_error._traceback = tb
-				raise real_error
-
+		data = data.result
+		if isinstance(data,dict):
 			for obj in data.pop('_oc',()):
 				self._decode(obj, objcache,objtodo)
 				# side effect: populate objcache

@@ -43,6 +43,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 		"""
 	root = None
 	transport = None
+	last_msgid = 0
 
 	def __init__(self, cfg={}, loader=None, adapters=()):
 		# the sender might be set later
@@ -231,6 +232,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 			rmsg=msg
 			try:
 				msg = self.codec.decode(msg)
+				msg = self.codec.decode2(msg)
 
 				#logger.debug("recv %r",msg)
 				m = msg.pop('_m')
@@ -258,7 +260,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 				msg = proc(*a,**msg)
 				#logger.debug("reply %r",msg)
 				try:
-					msg = self.codec.encode(msg, include = getattr(proc,'include',incl))
+					msg = self.codec.encode(msg, include = getattr(proc,'include',incl), _mid=self.last_msgid)
 				except Exception:
 					print("RAW was",rmsg,file=sys.stderr)
 					print("MSG is",msg,file=sys.stderr)
@@ -278,7 +280,9 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 			if a:
 				msg['_a'] = a
 
-			msg = self.codec.encode(msg, include=include)
+			msgid = self.last_msgid+1
+			self.last_msgid = msgid
+			msg = self.codec.encode(msg, include=include, _mid=msgid)
 			self.transport.send(msg)
 
 	############# Convenience methods for exporting stuff
