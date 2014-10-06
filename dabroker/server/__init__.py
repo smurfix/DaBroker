@@ -12,36 +12,11 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-from ..base import BrokeredInfo,Callable,Field,BrokeredInfoInfo,BrokeredMeta
+from ..base import BrokeredInfo,Callable,Ref,BackRef,Field,BrokeredInfoInfo,BrokeredMeta
 from types import FunctionType
 
 class ServerBrokeredInfo(BrokeredInfo):
-	model = None
-	def add_callables(self,model, hide=()):
-		# TODO: this should be in a more generic location
-		# and probably somewhat unified with .server.export_class()
-		if self.model is None:
-			self.model = model
-		else:
-			assert self.model is model, (self.model,model)
-		for a in dir(model):
-			if a.startswith('_') or a in hide: continue
-			m = getattr(model,a)
-			if not getattr(m,'_dab_callable',False): continue
-			if getattr(m,'__self__',None) is model: # classmethod
-				if self._meta is BrokeredInfoInfo:
-					raise RuntimeError("You need a separate metaclass if you want to add class methods")
-				self._meta.add(Callable(a))
-			elif isinstance(m,property): # normal method
-				self.add(Field(a))
-			else: # normal method
-				self.add(Callable(a))
-
-		for a in dir(self):
-			if a.startswith('_') or a in hide: continue
-			m = getattr(self,a)
-			if not getattr(m,'_dab_callable',False): continue
-			self._meta.add(Callable(m.__name__, meta=True))
+	pass
 
 class ServerBrokeredMeta(ServerBrokeredInfo,BrokeredMeta):
 	pass

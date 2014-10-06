@@ -90,7 +90,7 @@ class SQLInfo(ServerBrokeredInfo):
 		self.server = server
 		self.loader = loader
 		self.name = i.class_.__name__
-		self._meta = meta
+		#self._meta = meta
 		self._dab = self
 		self._dab_cached = getattr(i.class_,'_dab_cached',None)
 		model._dab = self
@@ -100,7 +100,8 @@ class SQLInfo(ServerBrokeredInfo):
 			cls = model
 		load_me.__name__ = str("codec_sql_"+self.name)
 
-		self.add_callables(model,hide=('update','delete','new'))
+		# now do the rest
+		server.export_class(model, attrs='+', metacls=self, metametacls=meta)
 		server.codec.register(load_me)
 
 	def __call__(self, **kw):
@@ -188,6 +189,7 @@ class SQLInfo(ServerBrokeredInfo):
 	@exported
 	@with_session
 	def new(self, session, obj=None, *key, **kw):
+		assert self.rw is not None
 		if obj is None:
 			# called to make a new object
 			assert kw and not key
@@ -214,8 +216,9 @@ class SQLMeta(ServerBrokeredMeta):
 			#self.add(Callable("get", cached=True))
 			#self.add(Callable("find", cached=True))
 			if rw:
-				self.add(Callable("new",meta=True))
-				self.add(Callable("delete",meta=True))
+				#self.add(Callable("new",meta=True))
+				#self.add(Callable("delete",meta=True))
+				pass
 
 class SQLLoader(BaseLoader):
 	"""A loader which reads from SQL"""
@@ -239,7 +242,8 @@ class SQLLoader(BaseLoader):
 			root[r.name] = r
 
 		self.tables[r.name] = r
-		self.set_key(r,r.name)
+		if getattr(r,'_key',None) is None:
+			self.set_key(r,r.name)
 		return r
 
 	def get(self,*key):

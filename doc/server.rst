@@ -112,6 +112,22 @@ You can now do this on the client:
 
 on the client as well as on the server.
 
+Attributing functions
+---------------------
+
+It's tedious to remember to manually add each function of an object which
+you want to export to your metaobject. For this reason, there's a couple of
+convenience functions which allow you to decorate your regular methods:
+
+    >>> from dabroker.util import exported
+    >>> class ServedObj(…):
+    >>>     @exported(include=True)
+    >>>     def special_object(self, …):
+    >>>         return SomeExportedObject()
+
+    >>> broker.add_callables
+
+
 Searching
 ---------
 

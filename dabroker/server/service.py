@@ -16,8 +16,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from .loader import Loaders
 from . import ServerBrokeredInfo
-from ..base import UnknownCommandError,BaseRef, Field,Ref,BackRef,Callable, AttrAdapter
-from ..util import import_string
+from ..base import UnknownCommandError,BaseRef, Field,Ref,BackRef,Callable, broker_info_meta,_Attribute
+from ..util import import_string,_ClassMethodType
 from ..base.config import default_config
 from ..base.transport import BaseCallbacks
 from ..base.service import BrokerEnv
@@ -210,12 +210,12 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 		for k,on in attrs.items():
 			ov,nv = on
 			if k in refs:
-				if getattr(refs[k],'hidden'):
+				if getattr(refs[k],'_dab_hidden'):
 					continue
 				if ov is not None: ov = ov._key
 				if nv is not None: nv = nv._key
 			elif k in fields:
-				if getattr(fields[k],'hidden'):
+				if getattr(fields[k],'_dab_hidden'):
 					continue
 			if ov != nv:
 				attrs[k] = (ov,nv)
@@ -252,10 +252,12 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 							do = o
 						proc = getattr(do,m)
 						if not getattr(proc,'_dab_callable',False):
+							import pdb;pdb.set_trace()
 							raise UnknownCommandError((m,o,a))
 					else:
 						proc = getattr(self,'do_'+m)
 				except AttributeError:
+					import pdb;pdb.set_trace()
 					raise UnknownCommandError((m,o,a))
 				msg = proc(*a,**msg)
 				#logger.debug("reply %r",msg)
@@ -287,7 +289,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 
 	############# Convenience methods for exporting stuff
 
-	def export_object(self, obj, attrs=None, vars=None, refs=None, backrefs=None, funcs=None, name=None, key=None, classkey=None, metacls=ServerBrokeredInfo):
+	def export_object(self, obj, **kw):
 		"""\
 			Convenience method to export a single object via DaBroker.
 			The object's class must not already be exported.
@@ -296,10 +298,11 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 			adds the _meta attribute to the object instead. Thus, you need
 			to explicitly add object-level attributes.
 			"""
-		meta = self.export_class(obj.__class__, attrs=attrs, vars=vars, refs=refs, backrefs=backrefs, funcs=funcs, classfuncs=_NotGiven, name=name, key=classkey, metacls=metacls, _set=obj)
+		kw.setdefault('metacls', ServerBrokeredInfo)
+		meta = self.export_class(obj.__class__, _set=obj, **kw)
 		return meta
 
-	def export_class(self, cls, attrs=None, vars=None, refs=None, backrefs=None, funcs=None, classfuncs=None, name=None, key=None, classkey=None, metacls=ServerBrokeredInfo, _set=None):
+	def export_class(self, cls, attrs=None, metaattrs='+', vars=None, refs=None, backrefs=None, funcs=None, hidden=None, classfuncs=None, name=None, key=None, classkey=None, metacls=ServerBrokeredInfo, metametacls=ServerBrokeredInfo, _set=None):
 		"""\
 			Convenience method to export a class via DaBroker.
 			@cls: the class to export.
@@ -308,17 +311,20 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 			@key, @classkey: well-known keys for the class. Will otherwise be allocated.
 			@vars @refs @backrefs @funcs @classfuncs: Attributes to export, will not be looked up in the class.
 
-			Note that auto-detecting attributes works on the class, i.e.
-			the un-nitialized object. You need to add attributes manually
-			if they are added only when the object is created.
+			Note that auto-detecting attributes works on the class, not a
+			class object. You need to add attributes manually if they are
+			added only when the object is created.
 			"""
 
-		if getattr(cls,'_meta',None) is not None:
-			raise RuntimeError("Class '{}' already has a '_meta' member".format(repr(cls)))
+		m = getattr(cls,'_meta',None)
+		assert m is None or m is broker_info_meta, (cls,m)
 
 		# Build
 		known = set()
-		def make_set(s):
+		classknown = set()
+		def make_set(s,k=known):
+			if s is NullSet or isinstance(s,NullSet):
+				return NullSet()
 			res = set()
 			if s is None:
 				return res
@@ -328,40 +334,64 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 			for m in s:
 				if m:
 					res.add(m)
-					known.add(m)
+					k.add(m)
 			return res
 
 		# known types
 		vars = make_set(vars)
+		vars2 = make_set(())
 		refs = make_set(refs)
 		backrefs = make_set(backrefs)
 		funcs = make_set(funcs)
 		if classfuncs is not _NotGiven:
 			classfuncs = make_set(classfuncs)
+		make_set(hidden)
 
 		if attrs is not None:
 			if isinstance(attrs,string_types):
-				if attrs == '*':
+				if attrs == '*': # fields, too
 					attrs = (x for x in dir(cls) if not x.startswith('_'))
+				elif attrs == '+': # methods only
+					attrs = (x for x in dir(cls) if not x.startswith('_') and getattr(getattr(cls,x),'_dab_callable',False))
 				else:
 					attrs = attrs.split(' ')
 			for a in attrs:
-				if a in known:
+				if a in known: # also contains 'hidden'
 					continue
-				if isinstance(a,AttrAdapter):
-					vars.add(a) # doesn't matter which kind
+				if isinstance(a,_Attribute):
+					vars2.add(a) # doesn't matter which kind
 					continue
+
 				m = getattr(cls,a)
+				d = getattr(m,'_dab_defer',None)
+				if d: d={'defer':d}
+				else: d = {}
+
 				if isfunction(m): # PY3 unbound method, or maybe a static function
-					funcs.add(a)
+					if not getattr(m,'_dab_callable',False): continue
+					funcs.add(Callable(a,**d))
 				elif hasattr(m,'_meta'): # another DaBroker object
-					refs.add(a)
+					refs.add(Ref(a,**d))
+				elif isinstance(m,property): # possibly-exported property
+					if not getattr(m,'_dab_callable',False): continue
+					ref = getattr(m,'_dab_ref',None)
+					if ref is None:
+						vars.add(Field(a,**d))
+					elif ref:
+						vars.add(BackRef(a,**d))
+					else:
+						vars.add(Ref(a,**d))
+				elif isinstance(m,_ClassMethodType):
+					if not getattr(m,'_dab_callable',False): continue
+					classfuncs.add(Callable(a,**d))
 				elif not ismethod(m): # data, probably
-					vars.add(a)
+					vars.add(Field(a,**d))
 				elif getattr(m,'__self__',None) is cls: # classmethod, py2+py3
-					classfuncs.add(a)
+					if not getattr(m,'_dab_callable',False): continue
+					classfuncs.add(Callable(a,**d))
 				else: # must be a PY2 unbound method
-					funcs.add(a)
+					if not getattr(m,'_dab_callable',False): continue
+					funcs.add(Callable(a,**d))
 		
 		if name:
 			clsname = name
@@ -369,22 +399,80 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 			clsname = cls.__name__
 			global _export_seq
 			_export_seq += 1
-			name = '_exp_'+str(_export_seq)
+			name = '_'+str(_export_seq)
 
-		meta = metacls(name)
+		if isinstance(metacls,ServerBrokeredInfo):
+			meta = metacls
+		else:
+			meta = metacls(name)
 
-		if classfuncs is not _NotGiven and classfuncs:
-			mmeta = ServerBrokeredInfo("meta_"+name)
+		if metaattrs is not None:
+			if isinstance(metaattrs,string_types):
+				if metaattrs == '*': # fields, too
+					metaattrs = (x for x in dir(metacls) if not x.startswith('_'))
+				elif metaattrs == '+': # methods only
+					metaattrs = (x for x in dir(metacls) if not x.startswith('_') and getattr(getattr(metacls,x),'_dab_callable',False))
+				else:
+					metaattrs = metaattrs.split(' ')
+
+			for a in metaattrs:
+				if a in known: # also contains 'hidden'
+					continue
+				if isinstance(a,_Attribute):
+					vars2.add(a) # doesn't matter which kind
+					continue
+
+				m = getattr(metacls,a)
+				d={'meta':True}
+				if  getattr(m,'_dab_defer',None):
+					d['defer']=d
+
+				if isfunction(m): # PY3 unbound method, or maybe a static function
+					if not getattr(m,'_dab_callable',False): continue
+					classfuncs.add(Callable(a,**d))
+				elif hasattr(m,'_meta'): # another DaBroker object
+					#classrefs.add(Ref(a,**d))
+					pass
+				elif isinstance(m,property): # possibly-exported property
+					pass
+					#if not getattr(m,'_dab_callable',False): continue
+					#ref = getattr(m,'_dab_ref',None)
+					#if ref is None:
+					#	classvars.add(Field(a,**d))
+					#elif ref:
+					#	classvars.add(BackRef(a,**d))
+					#else:
+					#	classvars.add(Ref(a,**d))
+				elif isinstance(m,_ClassMethodType):
+					if not getattr(m,'_dab_callable',False): continue
+					classfuncs.add(Callable(a,**d))
+				elif not ismethod(m): # data, probably
+					pass
+					#classvars.add(Field(a,**d))
+				elif getattr(m,'__self__',None) is cls: # classmethod, py2+py3
+					if not getattr(m,'_dab_callable',False): continue
+					classfuncs.add(Callable(a,**d))
+				else: # must be a PY2 unbound method
+					if not getattr(m,'_dab_callable',False): continue
+					classfuncs.add(Callable(a,**d))
+		
+		if metametacls is not ServerBrokeredInfo or classfuncs is not _NotGiven and classfuncs:
+			if isinstance(metametacls,ServerBrokeredInfo):
+				mmeta = metametacls
+			else:
+				mmeta = metametacls("meta_"+name)
 			for f in classfuncs:
-				if not isinstance(f,AttrAdapter):
+				if not isinstance(f,_Attribute):
 					f = Callable(f)
 				mmeta.add(f)
 			if classkey is None:
 				classkey = (self.loader.static.id, '_ecm',name)
-			self.loader.add(mmeta,*classkey)
+			if getattr(mmeta,'_key',None) is None:
+				self.loader.add(mmeta,*classkey)
 			meta._meta = mmeta
 
-		for f in vars: meta.add(f,Field)
+		for f in vars: meta.add(f)
+		for f in vars2: meta.add(f,Field)
 		for f in refs: meta.add(f,Ref)
 		for f in backrefs: meta.add(f,BackRef)
 		for f in funcs: meta.add(f,Callable)
@@ -394,3 +482,9 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 			key = (self.loader.static.id, '_ec',name)
 		self.loader.add(meta,*key)
 		return meta
+
+class NullSet(set):
+	"""An empty set that stays empty."""
+	def add(self,x):
+		pass
+

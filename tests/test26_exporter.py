@@ -69,7 +69,7 @@ class Test26_server(TestServer):
 		root = RootObj()
 		opsMeta = self.export_class(OpsObj,'*',funcs=[Callable("revc", cached=True)], metacls=SearchBrokeredInfo)
 		# OpsObj.rev will be auto-found
-		self.export_object(root,'*',refs='ops',name='rootMeta')
+		self.export_object(root,attrs='*',refs='ops',name='rootMeta')
 
 		theOpsObj = OpsObj("Oh?")
 		self.add_static(theOpsObj,2,3)
