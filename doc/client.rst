@@ -34,7 +34,9 @@ consistent instance at the time it was accessed. If you want a consistent
 snapshot of a whole list of objects, there are two ways to do this:
 
     * Write a server method that returns them in a list, e.g. via a database transaction.
-      Don't forget to flag the method with `.include=True`.
+      You need to flag the method with `._dab_include=True`, otherwise
+      you'll send a list of references instead. Since you would then need
+      to fetch them one-by-one, this is not atomic.
 
     * Collect the objects in a list or another convenient data structure, and do
 

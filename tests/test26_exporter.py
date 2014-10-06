@@ -43,7 +43,6 @@ class SearchBrokeredInfo(BrokeredInfo):
 			else:
 				res.append(obj)
 		return res
-	_dab_search.include=True
 
 class Test26_server(TestServer):
 	@cached_property
