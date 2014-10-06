@@ -248,7 +248,10 @@ class BrokeredInfo(BaseObj):
 	def __repr__(self):
 		return "{}({})".format(self.__class__.__name__,repr(self.name))
 
-class _attr(object):
+class _Attribute(object):
+	"""Base class for attributes of DaBroker-managed types"""
+	defer = False
+
 	def __init__(self,name, **kw):
 		self.name = name
 		for k,v in kw.items():
@@ -262,22 +265,26 @@ class _attr(object):
 	def __ne__(self,other):
 		return self.name.__ne__(getattr(other,'name',other))
 
-class Field(_attr):
+	def __repr__(self):
+		return "{}({},{})".format(self.__class__.__name__,repr(self.name),
+			','.join("{}={}".format(k,repr(v)) for k,v in self.__dict__.items() if k != "name" and not k.startswith('_')))
+
+class Field(_Attribute):
 	"""A standard data field; may be a dict/list.
 		Set the "hidden" attribute to True if you don't want this value broadcast."""
 	pass
 
-class Ref(_attr):
+class Ref(_Attribute):
 	"""A reference to another BrokeredBase object (many-to-one).
 		Set the "hidden" attribute to True if you don't want this value broadcast."""
 	pass
 
-class BackRef(_attr):
+class BackRef(_Attribute):
 	"""A reference from another BrokeredBase object type (one-to-many).
 		If you want client-side caching, TODO."""
 	pass
 
-class Callable(_attr):
+class Callable(_Attribute):
 	"""A procedure that will be called on the server."""
 	pass
 
