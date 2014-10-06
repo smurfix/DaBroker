@@ -137,7 +137,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 		if '_key' not in res._meta.__dict__:
 			self.add_static(res._meta,'root','meta')
 		return res
-	do_root.include = True
+	do_root._dab_include = True
 
 	def do_echo(self,msg):
 		logger.debug("echo %r",msg)
@@ -156,7 +156,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 		if isinstance(obj,BaseRef):
 			raise RuntimeError("Not without code")
 		return obj
-	do_get.include = True
+	do_get._dab_include = True
 
 	def do_update(self,obj,k={}):
 		"""Update an object.
@@ -262,7 +262,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 				msg = proc(*a,**msg)
 				#logger.debug("reply %r",msg)
 				try:
-					msg = self.codec.encode(msg, _include = getattr(proc,'include',incl), msgid=self.last_msgid)
+					msg = self.codec.encode(msg, _include = getattr(proc,'_dab_include',incl), msgid=self.last_msgid)
 				except Exception:
 					print("RAW was",rmsg,file=sys.stderr)
 					print("MSG is",msg,file=sys.stderr)

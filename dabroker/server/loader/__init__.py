@@ -34,8 +34,7 @@ class Loaders(object):
 
 		self.loaders = {} # first key component => actual loader
 
-		self.static = StaticLoader()
-		self.add_loader(self.static)
+		self.static = StaticLoader(self)
 		self.static.add(broker_info_meta)
 
 	def add_loader(self,loader):
@@ -80,14 +79,19 @@ class Loaders(object):
 		else:
 			k = getattr(obj,'_meta',obj.__class__._meta)._key.key[0]
 
-		self.loaders[k].add(obj, *(key[1:] if key else ()))
+		try:
+			self.loaders[k].add(obj, *(key[1:] if key else ()))
+		except KeyError:
+			import pdb;pdb.set_trace()
+			raise
 
 class BaseLoader(object):
 	id=None
-	def __init__(self, id=None):
+	def __init__(self, parent,id=None):
 		if id is not None:
 			self.id = id
 		assert self.id is not None
+		parent.add_loader(self)
 
 	def get(self,*key):
 		raise NotImplementedError("You need to override {}.get()".format(self.__class__.__name__))
@@ -129,9 +133,9 @@ class StaticLoader(BaseLoader):
 	"""A simple 'loader' which serves static objects"""
 	id="_s"
 
-	def __init__(self, id=None):
+	def __init__(self, parent, id=None):
 		self.objects = {}
-		super(StaticLoader,self).__init__(id=id)
+		super(StaticLoader,self).__init__(parent, id=id)
 
 	def get(self,*key):
 		return self.objects[key]

@@ -166,7 +166,6 @@ class SQLInfo(ServerBrokeredInfo):
 		for r in res:
 			self.fixup(r)
 		return res
-	_dab_search.include = True
 
 	@with_session
 	def get(self, session,*key, **kw):
@@ -180,7 +179,7 @@ class SQLInfo(ServerBrokeredInfo):
 			
 		self.fixup(res)
 		return res
-	get.include = True
+	get._dab_include = True
 
 	def new_setup(self,obj,**kw):
 		"""Method to override, to add interesting things to an object"""
@@ -203,7 +202,6 @@ class SQLInfo(ServerBrokeredInfo):
 		self.fixup(obj)
 		self.server.send_created(obj,kw)
 		return obj
-	new.include = True
 
 class SQLMeta(ServerBrokeredMeta):
 	"""Parent class for SQL table info"""
@@ -228,10 +226,9 @@ class SQLLoader(BaseLoader):
 		self.meta = {}
 		if id is None: id = self.id
 		else: self.id = id
-		super(SQLLoader,self).__init__(id=id)
+		super(SQLLoader,self).__init__(server.loader,id=id)
 
 		self.session = session
-		self.loader = server.loader
 		self.server = server
 
 	def add_model(self, model, root=None, cls=SQLInfo, mcls=SQLMeta, rw=False, hide=()):
