@@ -204,13 +204,14 @@ def _dab_(d):
 			d['_dab_'+k]=v
 	return d
 
-def exported(_fn,**attrs):
+def exported(_fn=None,**attrs):
 	"""\
 		Decorator to mark a method as exported to the client
 		"""
 	if _fn is None:
 		def xfn(_fn):
 			return exported(_fn,**attrs)
+		return xfn
 	# Functions allow arbitrary attributes, so this is easy
 	attrs = _dab_(attrs)
 	for k,v in attrs.items():
