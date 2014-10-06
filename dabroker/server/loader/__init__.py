@@ -113,7 +113,7 @@ class BaseLoader(object):
 			assert obj.__dict__.get('_key',kx) is kx, (key,kx)
 			key = None
 		else:
-			# getattr() calls the class' ._key property, which would recurse back here :-/
+			# if the object has a ._key property which generates the key, getattr() would recurse back here :-/
 			kx = obj.__dict__.get('_key',None)
 
 		if kx is not None:
