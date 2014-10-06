@@ -18,7 +18,6 @@ import os
 import sys
 from dabroker import patch; patch()
 from dabroker.server.service import BrokerServer
-from dabroker.server.loader.sqlalchemy import SQLLoader
 from dabroker.client.service import BrokerClient
 from dabroker.util.thread import AsyncResult, Thread
 
