@@ -89,7 +89,6 @@ class TestServer(BrokerServer):
 		sql = SQLLoader(DBSession,self)
 		sql.add_model(Person,self.root.data, rw=True)
 		sql.add_model(Address)
-		self.loader.add_loader(sql)
 
 	def do_trigger(self,msg):
 		self.send("trigger",msg)

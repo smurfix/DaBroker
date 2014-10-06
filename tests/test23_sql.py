@@ -113,7 +113,6 @@ class Test23_server(BrokerServer):
 
 		sql = SQLLoader(DBSession,self)
 		sql.add_model(Person,root.data, cls=PersonInfo)
-		self.loader.add_loader(sql)
 		self.hello = "Step 0"
 
 		return root

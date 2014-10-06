@@ -78,7 +78,6 @@ class Test22_server(BrokerServer):
 
 		sql = SQLLoader(DBSession,self)
 		sql.add_model(Person,root.data, rw=True)
-		self.loader.add_loader(sql)
 
 		return root
 

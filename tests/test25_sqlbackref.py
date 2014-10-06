@@ -90,7 +90,6 @@ class Test25_server(BrokerServer):
 		sql = SQLLoader(DBSession,self)
 		sql.add_model(Person,root.data)
 		sql.add_model(Address,root.data)
-		self.loader.add_loader(sql)
 
 		return root
 

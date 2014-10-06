@@ -157,8 +157,7 @@ SQLAlchemy and its ORM is supported directly:
     from dabroker.server.loader.sqlalchemy import SQLLoader
     # `person` and `address` are the standard SQLAlchemy example tables
 
-    sql = SQLLoader(DBSession,self)
-    broker.loader.add_loader(sql)
+    sql = SQLLoader(DBSession,broker)
 
     sql.add_model(Person, root.data, rw=True)
     sql.add_model(Address)
