@@ -185,7 +185,21 @@ class cached_property(object):
 				value = value.get()
 		return value
 
-default_attrs = dict(_dab_callable=True, include=True)
+default_attrs = dict(callable=True, include=True)
+def _dab_(d):
+	"""\
+		Called with a dict. Returns an .items() iterator which prefixes
+		every key with '_dab_', unless there is at least one key which
+		starts with an underscore.
+		"""
+	under=False
+	for k in d:
+		if k[0]=='_':
+			under=True
+			break
+	if under:
+		return d
+	return dict(('_dab_'+k,v) for k,v in d.items())
 
 def exported(_fn,**attrs):
 	"""\
@@ -196,6 +210,7 @@ def exported(_fn,**attrs):
 			return exported(_fn,**attrs)
 	# Functions allow arbitrary attributes, so this is easy
 	if not attrs: attrs = default_attrs
+	attrs = _dab_(attrs)
 	for k,v in attrs.items():
 		setattr(_fn,k,v)
 	return _fn
@@ -206,7 +221,6 @@ def exported(_fn,**attrs):
 # Fortunately, this is reasonably easy.
 from types import MethodType 
 class _ClassMethodType(object):
-	_dab_callable = True
 	def __init__(self,_func,_self,_cls=None, **attrs):
 		self.im_func = self.__func__ = _func
 		self.im_self = self.__self__ = _self
@@ -238,6 +252,7 @@ def exported_classmethod(_fn=None,**attrs):
 		return xfn
 	res = _ClassMethodAttr(_fn)
 	if not attrs: attrs = default_attrs
+	attrs = _dab_(attrs)
 	for k,v in attrs.items():
 		setattr(res,k,v)
 	res._attrs = attrs
@@ -260,6 +275,7 @@ def exported_staticmethod(_fn=None,**attrs):
 		return xfn
 	res = _StaticMethodAttr(_fn)
 	if not attrs: attrs = default_attrs
+	attrs = _dab_(attrs)
 	for k,v in attrs.items():
 		setattr(res,k,v)
 	res._attrs = attrs
@@ -281,6 +297,7 @@ def exported_property(fget=None,fset=None,fdel=None,doc=None,**attrs):
 			return exported_property(fget=fget,fset=fset,fdel=fdel,doc=doc,**attrs)
 		return xfn
 	if not attrs: attrs = default_attrs
+	attrs = dict(_dab_(attrs))
 	res = _PropertyAttr(fget=fget,fset=fset,fdel=fdel,doc=doc,**attrs)
 	return res
 
