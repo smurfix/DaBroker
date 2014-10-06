@@ -197,9 +197,12 @@ def _dab_(d):
 		if k[0]=='_':
 			under=True
 			break
-	if under:
-		return d
-	return dict(('_dab_'+k,v) for k,v in d.items())
+	if not under:
+		d = dict(('_dab_'+k,v) for k,v in d.items())
+	for k,v in default_attrs.items():
+		if '_dab_no_'+k not in d:
+			d['_dab_'+k]=v
+	return d
 
 def exported(_fn,**attrs):
 	"""\
@@ -209,7 +212,6 @@ def exported(_fn,**attrs):
 		def xfn(_fn):
 			return exported(_fn,**attrs)
 	# Functions allow arbitrary attributes, so this is easy
-	if not attrs: attrs = default_attrs
 	attrs = _dab_(attrs)
 	for k,v in attrs.items():
 		setattr(_fn,k,v)
@@ -251,7 +253,6 @@ def exported_classmethod(_fn=None,**attrs):
 			return exported_classmethod(_fn,**attrs)
 		return xfn
 	res = _ClassMethodAttr(_fn)
-	if not attrs: attrs = default_attrs
 	attrs = _dab_(attrs)
 	for k,v in attrs.items():
 		setattr(res,k,v)
@@ -274,7 +275,6 @@ def exported_staticmethod(_fn=None,**attrs):
 			return exported_staticmethod(_fn,**attrs)
 		return xfn
 	res = _StaticMethodAttr(_fn)
-	if not attrs: attrs = default_attrs
 	attrs = _dab_(attrs)
 	for k,v in attrs.items():
 		setattr(res,k,v)
@@ -296,7 +296,6 @@ def exported_property(fget=None,fset=None,fdel=None,doc=None,**attrs):
 		def xfn(fget=None,fset=None,fdel=None,doc=None):
 			return exported_property(fget=fget,fset=fset,fdel=fdel,doc=doc,**attrs)
 		return xfn
-	if not attrs: attrs = default_attrs
 	attrs = dict(_dab_(attrs))
 	res = _PropertyAttr(fget=fget,fset=fset,fdel=fdel,doc=doc,**attrs)
 	return res
