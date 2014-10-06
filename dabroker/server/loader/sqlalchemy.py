@@ -101,7 +101,7 @@ class SQLInfo(ServerBrokeredInfo):
 		load_me.__name__ = str("codec_sql_"+self.name)
 
 		# now do the rest
-		server.export_class(model, attrs='+', metacls=self, metametacls=meta)
+		server.export_class(model, attrs='+', metacls=self, metametacls=meta, key=(loader.id,self.name))
 		server.codec.register(load_me)
 
 	def __call__(self, **kw):
@@ -242,8 +242,6 @@ class SQLLoader(BaseLoader):
 			root[r.name] = r
 
 		self.tables[r.name] = r
-		if getattr(r,'_key',None) is None:
-			self.set_key(r,r.name)
 		return r
 
 	def get(self,*key):
@@ -254,7 +252,13 @@ class SQLLoader(BaseLoader):
 			return m
 		return m.get(*key[1:])
 
+	def add(self, obj, *key):
+		# dummy, .get already knows me
+		assert len(key) == 1 and key[0] == obj.name
+		return self.set_key(obj, obj.name)
+
 	def new(self, obj, *key):
+		import pdb;pdb.set_trace()
 		if key:
 			k = key[0]
 		else:

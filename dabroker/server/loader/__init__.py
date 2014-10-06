@@ -100,7 +100,7 @@ class BaseLoader(object):
 	def delete(self,*key):
 		raise NotImplementedError("You need to override {}.delete()".format(self.__class__.__name__))
 
-	def add(self, obj):
+	def add(self, obj, *key):
 		raise NotImplementedError("You need to override {}.new()".format(self.__class__.__name__))
 		
 	def set_key(self, obj, *key):
