@@ -263,7 +263,7 @@ class ChangeInvalid(ChangeData):
 		super(ChangeInvalid,self).__init__(server,obj)
 		self.old = old
 	def send_commit(self,server):
-		raise RuntimeError("inconsistent data",self.obj,_key,self.old)
+		raise RuntimeError("inconsistent data",self.obj,self.old)
 
 class BrokerClient(BrokerEnv, BaseCallbacks):
 	"""\
