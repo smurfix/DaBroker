@@ -206,7 +206,7 @@ class SQLInfo(ServerBrokeredInfo):
 class SQLMeta(ServerBrokeredMeta):
 	"""Parent class for SQL table info"""
 	def __init__(self,id,info,cls, rw):
-		super(SQLMeta,self).__init__("SQL:"+id)
+		super(SQLMeta,self).__init__('meta_'+cls.__name__) ## "SQL:%s:%s" % (id,cls.__name__))
 		self._key = BaseRef(key=(id,'_meta',cls.__name__))
 		self.info = info
 		self.__name__ = "SQLMeta:"+cls.__name__
