@@ -188,9 +188,11 @@ class cached_property(object):
 default_attrs = dict(callable=True, include=True)
 def _dab_(d):
 	"""\
-		Called with a dict. Returns an .items() iterator which prefixes
-		every key with '_dab_', unless there is at least one key which
-		starts with an underscore.
+		Called with a dict. Returns a dict with every key with '_dab_',
+		unless there is at least one key which starts with an underscore.
+		Also adds the default attributes _dab_*, unless overridden or
+		explicitly turned off by passing a true-valued item named
+		_dab_no_*, for * in (callable,include)
 		"""
 	under=False
 	for k in d:
@@ -200,7 +202,7 @@ def _dab_(d):
 	if not under:
 		d = dict(('_dab_'+k,v) for k,v in d.items())
 	for k,v in default_attrs.items():
-		if '_dab_no_'+k not in d:
+		if '_dab_'+k not in d and not d.get('_dab_no_'+k,False):
 			d['_dab_'+k]=v
 	return d
 
