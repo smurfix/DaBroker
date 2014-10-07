@@ -1,9 +1,7 @@
 language: python
 python:
   - "2.7"
-  - "3.3"
   - "3.4"
-  - "pypy"
 services:
   - rabbitmq
 before_script:
@@ -11,4 +9,4 @@ before_script:
 install:
   - "pip install -v -r requirements.txt"
   - "pip install -v -r requirements_test.txt"
-script: make test
+script: make test2 test3
