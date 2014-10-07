@@ -61,7 +61,7 @@ from traceback import format_exc
 
 test_cfg = dict(
                 amqp_user='test', amqp_password='test', amqp_host=os.environ.get('AMQP_HOST','127.0.0.1'),
-				amqp_virtual_host='/test',
+				amqp_virtual_host='test',
                 codec=os.environ.get("DAB_CODEC","null"),
 )
 
