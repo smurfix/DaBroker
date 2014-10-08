@@ -197,7 +197,7 @@ class BrokeredInfo(BaseObj):
 		This class is used for metadata about Brokered objects.
 		It is immutable on the client.
 
-		The `cached` attribute specifies how client-side search works
+		The `_dab_cached` attribute specifies how client-side search works
 		(i.e. the meta-object's `get` and `find` methods).
 
 		None: No search, explicitly exported methods only.
