@@ -36,7 +36,7 @@ def kstr(v):
 	else:
 		return str(v)
 
-def search_key(a,kw):
+def search_key(a,**kw):
 	"""Build a reproducible string from search keywords"""
 	if a is None:
 		a = ()
@@ -159,6 +159,11 @@ class ClientBrokeredInfo(BrokeredInfo):
 				res = res()
 			return res
 
+	def count(self, **kw):
+		if self._dab_cached is None:
+			raise RuntimeError("You cannot search "+repr(self))
+		return self.client.count(self, _cached=self._dab_cached, **kw)
+
 	def __repr__(self):
 		k=getattr(self,'_key',None)
 		if not k or not hasattr(self,'name'):
@@ -279,7 +284,7 @@ class call_proc(object):
 		def c(*a,**k):
 			with obj._dab.env:
 				if self.cached and not obj._obsolete:
-					kws = self.name+':'+search_key(a,k)
+					kws = self.name+':'+search_key(a,**k)
 					ckey = " ".join(str(x) for x in obj._key.key)+":"+kws
 
 					res = obj._call_cache.get(kws,_NotGiven)

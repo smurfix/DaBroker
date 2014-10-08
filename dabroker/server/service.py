@@ -245,7 +245,7 @@ class BrokerServer(BrokerEnv, BaseCallbacks):
 						if m == "_dab_search" and getattr(o,'_dab_cached',None) is not None:
 							incl = msg.get('_limit',99) < 10
 						else:
-							assert m in o._meta.calls,"You cannot call method {} of {}".format(m,o)
+							assert m in o._meta.calls,"You cannot call method {} of {} ({})".format(m,o,repr(o._meta.calls))
 						if not mt and m[0] != '_' and isinstance(o,ServerBrokeredInfo):
 							do = o.model
 						else:

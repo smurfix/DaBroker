@@ -36,7 +36,7 @@ from heapq import heapify,heappop
 class _NotGiven: pass
 
 class KnownSearch(object):
-	def __init__(self, kw, res, ckey, limit):
+	def __init__(self, kw, res, ckey, limit=0):
 		self.kw = kw
 		self.res = res
 		self.ckey = ckey
@@ -259,11 +259,11 @@ class ChangeDel(ChangeData):
 		super(ChangeDel,self).revert(server)
 
 class ChangeInvalid(ChangeData):
-	def __init__(self,server,obj,old):
+	def __init__(self,server,obj,coll):
 		super(ChangeInvalid,self).__init__(server,obj)
-		self.old = old
+		self.colliding = coll
 	def send_commit(self,server):
-		raise RuntimeError("inconsistent data",self.obj,self.old)
+		raise RuntimeError("inconsistent data",self.obj,self.coll)
 
 class BrokerClient(BrokerEnv, BaseCallbacks):
 	"""\
@@ -335,12 +335,32 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 			chg = self.obj_chg.get(key,None)
 			if chg is not None:
 				# Ugh. Yes.
+				upd = {}
+				coll = {}
 				for k in obj._meta.fields:
-					if chg.old_data.get(k,None) != getattr(obj,k):
-						# No guarantee that the old data has not been used
-						# to generate the new, so error out.
-						self.obj_chg[key] = ChangeInvalid(self,obj,chg)
-						return old
+					sv = getattr(obj,k) # new from server
+					cv = old.__dict__.get(k,None) # new on the client
+					ov = chg.old_data.get(k,cv) # our old value
+					if cv == sv:
+						# server has our current value, so drop that change
+						chg.old_data.pop(k,None)
+						continue
+					if ov == sv:
+						# server didn' yet see our change, nothing to do
+						continue
+					if cv != ov:
+						# three-way difference: inconsistent values
+						coll[k] = (ov,cv,sv)
+						continue
+					upd[k] =  sv
+				if coll:
+					self.obj_chg[key] = ChangeInvalid(self,obj,coll)
+					return old
+				# 
+				old.__dict__.update(upd)
+				if not chg.old_data:
+					# all our updates have arrived on the server
+					del self.obj_chg[key]
 			else:
 				old.__dict__.update(obj.__dict__)
 			return old
@@ -430,7 +450,7 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 	def find(self, typ, _cached=False,_limit=None, **kw):
 		"""Find objects by keyword"""
 		if _cached:
-			kws = search_key(None,kw)
+			kws = search_key(None,**kw)
 			ks = typ.searches.get(kws,None)
 			if ks is not None and (not ks.limit or (_limit and _limit <= len(ks.res))):
 				self._cache[ks.ckey] # update the access counter
@@ -443,16 +463,35 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 		if _limit is not None:
 			kw['_limit'] = _limit
 		res = self.send("_dab_search", **kw)
-		if not _cached:
-			return res
 
-		ckey = " ".join(str(x) for x in typ._key.key)+":"+kws
+		if _cached:
+			ckey = " ".join(str(x) for x in typ._key.key)+":"+kws
 
-		if _limit and len(res) < _limit:
-			_limit = None
-		ks = KnownSearch(kw,res,ckey, _limit)
-		typ.searches[kws] = ks
-		self._cache[ckey] = ks
+			if _limit and len(res) < _limit:
+				_limit = None
+			ks = KnownSearch(kw,res,ckey, _limit)
+			typ.searches[kws] = ks
+			self._cache[ckey] = ks
+
+		return res
+
+	def count(self, typ, _cached=False, **kw):
+		"""Count objects"""
+		if _cached:
+			kws = search_key(None,_c='count',**kw)
+			ks = typ.searches.get(kws,None)
+			if ks is not None:
+				self._cache[ks.ckey] # update the access counter
+				return ks.res
+		
+		kw['_obj'] = typ
+		res = self.send("_dab_count", **kw)
+
+		if _cached:
+			ckey = " ".join(str(x) for x in typ._key.key)+":"+kws
+			ks = KnownSearch(kw,res,ckey)
+			typ.searches[kws] = ks
+			self._cache[ckey] = ks
 		return res
 
 	def call(self, obj,name,a,k, _meta=False):

@@ -144,6 +144,13 @@ non-`None` value, and add a method
 
 which returns the objects in question, up to the given limit.
 
+There also should be a `_dab_count` function (without the `_limit`
+parameter) which simply returns the number of items that an unlimited
+search with the same parameters would return.
+
+Other functions can easily be implemented. Look at the implementation of
+`dabroker.client.service.find`
+
 Databases
 ---------
 

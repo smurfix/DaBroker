@@ -167,6 +167,12 @@ class SQLInfo(ServerBrokeredInfo):
 			self.fixup(r)
 		return res
 
+	@exported
+	@with_session
+	def _dab_count(self,session, **kw):
+		res = session.query(self.model).filter_by(**kw).count()
+		return res
+
 	@with_session
 	def get(self, session,*key, **kw):
 		assert len(key) == 1 or kw and not key
@@ -213,6 +219,8 @@ class SQLMeta(ServerBrokeredMeta):
 		if rw is not None:
 			#self.add(Callable("get", cached=True))
 			#self.add(Callable("find", cached=True))
+			self.add(Callable("_dab_search", cached=True))
+			self.add(Callable("_dab_count", cached=True))
 			if rw:
 				#self.add(Callable("new",meta=True))
 				#self.add(Callable("delete",meta=True))

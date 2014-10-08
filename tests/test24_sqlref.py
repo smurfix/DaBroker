@@ -160,10 +160,12 @@ class Test24_client(TestClient):
 		assert P.name == 'Person',P.name
 		r = list(P.find())
 		assert len(r) == 0, r
+		assert P.count()==0
 
 		# A: create
 		p1 = self.send("mangle_new", P, name="Fred Flintstone")
 		q1 = self.send("mangle_new", P, name="Barney Rubble")
+		assert P.count()==2
 		a1 = self.send("mangle_new", A, street="Rubble Way", person=p1)
 
 		self.jump(1,2) # goto B
