@@ -31,7 +31,7 @@ counter = 0
 
 # client's root object
 @baseclass_for("_s","root","meta")
-class my_root(ClientBaseObj):
+class my_root(object):
 	def test_me(self):
 		global counter
 		counter += 100

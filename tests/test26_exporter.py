@@ -15,8 +15,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 # This test runs the test environment's local queue implementation.
 
 from dabroker import patch; patch()
-from dabroker.server.service import BrokerServer
-from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj,BaseRef
+from dabroker.server.service import BrokerServer,ServerBrokeredInfo
+from dabroker.base import Field,Ref,Callable, BaseObj,BaseRef
 from dabroker.client.service import BrokerClient
 from dabroker.util import cached_property,exported
 from dabroker.util.thread import Event
@@ -26,13 +26,13 @@ from dabroker.util.tests import test_init,TestMain,TestClient,TestServer
 logger = test_init("test.26.objbase")
 logger_s = test_init("test.26.objbase.server")
 
-class SearchBrokeredInfo(BrokeredInfo):
+class SearchBrokeredInfo(ServerBrokeredInfo):
 	objs = []
 	_dab_cached = True
 
 	def obj_add(self,obj):
 		self.objs.append(obj)
-
+#
 	@exported
 	def _dab_search(self,_limit=None,**kw):
 		res = []

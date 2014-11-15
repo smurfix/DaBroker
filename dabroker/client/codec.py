@@ -13,6 +13,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ##BP
 
 from weakref import ref,WeakValueDictionary
+from functools import partial
+
 from . import ClientBaseRef,ClientBaseObj
 from ..base import BaseRef,BaseObj, BrokeredInfo, BrokeredInfoInfo, adapters as baseAdapters, common_BaseObj,common_BaseRef, NoData,ManyData
 from ..base.service import current_service
@@ -78,77 +80,63 @@ def baseclass_for(*k):
 		return fn
 	return proc
 
-class _ClientData(ClientBaseObj):
-	"""Mix-in class for remote objects"""
-	_key = None
-
-	def __init__(self,*a,**k):
-		self._call_cache = WeakValueDictionary()
-		super(_ClientData,self).__init__(*a,**k)
-
-class ClientBrokeredInfo(BrokeredInfo):
+class ClientBrokeredInfo(ClientBaseObj,BrokeredInfo):
 	"""\
 		This is the base class for client-side meta objects.
 		"""
 	def __init__(self,*a,**k):
 		super(ClientBrokeredInfo,self).__init__(*a,**k)
 		self.searches = WeakValueDictionary()
-		self._class = [None,None]
+		self._class = None
 
-	def class_(self,is_meta):
+	def __call__(self, _is_meta=False, *a,**kw):
 		"""\
-			Determine which class to use for objects with this as metaclass
+			Return the class to use for objects with this as metaclass
 			"""
-		cls = self._class[is_meta]
-		if cls is not None:
-			return cls
-		k = self._key.key
-		cls = _registry.get(k,None)
+		cls = self._class
 		if cls is None:
-			# Allow a single wildcard at the end
-			cls = _registry.get((k[:-1])+(None,),object)
+			k = self._key.key
+			cls = _registry.get(k,None)
+			if cls is None:
+				# Allow a single wildcard at the end
+				cls = _registry.get((k[:-1])+(None,),object)
 
-		if is_meta:
-			class ClientInfo(_ClientInfo,cls):
-				pass
+			if _is_meta:
+				class ClientInfo(ClientBrokeredInfo,cls):
+					pass
+			else:
+				class ClientInfo(ClientBaseObj,cls):
+					pass
 			cls = ClientInfo
 
+			for k in self.fields.keys():
+				setattr(cls, '_dab_'+k if hasattr(cls,k) else k,FieldProperty(k))
 			for k in self.refs.keys():
 				if k != '_meta':
-					setattr(cls, '_dab_'+k if hasattr(cls,k) else k,handle_related(k))
-		else:
-			class ClientData(_ClientData,cls):
-				pass
-			cls = ClientData
-
-			for k in self.fields.keys():
-				if not hasattr(cls,k):
-					setattr(cls, '_dab_'+k if hasattr(cls,k) else k,handle_data(k))
-			for k in self.refs.keys():
-				if k != '_meta' and not hasattr(cls,k):
-					setattr(cls, '_dab_'+k if hasattr(cls,k) else k,handle_ref(k))
+					setattr(cls, '_dab_'+k if hasattr(cls,k) else k,RefProperty(k))
 			for k,v in self.backrefs.items():
-				setattr(cls, '_dab_'+k if hasattr(cls,k) else k,handle_backref(k,v))
+				setattr(cls, '_dab_'+k if hasattr(cls,k) else k,BackRefProperty(k,v))
 
-		for k,v in self.calls.items():
-			if not hasattr(cls,k):
-				setattr(cls,k,call_proc(v))
+			for k,v in self.calls.items():
+				if not hasattr(cls,k):
+					setattr(cls,k,RpcProperty(v))
 
-		self._class[is_meta] = cls
-		return cls
+			self._class = cls
+		return cls(*a,**kw)
 
 	def find(self, **kw):
-		if self._dab_cached is None:
+		if self.cached is None:
 			raise RuntimeError("You cannot search "+repr(self))
-		for r in self.client.find(self, _cached=self._dab_cached, **kw):
+		for r in self.client.find(self, _cached=self.cached, **kw):
 			if not isinstance(r,BaseObj):
 				r = r()
 			yield r
 
 	def get(self, **kw):
-		if self._dab_cached is None:
+		if self.cached is None:
+			import pdb;pdb.set_trace()
 			raise RuntimeError("You cannot search "+repr(self))
-		res = list(self.client.find(self, _limit=2,_cached=self._dab_cached, **kw))
+		res = list(self.client.find(self, _limit=2,_cached=self.cached, **kw))
 		if len(res) == 0:
 			raise NoData(cls=self,**kw)
 		elif len(res) == 2:
@@ -160,9 +148,9 @@ class ClientBrokeredInfo(BrokeredInfo):
 			return res
 
 	def count(self, **kw):
-		if self._dab_cached is None:
+		if self.cached is None:
 			raise RuntimeError("You cannot search "+repr(self))
-		return self.client.count(self, _cached=self._dab_cached, **kw)
+		return self.client.count(self, _cached=self.cached, **kw)
 
 	def __repr__(self):
 		k=getattr(self,'_key',None)
@@ -171,7 +159,7 @@ class ClientBrokeredInfo(BrokeredInfo):
 		return '‹I:{}:{}›'.format(self.name, '¦'.join(str(x) for x in k))
 	__str__=__unicode__=__repr__
 		
-class _ClientInfo(_ClientData,ClientBrokeredInfo):
+class _ClientInfo(ClientBrokeredInfo):
 	"""Mix-in class for meta objects"""
 	_name = None
 	def __init__(self,*a,**k):
@@ -179,13 +167,13 @@ class _ClientInfo(_ClientData,ClientBrokeredInfo):
 
 class ClientBrokeredInfoInfo(ClientBrokeredInfo,BrokeredInfoInfo):
 	"""\
-		This is the client-side singleton meta-metaclass
+		This is the client-side singleton meta object
 		(the root of DaBroker's object system)
 		"""
 	pass
 client_broker_info_meta = ClientBrokeredInfoInfo()
 
-class handle_data(object):
+class FieldProperty(object):
 	"""This property accessor handles updating non-referential attributes."""
 
 	# Note that there is no `__get__` method. It is not necessary,
@@ -203,10 +191,11 @@ class handle_data(object):
 		if obj._meta is None:
 			assert not ov or ov == val, (self.name,ov,val)
 		else:
+			import pdb;pdb.set_trace()
 			obj._meta._dab.obj_change(obj, self.name, ov,val)
 
-class handle_related(object):
-	"""This property accessor handles retrieving referred objects from cache, or the server"""
+class RefProperty(object):
+	"""This property accessor handles referred objects"""
 	def __init__(self, name):
 		self.name = name
 
@@ -219,8 +208,6 @@ class handle_related(object):
 			return None
 		return obj._meta._dab.get(k)
 
-class handle_ref(handle_related):
-	"""This property accessor handles updating referential attributes"""
 	def __set__(self, obj, val):
 		ov = obj._refs.get(self.name,_NotGiven)
 		if val is not None:
@@ -230,7 +217,7 @@ class handle_ref(handle_related):
 			return
 		obj._meta._dab.obj_change(obj, self.name, ov,val)
 
-class handle_backref(object):
+class BackRefProperty(object):
 	"""This property accessor handles retrieving one-to-many relationships"""
 	def __init__(self, name,refobj):
 		self.name = name
@@ -242,10 +229,10 @@ class handle_backref(object):
 
 		k = obj._refs.get(self.name,None)
 		if k is None:
-			k = obj._refs[self.name] = k = backref_handler(obj, self.name,self.ref)
+			k = obj._refs[self.name] = k = BackRefHandler(obj, self.name,self.ref)
 		return k
 
-class backref_handler(object):
+class BackRefHandler(object):
 	"""Manage a specific back reference"""
 	def __init__(self, obj, name,refobj):
 		self.obj = ref(obj)
@@ -270,34 +257,40 @@ class backref_handler(object):
 		obj,ref = self._deref()
 		return obj._meta._dab.send("backref_len",obj, self.name)
 
-class call_proc(object):
+class RpcProperty(object):
 	"""This property accessor returns a shim which executes a RPC to the server."""
 	def __init__(self, proc):
 		self.name = proc.name
 		self.cached = getattr(proc,'cached',False)
+		self.for_class = getattr(proc,'for_class',None)
 		self.meta = getattr(proc,'meta',False)
 
+	def _do_call(self,obj, *a,**k):
+		with obj._dab.env:
+			if self.cached and not obj._obsolete:
+				kws = self.name+':'+search_key(a,**k)
+				ckey = " ".join(str(x) for x in obj._key.key)+":"+kws
+
+				res = obj._call_cache.get(kws,_NotGiven)
+				if res is not _NotGiven:
+					res = res.data
+					current_service.top._cache[ckey] # Lookup to increase counter
+					return res
+			res = obj._meta._dab.call(obj,self.name, a,k, _meta=self.meta)
+			if self.cached and not obj._obsolete:
+				rc = CacheProxy(res)
+				obj._call_cache[kws] = rc
+				current_service.top._cache[ckey] = rc
+			return res
+
 	def __get__(self, obj, type=None):
-		if obj is None:
-			return self
+		if self.for_class is None: # normal method
+			if obj is None:
+				return self
+		else: # static- or classmethod
+			obj=type
 
-		def c(*a,**k):
-			with obj._dab.env:
-				if self.cached and not obj._obsolete:
-					kws = self.name+':'+search_key(a,**k)
-					ckey = " ".join(str(x) for x in obj._key.key)+":"+kws
-
-					res = obj._call_cache.get(kws,_NotGiven)
-					if res is not _NotGiven:
-						res = res.data
-						current_service.top._cache[ckey] # Lookup to increase counter
-						return res
-				res = obj._meta._dab.call(obj,self.name, a,k, _meta=self.meta)
-				if self.cached and not obj._obsolete:
-					rc = CacheProxy(res)
-					obj._call_cache[kws] = rc
-					current_service.top._cache[ckey] = rc
-				return res
+		c = partial(RpcProperty._do_call, self,obj)
 		c.__name__ = str(self.name)
 		return c
 
@@ -315,12 +308,13 @@ class client_BaseObj(common_BaseObj):
 	@classmethod
 	def encode_ref(obj,k):
 		"""\
-			Encode a reference, without loading the actual object – which
-			would be a Bad Idea.
+			Encode a reference, without loading the actual object.
+			(Since we can't load the object without encoding a reference for it, that'd be somewhat difficult.)
 			"""
 		ref = obj._refs[k]
 		if ref is not None:
-			ref = ClientBaseRef(obj._meta,obj._key)
+			import pdb;pdb.set_trace()
+			ref = ClientBaseRef(meta=obj._meta, key=obj._key)
 		return ref
 	
 
@@ -331,6 +325,7 @@ class client_BaseObj(common_BaseObj):
 			"""
 
 		k = ClientBaseRef(key=tuple(k),code=c)
+
 		if not r or '_meta' not in r:
 			raise RuntimeError("Object without meta data")
 
@@ -338,14 +333,14 @@ class client_BaseObj(common_BaseObj):
 		if not isinstance(m,ClientBrokeredInfo):
 			# assume it's a reference, so resolve it
 			r['_meta'] = m = m()
-		res = m.class_(_is_meta)()
-		res.__class__.__name__ = str('Client:'+f.get('name',m.name))
+		res = m(_is_meta)
 		res._key = k
 
 		# Got the class, now fill it with data
 		if f:
 			for k,v in f.items():
-				setattr(res,k,v)
+				res.__dict__[k] = v
+				# do not use setattr here, it tries to record a change
 		if r:
 			for k,v in r.items():
 				if k == '_meta':

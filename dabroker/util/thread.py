@@ -132,6 +132,8 @@ def prep_spawned(fn):
 class MainThread(Thread):
 	"""Adapter from a code snippet to a Thread"""
 	def __init__(self, code, *a,**k):
+		if code is None:
+			import pdb;pdb.set_trace()
 		self._code = code
 		super(MainThread,self).__init__(*a,**k)
 
@@ -254,13 +256,8 @@ class Main(object):
 		self.shutting_down.set()
 		if self._stopping:
 			if self._stopping == gevent.getcurrent():
-				try:
-					raise RuntimeError("Cleanup entered from cleanup task.")
-				except RuntimeError:
-					logger.exception("Cleanup entered from cleanup task.")
 				return
-			else:
-				logger.debug("Cleanup entered again.")
+			logger.debug("Cleanup entered again.")
 		else:
 			self._stopping = gevent.spawn(self._real_cleanup)
 		self._stopping.join()
@@ -285,7 +282,7 @@ class Main(object):
 			logger.debug("Running %s",j)
 			try:
 				j(*a,**k)
-			except Exception:
+			except BaseException:
 				logger.exception("Running %s",j)
 			else:
 				logger.debug("Running %s",j)

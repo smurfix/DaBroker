@@ -19,6 +19,7 @@ from .thread import local_object
 from sqlalchemy.inspection import inspect
 from functools import wraps
 from contextlib import contextmanager
+from ..base import BrokeredInfo
 
 import logging
 logger = logging.getLogger("dabroker.util.sqlalchemy")
@@ -54,7 +55,11 @@ def session_maker(maker,name=None):
 def session_wrapper(obj, maker=None):
 	"""Provide a transactional scope around a series of operations."""
 	if maker is None:
-		loader = obj._dab.loader
+		if isinstance(obj,BrokeredInfo):
+			loader = obj.loader
+		else:
+			import pdb;pdb.set_trace()
+			loader = obj._dab.loader
 
 		s_name = loader.id
 		maker = loader.session

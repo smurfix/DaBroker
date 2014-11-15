@@ -449,6 +449,8 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 	
 	def find(self, typ, _cached=False,_limit=None, **kw):
 		"""Find objects by keyword"""
+		assert getattr(typ.calls.get('_dab_search',None),'for_class',False)
+		
 		if _cached:
 			kws = search_key(None,**kw)
 			ks = typ.searches.get(kws,None)
@@ -477,6 +479,7 @@ class BrokerClient(BrokerEnv, BaseCallbacks):
 
 	def count(self, typ, _cached=False, **kw):
 		"""Count objects"""
+		call = typ._meta.calls['_dab_count']
 		if _cached:
 			kws = search_key(None,_c='count',**kw)
 			ks = typ.searches.get(kws,None)

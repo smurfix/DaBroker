@@ -16,9 +16,10 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from dabroker import patch; patch()
 from dabroker.server.service import BrokerServer
+from dabroker.server import export_class
 from dabroker.base import BrokeredInfo, Field,Ref,Callable, BaseObj,BaseRef
 from dabroker.client.service import BrokerClient
-from dabroker.util import cached_property,exported
+from dabroker.util import cached_property,exported,exported_classmethod
 from dabroker.util.thread import Event
 
 from dabroker.util.tests import test_init,TestMain,TestClient,TestServer
@@ -26,24 +27,6 @@ from gevent.event import AsyncResult
 
 logger = test_init("test.21.objbase")
 logger_s = test_init("test.21.objbase.server")
-
-class SearchBrokeredInfo(BrokeredInfo):
-	objs = []
-	_dab_cached = True
-
-	def obj_add(self,obj):
-		self.objs.append(obj)
-
-	@exported
-	def _dab_search(self,_limit=None,**kw):
-		res = []
-		for obj in self.objs:
-			for k,v in kw.items():
-				if getattr(obj,k,None) != v:
-					break
-			else:
-				res.append(obj)
-		return res
 
 class Test21_server(TestServer):
 	@cached_property
@@ -57,13 +40,6 @@ class Test21_server(TestServer):
 		someMeta.add(Field("hello"))
 		self.add_static(someMeta,0,99)
 
-		opsMeta = SearchBrokeredInfo("opsMeta")
-		opsMeta.add(Callable("rev"))
-		opsMeta.add(Callable("trigger"))
-		opsMeta.add(Callable("revc", cached=True))
-		opsMeta.add(Field("hell"))
-		self.add_static(opsMeta,0,2)
-
 		class RootObj(BaseObj):
 			_meta = rootMeta
 			hello = "Hello!"
@@ -73,9 +49,26 @@ class Test21_server(TestServer):
 			foo="bar"
 
 		class OpsObj(BaseObj):
-			_meta = opsMeta
+			objs = []
+			_dab_cached=True
+
 			def __init__(self, h="Oh?"):
 				self.hell = h
+
+			@classmethod
+			def obj_add(self,obj):
+				self.objs.append(obj)
+
+			@exported_classmethod
+			def _dab_search(cls,_limit=None,**kw):
+				res = []
+				for obj in cls.objs:
+					for k,v in kw.items():
+						if getattr(obj,k,None) != v:
+							break
+					else:
+						res.append(obj)
+				return res
 
 			@exported
 			def trigger(self,arg):
@@ -93,9 +86,12 @@ class Test21_server(TestServer):
 				return "OpsObj:%r:%s"%(self._key,self.hell)
 			def __repr__(self):
 				return "<%s>"%self
-
+		
 		root = RootObj()
 		self.add_static(root,0,2,21)
+		exp = self._ops_meta = export_class(OpsObj,self.loader, attrs="+")
+		exp.add(Field('hell'))
+		exp.calls['revc'].cached=True
 
 		theOpsObj = OpsObj("Oh?")
 		self.add_static(theOpsObj,0,34)
@@ -104,9 +100,8 @@ class Test21_server(TestServer):
 		for i,n in ((0,"Zero"),(1,"One"),(2,"Two"),(3,"Three")):
 			o = OpsObj(n)
 			self.add_static(o,0,10,i)
-			opsMeta.obj_add(o)
+			OpsObj.obj_add(o)
 		
-		self._ops_meta = opsMeta
 		return root
 
 	def do_trigger(self,msg):
@@ -115,7 +110,7 @@ class Test21_server(TestServer):
 			self.send("invalid",self.root.ops._key,BaseRef(key=(3,4,5)), _include=None) # the latter is unknown
 			self.send("go_on")
 		elif msg == 2:
-			obj = self._ops_meta.objs[2]
+			obj = self.root.ops.__class__.objs[2]
 			ov = obj.hell
 			obj.hell = nv = "Two2"
 			attrs = {'hell': (ov,nv)}
@@ -206,7 +201,7 @@ class Test21_client(TestClient):
 			os = list(Op.find(hell="Two"))
 			assert len(os) == 1, os
 			assert os[0] is o1, (os,o1)
-			assert cid==self.cid
+			assert cid==self.cid,(cid,self.cid)
 
 			# Now update some stuff.
 			self.send("trigger",2)

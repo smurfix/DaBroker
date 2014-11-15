@@ -76,7 +76,7 @@ rootMeta = BrokeredInfo("rootMeta")
 rootMeta.add(Field("hello"))
 rootMeta.add(Field("data"))
 rootMeta.add(Ref("more"))
-rootMeta.add(Callable("callme"))
+rootMeta.add(Callable("callme",meta=True))
 
 class TestRoot(BaseObj):
 	_meta = rootMeta

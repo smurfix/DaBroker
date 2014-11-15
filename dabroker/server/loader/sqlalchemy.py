@@ -14,7 +14,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 # The sqlalchemy object loader
 
-from .. import ServerBrokeredInfo
+from .. import ServerBrokeredInfo, export_class
 from ...base import BaseRef, Field,Ref,BackRef,Callable, get_attrs,NoData
 from ...util import cached_property,exported
 from ...util.thread import local_object
@@ -50,26 +50,25 @@ def _get_attrs(obj):
 
 def keyfix(self,*a,**k):
 	"""
-		SQLalchemy objects don't get a key on their own.
-		Attach it here.
+		SQLalchemy objects don't magically get a key on their own.
+		Attach it with this property function.
 		"""
 	self.__class__._dab.fixup(self)
 	return self.__dict__.get('_key')
 
 class SQLInfo(ServerBrokeredInfo):
 	"""This class represents a single SQL table"""
-	_dab_cached = None
 
-	def __new__(cls,mcls, id, server, model, loader, rw=False, hide=()):
+	def __new__(cls, id, server, model, loader, rw=False, hide=()):
 		if hasattr(model,'_dab'):
 			return model._dab
 		return object.__new__(cls)
-	def __init__(self,mcls, id, server, model, loader, rw=False, hide=()):
+	def __init__(self, id, server, model, loader, rw=False, hide=()):
 		if hasattr(model,'_dab'):
+			assert model._dab is self
 			return
 		super(SQLInfo,self).__init__()
 		i = inspect(model)
-		meta = mcls(id,self,i.class_, rw)
 
 		for k in i.column_attrs:
 			if k not in hide:
@@ -90,9 +89,7 @@ class SQLInfo(ServerBrokeredInfo):
 		self.server = server
 		self.loader = loader
 		self.name = i.class_.__name__
-		#self._meta = meta
-		self._dab = self
-		self._dab_cached = getattr(i.class_,'_dab_cached',None)
+		self._dab_cached = getattr(self,'_dab_cached',getattr(model,'_dab_cached',None))
 		model._dab = self
 		model._key = cached_property(keyfix)
 		model._attrs = property(_get_attrs)
@@ -101,7 +98,7 @@ class SQLInfo(ServerBrokeredInfo):
 		load_me.__name__ = str("codec_sql_"+self.name)
 
 		# now do the rest
-		server.export_class(model, attrs='+', metacls=self, metametacls=meta, key=(loader.id,self.name))
+		export_class(model, server.loader, attrs='+', name=self.name, metacls=self, key=(loader.id,self.name))
 		server.codec.register(load_me)
 
 	def __call__(self, **kw):
@@ -209,23 +206,6 @@ class SQLInfo(ServerBrokeredInfo):
 		self.server.send_created(obj,kw)
 		return obj
 
-class SQLMeta(ServerBrokeredMeta):
-	"""Parent class for SQL table info"""
-	def __init__(self,id,info,cls, rw):
-		super(SQLMeta,self).__init__('meta_'+cls.__name__) ## "SQL:%s:%s" % (id,cls.__name__))
-		self._key = BaseRef(key=(id,'_meta',cls.__name__))
-		self.info = info
-		self.__name__ = "SQLMeta:"+cls.__name__
-		if rw is not None:
-			#self.add(Callable("get", cached=True))
-			#self.add(Callable("find", cached=True))
-			self.add(Callable("_dab_search", cached=True))
-			self.add(Callable("_dab_count", cached=True))
-			if rw:
-				#self.add(Callable("new",meta=True))
-				#self.add(Callable("delete",meta=True))
-				pass
-
 class SQLLoader(BaseLoader):
 	"""A loader which reads from SQL"""
 	id="sql"
@@ -239,8 +219,8 @@ class SQLLoader(BaseLoader):
 		self.session = session
 		self.server = server
 
-	def add_model(self, model, root=None, cls=SQLInfo, mcls=SQLMeta, rw=False, hide=()):
-		r = cls(id=self.id, mcls=mcls, server=self.server, model=model, loader=self, rw=rw, hide=hide)
+	def add_model(self, model, root=None, cls=SQLInfo, rw=False, hide=()):
+		r = cls(id=self.id, server=self.server, model=model, loader=self, rw=rw, hide=hide)
 		self.meta[r.name]=r._meta
 
 		if root is not None:
@@ -259,7 +239,7 @@ class SQLLoader(BaseLoader):
 
 	def add(self, obj, *key):
 		# dummy, .get already knows me
-		assert len(key) == 1 and key[0] == obj.name
+		assert len(key) == 1 and key[0] == obj.name, (key,obj,obj.name)
 		return self.set_key(obj, obj.name)
 
 	def new(self, obj, *key):

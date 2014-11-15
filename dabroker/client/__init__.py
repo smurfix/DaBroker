@@ -105,9 +105,11 @@ class ClientBaseObj(BaseObj):
 	"""base for all DaBroker-controlled objects on the client."""
 	_obsolete = False
 
-	def __init__(self):
-		super(ClientBaseObj,self).__init__()
+	def __init__(self,*a,**k):
+		super(ClientBaseObj,self).__init__(*a,**k)
 		self._refs = {}
+		self._dab = current_service.top
+		self._call_cache = WeakValueDictionary()
 	
 	def _attr_key(self,k):
 		return self._refs[k]
