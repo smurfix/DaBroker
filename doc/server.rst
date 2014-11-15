@@ -51,47 +51,21 @@ with
 The client obtains a root object once; it's therefore a good idea to move
 mutable data to another object. You'll see how to publish updates later.
 
-    broker.export_class(Status, 'servers load health')
+    from dabroker.server import export_class,export_object
+    from dabroker.base import BaseObj,Ref
+
+    export_class(Status, broker.loader, 'servers load health')
+
     root = MyRoot()
-    broker.export_object(root, 'version_string version_tuple login', refs='status')
+    exporter = export_object(root,broker.loader, attrs='version_string version_tuple login')
+    exporter.add(Ref('status'))
     broker.add_static(root,"root")
-    # export_class does not override 
-
-You can also pass in an iterable. Class inspection is only used 
-
-You can of course do all of this manually:
-
-    from dabroker.base import BrokeredInfo, Field,Ref,Callable
-
-    rootInfo = BrokeredInfo("rootInfo")
-    rootInfo.add(Field("version_string"))
-    rootInfo.add(Field("version_tuple"))
-    rootInfo.add(Ref("status"))
-    rootInfo.add(Callable("login"))
-
-    statusInfo = BrokeredInfo("statusInfo")
-    statusInfo.add(Field(servers))
-    statusInfo.add(Field(load))
-    statusInfo.add(Field(health))
-
-    MyRoot._meta = rootInfo
-    Status._meta = statusInfo
-
-    # Next, add unique keys:
-
-    broker.add_static(rootInfo,"root","meta")
-    broker.add_static(statusInfo,"status","meta")
-
-    broker.root = root = MyRoot()
-
-    broker.add_static(root,"root")
-    broker.add_static(root.status,"status")
 
 `add_static` is a convenience method which expands to
 
     broker.loader.static.add(root.status,"status")
 
-because DaBroker supports multiple loaders.
+as DaBroker supports multiple object loaders.
 
 Thus:
 
@@ -101,7 +75,7 @@ shows
 
     R:('static','root')‹ABCDEFGH›
 
-You can now do this on the client:
+You can now do this
 
     >>> print broker.root.status.health
     OK
@@ -125,8 +99,20 @@ convenience functions which allow you to decorate your regular methods:
     >>>     def special_object(self, …):
     >>>         return SomeExportedObject()
 
-    >>> broker.add_callables
+`export_object` will find these when you pass a '+' or '*' as `attrs`.
+The latter also adds all variables which the class defines.
 
+Overriding
+----------
+
+If you want to attach functions to your exported class which the base class
+does not have, you can add them to the meta object:
+
+    >>> class SpecialInfo(ServerBrokeredInfo):
+    >>>    @exported
+    >>>    def fn(self,obj,…):
+    >>>       pass
+    >>> export_class(cls, server.loader, metacls=SpecialInfo)
 
 Searching
 ---------

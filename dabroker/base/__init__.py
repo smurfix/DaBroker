@@ -33,7 +33,7 @@ class ManyData(DataError):
     pass
 
 def get_attrs(obj, meta=None):
-	"""Return a dict with my attributes"""
+	"""Return a dict with an object's DaBroker-exported attributes"""
 	if meta is None:
 		meta = obj._meta
 
@@ -54,8 +54,9 @@ class BaseRef(object):
 		A basic (reference to an) object.
 
 		@key: The actual data required to retrieve the object.
-		@code: a secret has to ensure that the client got the code legally
-			(no object enumeration, possibly includes access rights).
+		@code: a secret to ensure that the client got the code from the server
+		       This prevents malicious clients from trying to randomly
+		       guessing keys for objects they won't usually have access to.
 		"""
 	def __init__(self, key=None, meta=None, code=None):
 		# if this is a hybrid BaseObj+BaseRef thing (like BrokeredInfoInfo),
@@ -73,7 +74,8 @@ class BaseRef(object):
 		self.key = tuple(key)
 		self.code = code
 	
-	### BaseRef objects "are" their keys.
+	# BaseRef objects behave like their keys
+	# when indexing / comparing.
 
 	def __len__(self):
 		return len(self.key)
@@ -103,11 +105,11 @@ class BaseRef(object):
 
 class BaseObj(object):
 	"""\
-		This is the base object for our object storage.
+		This is the basic class for our storage system.
 
 		You need:
 		@meta (BrokeredInfo): describes this element's class
-		@key (BaseRef): required to load this element
+		@key (BaseRef): required to (re)load this element
 		"""
 	def __init__(self, meta=None,key=None, **k):
 		if meta is not None:
@@ -116,6 +118,7 @@ class BaseObj(object):
 			self._key = key
 		super(BaseObj,self).__init__(**k)
 
+	# Objects compare like their key
 	def __hash__(self):
 		self = getattr(self,'_key',self)
 		self = getattr(self,'key',self)
@@ -126,6 +129,7 @@ class BaseObj(object):
 		return self._key.__ne__(other)
 
 	def _attr_key(self,k):
+		"""Like getattr(), but returns the value's key."""
 		res = getattr(self,k,None)
 		if res is not None:
 			res = res._key
@@ -136,6 +140,7 @@ class BaseObj(object):
 		return get_attrs(self)
 
 class common_BaseRef(object):
+	"""Common base for reference coding; the decoder is overridden in client and server"""
 	cls = BaseRef
 	clsname = "Ref"
 	
@@ -151,7 +156,7 @@ class common_BaseRef(object):
 		return cls.clsname,res
 
 class common_BaseObj(object):
-	"""Common base class for object coding; overridden in client and server"""
+	"""Common base for object coding; the decoder is overridden in client and server"""
 	cls = BaseObj
 	clsname = "Obj"
 
@@ -160,8 +165,8 @@ class common_BaseObj(object):
 		"""\
 			Fetch a reference.
 
-			This is overrideable so that an implementation can generate the
-			key from the reference, without loading the actual object.
+			This is overrideable so that the server-side can generate
+			a reference's key without loading the actual object.
 			"""
 		ref = getattr(obj,k)
 		if ref is not None:
@@ -190,15 +195,13 @@ class common_BaseObj(object):
 			r[k] = cls.encode_ref(obj,k)
 		return res
 
-	# the decoder is client/server specific
-
 class BrokeredInfo(BaseObj):
 	"""\
 		This class is used for metadata about Brokered objects.
 		It is immutable on the client.
 
-		The `_dab_cached` attribute specifies how client-side search works
-		(i.e. the meta-object's `get` and `find` methods).
+		The `cached` attribute specifies how client-side search works
+		(i.e. the `get` and `find` methods).
 
 		None: No search, explicitly exported methods only.
 		False: Searches should not be cached.
@@ -206,7 +209,7 @@ class BrokeredInfo(BaseObj):
 		"""
 	name = None
 	_meta = None
-	_dab_cached = None
+	cached = None
 
 	def __init__(self,name=None, **k):
 		super(BrokeredInfo,self).__init__(**k)
@@ -285,7 +288,9 @@ class BackRef(_Attribute):
 	pass
 
 class Callable(_Attribute):
-	"""A procedure that will be called on the server."""
+	"""A procedure that will be called on the server.
+		The 'for_class' attribute, if true, says that this is a classmethod:
+		True=yes, None/missing=No, False=it's a staticmethod."""
 	pass
 
 adapters = []
@@ -323,21 +328,25 @@ class CallableAdapter(AttrAdapter):
 	clsname = "_C"
 
 class BrokeredMeta(BrokeredInfo):
+	"""This class describes the fields which BrokeredInfo exports."""
 	class_ = BrokeredInfo
 	def __init__(self,name, **k):
 		super(BrokeredMeta,self).__init__(name=name, **k)
 		self.add(Field("name"))
+		self.add(Field("cached"))
+
 		self.add(Field("fields"))
 		self.add(Field("refs"))
 		self.add(Field("backrefs"))
 		self.add(Field("calls"))
-		self.add(Field("_dab_cached"))
 
 class BrokeredInfoInfo(BrokeredMeta,BaseRef):
-	"""This singleton is used for metadata about BrokeredInfo objects."""
-	def __init__(self, **k):
-		super(BrokeredInfoInfo,self).__init__(name="BrokeredInfoInfo Singleton", meta=self,key=(),code="ROOT", **k)
+	"""This well-known singleton is used for metadata about BrokeredInfo objects.
+		It is its own metadata implementation, its own key, and isn't (in fact cannot be) sent to clients."""
+	def __init__(self):
+		super(BrokeredInfoInfo,self).__init__(name="BrokeredInfoInfo Singleton", meta=self,key=(),code="ROOT")
 		self._key = self
+		# This is a singleton that's never destructed, thus the cycles are not a problem.
 
 broker_info_meta = BrokeredInfoInfo()
 BrokeredInfo._meta = broker_info_meta
