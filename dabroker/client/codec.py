@@ -125,18 +125,17 @@ class ClientBrokeredInfo(ClientBaseObj,BrokeredInfo):
 		return cls(*a,**kw)
 
 	def find(self, **kw):
-		if self.cached is None:
+		if self._dab_cached is None:
 			raise RuntimeError("You cannot search "+repr(self))
-		for r in self.client.find(self, _cached=self.cached, **kw):
+		for r in self.client.find(self, _cached=self._dab_cached, **kw):
 			if not isinstance(r,BaseObj):
 				r = r()
 			yield r
 
 	def get(self, **kw):
-		if self.cached is None:
-			import pdb;pdb.set_trace()
+		if self._dab_cached is None:
 			raise RuntimeError("You cannot search "+repr(self))
-		res = list(self.client.find(self, _limit=2,_cached=self.cached, **kw))
+		res = list(self.client.find(self, _limit=2,_cached=self._dab_cached, **kw))
 		if len(res) == 0:
 			raise NoData(cls=self,**kw)
 		elif len(res) == 2:
@@ -148,9 +147,9 @@ class ClientBrokeredInfo(ClientBaseObj,BrokeredInfo):
 			return res
 
 	def count(self, **kw):
-		if self.cached is None:
+		if self._dab_cached is None:
 			raise RuntimeError("You cannot search "+repr(self))
-		return self.client.count(self, _cached=self.cached, **kw)
+		return self.client.count(self, _cached=self._dab_cached, **kw)
 
 	def __repr__(self):
 		k=getattr(self,'_key',None)

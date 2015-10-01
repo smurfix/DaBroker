@@ -96,20 +96,6 @@ class server_InfoObj(server_BaseObj):
 	clsname = "Info"
 
 	@staticmethod
-	def encode(obj, include=False):
-		if not include:
-			return common_BaseRef.encode(obj._key, meta=obj._meta)
-		res = server_BaseObj.encode(obj, include=include)
-		for n,f in obj.fields.items():
-			if n.startswith('_dab_'):
-				rn = n[5:]
-			else:
-				rn = n
-			if getattr(f,'for_class',False):
-				res['f'][rn]=getattr(obj.model,n)
-		return res
-
-	@staticmethod
 	def decode(f=None,**kw):
 		assert f is None
 		return server_BaseObj.decode(**kw)

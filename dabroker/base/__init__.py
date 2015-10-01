@@ -209,7 +209,7 @@ class BrokeredInfo(BaseObj):
 		"""
 	name = None
 	_meta = None
-	cached = None
+	_dab_cached = None
 
 	def __init__(self,name=None, **k):
 		super(BrokeredInfo,self).__init__(**k)
@@ -333,7 +333,7 @@ class BrokeredMeta(BrokeredInfo):
 	def __init__(self,name, **k):
 		super(BrokeredMeta,self).__init__(name=name, **k)
 		self.add(Field("name"))
-		self.add(Field("cached"))
+		self.add(Field("_dab_cached"))
 
 		self.add(Field("fields"))
 		self.add(Field("refs"))

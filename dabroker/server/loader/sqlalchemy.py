@@ -58,6 +58,7 @@ def keyfix(self,*a,**k):
 
 class SQLInfo(ServerBrokeredInfo):
 	"""This class represents a single SQL table"""
+	_dab_cached = True
 
 	def __new__(cls, id, server, model, loader, rw=False, hide=()):
 		if hasattr(model,'_dab'):
