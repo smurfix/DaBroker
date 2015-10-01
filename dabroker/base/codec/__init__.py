@@ -285,11 +285,13 @@ class BaseCodec(object):
 			# A list will keep its "include" state
 			res = []
 			i = 0
+			n = len(objref)
 			for x in data:
 				res.append(self._encode(x,objcache,objref,include, p=res,off=i))
 				i += 1
 
-			#res = { '_o':'LIST','_d':res }
+			if len(objref) != n:
+				res = { '_o':'LIST','_d':res }
 
 		else:
 			odata = data
