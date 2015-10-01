@@ -289,7 +289,7 @@ class BaseCodec(object):
 				res.append(self._encode(x,objcache,objref,include, p=res,off=i))
 				i += 1
 
-			res = { '_o':'LIST','_d':res }
+			#res = { '_o':'LIST','_d':res }
 
 		else:
 			odata = data
