@@ -84,8 +84,8 @@ class SQLInfo(ServerBrokeredInfo):
 
 		self.rw = rw
 		if rw:
-			self.add(Callable("update"))
-			self.add(Callable("delete"))
+			self.add(Callable("update", for_class=True))
+			self.add(Callable("delete", for_class=True))
 		self.model = model
 		self.server = server
 		self.loader = loader
@@ -150,7 +150,7 @@ class SQLInfo(ServerBrokeredInfo):
 	def fixup(self,obj):
 		"""Set _meta and _key attributes"""
 		obj._meta = self
-		obj._dab = self._dab
+		#obj._dab = self._dab
 		i=inspect(obj)
 		return self.loader.set_key(obj,i.class_.__name__,obj.id)
 

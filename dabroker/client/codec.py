@@ -258,11 +258,12 @@ class BackRefHandler(object):
 
 class RpcProperty(object):
 	"""This property accessor returns a shim which executes a RPC to the server."""
-	def __init__(self, proc):
+	def __init__(self, proc, base=None):
 		self.name = proc.name
 		self.cached = getattr(proc,'cached',False)
 		self.for_class = getattr(proc,'for_class',None)
 		self.meta = getattr(proc,'meta',False)
+		self.base = base
 
 	def _do_call(self,obj, *a,**k):
 		with obj._dab.env:
@@ -292,6 +293,11 @@ class RpcProperty(object):
 		c = partial(RpcProperty._do_call, self,obj)
 		c.__name__ = str(self.name)
 		return c
+	
+	def __call__(self, *a,**k):
+		# direct call, "classmethod"
+		assert self.base is not None
+		return self._do_call(self.base, *a,**k)
 
 @codec_adapter
 class client_BaseRef(common_BaseRef):
@@ -346,6 +352,13 @@ class client_BaseObj(common_BaseObj):
 					res._meta = v
 				else:
 					res._refs[k] = v
+
+		if f and _is_meta and 'calls' in f:
+			c = f['calls']
+			for k,v in c.items():
+				if getattr(v,'for_class',False):
+					res.__dict__[k] = RpcProperty(v,res)
+					pass
 
 		return current_service.top._add_to_cache(res)
 	
