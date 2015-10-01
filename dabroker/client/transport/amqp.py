@@ -77,10 +77,6 @@ class Transport(AmqpTransport):
 		self.callback_queue = res.queue
 		self.channel.basic_consume(callback=self.on_rpc_response, queue=self.callback_queue, no_ack=True)
 
-#		self.rpc_channel = self.connection.channel()
-#		self.rpc_channel.queue_declare(queue=self.cfg['rpc_queue'], auto_delete=False, passive=True)
-
-#		self.info_channel = self.connection.channel()
 		self.channel.exchange_declare(exchange=self.cfg['rpc_exchange'], type='fanout', auto_delete=False)
 
 		res = self.channel.queue_declare(exclusive=True)

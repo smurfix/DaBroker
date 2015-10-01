@@ -237,32 +237,33 @@ class BaseCodec(object):
 			self.name2cls[cls.clsname] = cls
 		
 	def _encode(self, data, objcache,objref, include=False, p=None,off=None):
-		# @objcache: dict: id(obj) => (seqnum,encoded,selfref)
+		# @objcache: dict: id(obj) => (seqnum,encoded,selfref,data)
 		#            `encoded` will be set to the encoded object so that
 		#            the seqnum can be removed later if it turns out not to
 		#            be needed.
+		#            `selfref` is None (incomplete), False (recursive),
+		#            or an (id,parent,position) tuple used to fix-up a prior
+		#            reference to this object when decoding.
+		#            `data` is the original data. We need to keep it around
+		#            because if there is no other reference to it, it'll be
+		#            freed, causing the id to be re-used. Not good.
 		# 
 		# @objref: dict: seqnum => oid: objects which are actually required for proper
-		#          encoding. If `None`, try to do simple encoding.
+		#          encoding.
+
+		# @p,@off: p[off] == data. Required for fixing cyclic references.
 		
-		# Scalars (integers, strings) do not refer to other objects and
-		# thus are never encoded.
-		#
-		# The only case where that would help is long strings which are
-		# referred to multiple times from the same object tree. This is too
-		# unlikely to be worth the bother.
-
-		# Numbers and strings are never encoded by this
-		if isinstance(data,scalar_types):
-			return data
-
 		# If this is a Werkzeug localproxy, dereference it
-		# before doing anything else
 		ac = getattr(data,'_get_current_object',None)
 		if ac is not None:
 			data = ac()
 
-		# Have I seen that before?
+		# Scalars (integers, strings) do not refer to other objects and
+		# thus are never encoded.
+		if isinstance(data,scalar_types):
+			return data
+
+		# Have I seen this object before?
 		did = id(data)
 		oid = objcache.get(did,None)
 		if oid is not None:
@@ -276,12 +277,9 @@ class BaseCodec(object):
 			return {'_or':oid}
 
 		# No, this is a new object: Generate a new ID for it.
-		# (There's other stuff in objcache, but that's harmless.)
 		oid = 1+len(objcache)
 		objcache[did] = [oid,None,None,data]
-		# we need to keep the data around.
-		# Otherwise the address may get reused (data gets dynamically build
-		# by encoding objects), so we get very interesting data corruption effects.
+		# we need to keep the data around, see above
 		
 		if isinstance(data,(list,tuple)):
 			# A list will keep its "include" state
@@ -340,13 +338,14 @@ class BaseCodec(object):
 	def encode(self, data, _include=False, _raw=False, **kw):
 		"""\
 			Encode this data structure. Recursive structures or
-			multiply-used objects are handled correctly, but not in
-			combination.
+			multiply-used objects are handled mostly-correctly.
 
 			@_include: a flag telling the system to encode an object's data,
 			           not just a reference. Used server>client. If None,
 			           send object keys without retrieval info. This is used
 			           e.g. when broadcasting, so as to not leak data access.
+			@_raw: if true, skip bundling up the result. Used for encodding
+			       errors.
 			"""
 		# No, not yet / did not work: slower path
 		objcache = {"done":1}
@@ -361,13 +360,17 @@ class BaseCodec(object):
 				c,d,e,x = objcache[k]
 				if type(e) is not tuple: return 9999999999
 				return e[0]
+
 			for d in sorted(objref.values(), key=_sorter):
 				oid,v,f,x = objcache[d]
+				# add object IDs only to those objects which need it
 				v['_oi']=oid
 				if isinstance(f,tuple):
+					# Referenced. Add to cache and replace with fix-up.
 					f[1][f[2]] = {'_or':oid}
 					cache.append(v)
 		if _raw:
+			assert not kw, kw
 			return res,cache
 
 		res = {'data':res}
