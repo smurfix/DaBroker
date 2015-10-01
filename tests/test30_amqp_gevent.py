@@ -27,7 +27,7 @@ from dabroker.util.tests import test_init,TestMain,test_cfg, cfg_merge
 
 logger = test_init("test.30.amqp")
 
-cfg = {'transport':'amqp', 'codec':'marshal'}
+cfg = {'transport':'amqp', 'codec':os.environ.get('DAB_CODEC','marshal')}
 
 class ServerThread(Thread):
 	def code(self, cfg,ready):
