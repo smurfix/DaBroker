@@ -29,7 +29,7 @@ attribute, fetch that object from cache or the server, and save it in
 `obj_b`. However, it will _not_ check in the cache (or on the server)
 whether the server's version of `obj_a.some_obj` still refers to `obj_b`.
 
-This bascially means that at any time, a single object represents a specific
+This basically means that at any time, a single object represents a specific
 consistent instance at the time it was accessed. If you want a consistent
 snapshot of a whole list of objects, there are two ways to do this:
 
@@ -70,7 +70,7 @@ copy from cache, or from the server. You can find an example in `test22`,
 at the "# refresh" comment in `job1()`.
 
 You can test `obj._obsolete` to discover whether the server has sent an
-invalidation notive for that object.
+invalidation notice for that object.
 
 Client-side subclassing
 -----------------------

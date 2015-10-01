@@ -25,7 +25,7 @@ example, see `dabroker.base.codec._timedelta`:
 
         @staticmethod
         def encode(obj, include=False):
-            ## the string is purely for human consumption and therefore does not have a time zone
+            ## the string is purely for human consumption
             return {"t":obj.total_seconds(),"s":str(obj)}
 
         @staticmethod
