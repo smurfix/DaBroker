@@ -110,6 +110,8 @@ def export_object(obj, loader=None, attrs=None, name=None, key=None, metacls=Ser
 	meta.add_class_attrs(meta,meta, attrs='+')
 	meta.add_class_attrs(meta,cls, attrs=attrs)
 	obj._meta = meta
+	if getattr(obj,'_dab_cached',False):
+		meta._dab_cached = obj._dab_cached
 
 	if loader:
 		if key is None:
