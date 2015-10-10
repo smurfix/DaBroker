@@ -4,10 +4,8 @@ Use case
 
 Let's say that you have a database. Or several. Or something else that can
 be expressed as a collection of typed objects. Something which is
-read-only, or updated fairly infrequently. DaBroker does not care (much).
-, as long
-as these objects have well-defined data fields and/or links to other objects:
-and types.
+read-only, or updated fairly infrequently. DaBroker does not care (much),
+as long as these objects have well-defined data fields.
 
 Let's further assume that you have processes which need to keep a dynamic
 subset of that data in memory. For instance, if you serve a web site, the
@@ -62,12 +60,12 @@ DaBroker exposes common one-to-many and many-to-one semantics.
 DaBroker does not itself have a generic query interface. You can, however,
 easily add application-specific back-ends.
 
-DaBroker does not constrain your data serialization scheme. It currently
-supports JSON, BSON (i.e. binary JSON) and Python's `marshal` module.
-The only mandatory requirement is support for strings and string-keyed
-dictionaries / hashes. All current serializers do also support lists, 
-integers, floats, and True/False/None; that can be made optional if
-necessary.
+DaBroker implements a safe front-end to whatever transmission scheme you're
+using. It'll work if it's JSON-compatible, i.e. supports None/True/False,
+integers, lists and hashes. Messages which don't contain "real" objects
+or self-referential or multi-referenced structures are passed unmolested.
+DaBroker currently supports JSON, BSON (i.e. binary JSON) and Python's
+`marshal` module.
 
 DaBroker does not constrain your data types. Its serializer can reproduce
 arbitrary data structures, including self-referential objects and loops.
