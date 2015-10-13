@@ -5,7 +5,7 @@ python:
 services:
   - rabbitmq
 before_script:
-  - tests/setup_rabbitmq.sh
+  - sudo tests/setup_rabbitmq.sh
 install:
   - "pip install -v -r requirements.txt"
   - "pip install -v -r requirements_test.txt"

@@ -24,7 +24,7 @@ from gevent.queue import Queue
 from gevent.event import AsyncResult,Event
 from signal import SIGINT
 
-from flask._compat import string_types
+from six import string_types
 	
 logger = logging.getLogger("dabroker.util.thread")
 
