@@ -2,7 +2,14 @@
 
 export PYTHONPATH=$(shell pwd)
 
-test:
+test: test.cfg
+	py.test-3
+
+test.cfg:
+	@cp test.cfg.sample $@
+	@echo "Warning: copied test.cfg.sample to $@" >&2
+
+otest:
 	@set -ex; for T in 2 3 y ; do for C in bson json marshal; do \
 	make test$$T DAB_CODEC=$$C; \
 	done; done

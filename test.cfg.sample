@@ -1,0 +1,12 @@
+config:
+  testing: true
+  etcd:
+    host: localhost
+    port: 2379
+    root: /test/etctree
+  amqp:
+    server:
+      host='localhost',
+      userid='test',
+      password='test',
+      virtual_host='/test',

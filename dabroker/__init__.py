@@ -54,8 +54,13 @@ def patch():
 # Warnings are bad, except for some which are not
 from warnings import filterwarnings
 filterwarnings("error")
-filterwarnings("ignore",category=DeprecationWarning)
-filterwarnings("ignore",category=PendingDeprecationWarning)
-filterwarnings("ignore",category=ImportWarning)
+#filterwarnings("ignore",category=DeprecationWarning)
+#filterwarnings("ignore",category=PendingDeprecationWarning)
+#filterwarnings("ignore",category=ImportWarning)
 filterwarnings("ignore",message="^Converting column '.*' from VARCHAR to TEXT") # mysql special
+
+def unit(app, cfg="/etc/dabroker.cfg", **args):
+	"""Return the DaBroker unit for this app."""
+	from dabroker.unit import Unit
+	return Unit(app,cfg, **args)
 

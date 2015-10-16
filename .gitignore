@@ -4,3 +4,4 @@
 .*.swo
 *.pyc
 *.pyo
+/test.cfg
