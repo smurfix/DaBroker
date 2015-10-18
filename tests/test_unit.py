@@ -35,15 +35,26 @@ def load_cfg(cfg):
 
 	return cfg
 
-@pytest.fixture
-def unit1():
+def test_basic():
 	cfg = load_cfg("test.cfg")
-	return Unit("test.one", cfg)
-	
-@pytest.fixture
-def unit2():
-	cfg = load_cfg("test.cfg")
-	return Unit("test.two", cfg)
+	u = Unit("test.zero", cfg)
+	u.start()
+	import pdb;pdb.set_trace()
+	u.stop()
 
-def test_unit(unit1, unit2):
-	pass
+@pytest.yield_fixture
+def unit1():
+	yield from _unit("one")
+@pytest.yield_fixture
+def unit2():
+	yield from _unit("two")
+def _unit(name):
+	cfg = load_cfg("test.cfg")
+	u = Unit("test."+name, cfg)
+	u.start()
+	yield u
+	u.stop()
+	
+#def test_unit(unit1, unit2):
+#	import pdb;pdb.set_trace()
+#	pass

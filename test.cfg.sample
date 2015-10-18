@@ -6,7 +6,7 @@ config:
     root: /test/etctree
   amqp:
     server:
-      host='localhost',
-      userid='test',
-      password='test',
-      virtual_host='/test',
+      host: localhost
+      userid: test
+      password: test
+      virtual_host: /test

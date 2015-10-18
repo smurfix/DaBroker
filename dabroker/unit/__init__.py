@@ -20,11 +20,11 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## 
 
 import weakref
-from threading import Thread,Condition
+from threading import Thread,Condition,Lock
 import uuid
 import etcd
-from queue import Queue
 from dabroker.util import attrdict
+from etctree.node import mtValue
 
 import logging
 logger = logging.getLogger(__name__)
@@ -65,13 +65,17 @@ _units = {}
 # helper for recursive dict.[set]default()
 def _r_setdefault(d,kv):
 	for k,v in kv.items():
-		dk = d.get(k,_NOTGIVEN)
-		if dk is _NOTGIVEN:
+		if isinstance(v,mtValue):
+			v = v.value
+		try:
+			dk = d[k]
+		except KeyError:
 			if isinstance(v,dict) and not isinstance(v,attrdict):
 				v = attrdict(**v)
 			d[k] = v
-		elif isinstance(d[k],dict):
-			_r_setdefault(dk,v)
+		else:
+			if isinstance(d[k],dict):
+				_r_setdefault(dk,v)
 
 class Unit(object):
 	"""The basic DaBroker messenger. Singleton per app (normally)."""
@@ -79,9 +83,6 @@ class Unit(object):
 	config = None # configuration data
 	conn = None # AMQP receiver
 	recv_id = None # my UUID
-	queue = None
-	reader = None
-	writer = None
 
 	rpc_endpoints = None # RPC listeners
 	alert_endpoints = None # 
@@ -98,20 +99,67 @@ class Unit(object):
 		self.app = app
 
 		self.config = self._get_config(cfg, **kw)
+		self.conn_lock = Condition()
 
 	def start(self):
-		self.queue = Queue()
-		self.reader = Thread(target=_reader, args=(weakref.proxy(self),))
-		self.reader.start()
-		self.writer = Thread(target=_writer, args=(weakref.proxy(self),))
-		self.writer.start()
 		self.rpc_endpoints = {}
-		self.register_rpc("dabroker.info",self._server_info)
-		self.recv_id = uuid.uuid1()
+		self.alert_endpoints = {}
+		self.register_rpc(self._server_info,"dabroker.info")
+		self.uuid = uuid.uuid1()
 
-		_units[app] = self
+		self._create_conn()
+		_units[self.app] = self
 	
-	def register_rpc(self, fn, name=None):
+	def stop(self):
+		self._kill()
+		
+	def register_rpc(self, *a):
+		"""\
+			Register a listener.
+				
+				conn.register_rpc(RPCservice(fn,name))
+				conn.register_rpc(fn,name)
+				conn.register_rpc(fn)
+				@conn_register(name)
+				def fn(…): pass
+				@conn_register
+				def fn(…): pass
+			"""
+		name = None
+		def reg(fn):
+			nonlocal name
+			from .rpc import RPCservice
+			if not isinstance(fn,RPCservice):
+				if name is None:
+					name = fn.__name__
+					name = name.replace('._','.')
+					name = name.replace('_','.')
+				fn = RPCservice(name=name,fn=fn)
+			elif name is None:
+				name = fn.name
+			assert name not in self.rpc_endpoints, name
+			assert fn.is_alert is None
+			self.rpc_endpoints[name] = fn
+			fn.is_alert = False
+			return fn.fn
+		assert len(a) <= 2
+		if len(a) == 0:
+			return reg
+		elif len(a) == 2:
+			name = a[1]
+			return reg(a[0])
+		else:
+			a = a[0]
+			if isinstance(a,str):
+				name = a
+				return reg
+			else:
+				return reg(a)
+
+			
+
+	
+	def register_alert(self, fn, name=None):
 		"""Register a listener"""
 		from .rpc import RPCservice
 		if not isinstance(fn,RPCservice):
@@ -122,13 +170,14 @@ class Unit(object):
 			fn = RPCservice(name=name,fn=fn)
 		elif name is None:
 			name = fn.name
-		assert name not in self.rpc_endpoints, name
-		self.rpc_endpoints = fn
+		assert name not in self.alert_endpoints, name
+		self.alert_endpoints[name] = fn
+		fn.is_alert = True
 
 	def _server_info(self, msg):
 		msg.reply(dict(
 			app=self.app,
-			recv_id=self.recv_id,
+			recv_id=self.uuid,
 			rpc_endpoints=list(self.rpc_endpoints.keys())
 			))
 		
@@ -147,34 +196,29 @@ class Unit(object):
 
 		from etctree import client as etcd_client
 		self.etcd = etcd_client(cfg)
-		try:
-			self.cfgtree = self.etcd.tree("/config", immediate=True)
-		except etcd.EtcdKeyNotFound:
-			logger.error("no /config subtree in etcd, using defaults")
-			self.cfgtree = {}
-		else:
-			if 'specific' in self.cfgtree:
-				specs = []
+		self.cfgtree = self.etcd.tree("/config", immediate=True)
+		if 'specific' in self.cfgtree:
+			specs = []
+			try:
+				spectree = self.cfgtree['specific']
+				for part in self.app.split('.'):
+					spectree = spectree[part]
+					specs.append(spectree)
+			except KeyError:
+				pass
+			for tree in specs:
 				try:
-					spectree = self.cfgtree['specific']
-					for part in self.app.split('.'):
-						spectree = spectree[part]
-						specs.append(spectree)
+					tree = tree.config
 				except KeyError:
 					pass
-				for tree in specs:
-					try:
-						tree = tree.config
-					except KeyError:
-						pass
-					else:
-						_r_setdefault(cfg,tree)
+				else:
+					_r_setdefault(cfg,tree)
 
-			_r_setdefault(cfg,self.cfgtree)
-			_r_setdefault(cfg,default_config)
+		_r_setdefault(cfg.config,self.cfgtree)
+		_r_setdefault(cfg.config,DEFAULT_CONFIG)
 
-			# Also tell the user about our default settings
-			_r_setdefault(self.cfgtree,default_config)
+		# Also tell the user about our default settings
+		_r_setdefault(self.cfgtree,DEFAULT_CONFIG)
 		return cfg.config
 		
 	## The following code is the non-interesting cleanup part
@@ -183,25 +227,7 @@ class Unit(object):
 		self._kill()
 
 	def _kill(self):
-		q,self.queue = self.queue,None
-		if q:
-			try:
-				q.put(None)
-			except Exception:
-				logger.exception("putting end token")
 		self._kill_conn()
-		r,self.reader=self.reader,None
-		if r:
-			try:
-				r.join(timeout=10)
-			except Exception:
-				logger.exception("join reader")
-		w,self.writer=self.writer,None
-		if w:
-			try:
-				w.join(timeout=10)
-			except Exception:
-				logger.exception("join writer")
 
 	def _kill_conn(self):
 		c,self.conn = self.conn,None
@@ -213,89 +239,11 @@ class Unit(object):
 
 	def _create_conn(self):
 		from .conn import Connection
-		conn = Connection()
+		conn = Connection(self)
 		for d in self.rpc_endpoints.values():
 			conn.register_rpc(d)
 		for d in self.alert_endpoints.values():
 			conn.register_alert(d)
-		conn.start()
-
+		conn.run()
 		self.conn = conn
-
-def _reader(self):
-	"""\
-		Read from messaging, dispatch"""
-	backoff = 0.1
-	while True:
-		try:
-			with self.conn_lock:
-				self.conn = self._create_conn()
-				self.conn_lock.notify()
-			while self.conn is not None and self.conn.is_alive():
-				x = self.read_conn()
-				try:
-					res = self.dispatch(x)
-				except Exception as e:
-					answer_with_errro()
-				else:
-					answer()
-				ack(x)
-				if backoff > 0.1:
-					backoff /= 2
-		except Exception as e:
-			if not dir(self):
-				# the proxy got tilted
-				return
-			logger.exception("_reader")
-			if self.config.testing:
-				raise
-			sleep(backoff)
-			backoff *= 1.5
-		finally:
-			self._kill_conn()
-
-def _writer(self):
-	"""\
-		Read from the queue, publish to messaging
-		"""
-	backoff = 0.1
-	while True:
-		try:
-			with self.conn_lock:
-				while self.conn is None or not self.conn.is_alive():
-					self.conn_lock.wait(10)
-			while True:
-				x = self.q.get()
-				if x is None:
-					return
-				try:
-					send_conn(x)
-				except Exception as e:
-					try:
-						send_error_to(x,e)
-					except Exception:
-						logger.exception("_writer: nested error")
-				if backoff > 0.1:
-					backoff /= 2
-		except Exception as e:
-			if not dir(self):
-				# the proxy got tilted
-				return
-			logger.exception("_writer")
-			if self.config.testing:
-				raise
-			sleep(backoff)
-			backoff *= 1.5
-		finally:
-			try:
-				with self.conn_lock:
-					c,self.conn = self.conn,None
-			except ReferenceError:
-				pass
-			else:
-				if c is not None:
-					try:
-						c.close()
-					except Exception:
-						logger.exception("_writer: closing the connection")
 

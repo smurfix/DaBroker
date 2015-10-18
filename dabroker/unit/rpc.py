@@ -13,10 +13,19 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ##BP
 
 class RPCservice(object):
-	def __init__(self, name,fn):
-		self.name = name
-		self.fn = fn
+	"""\
+		This object handles one specific RPC service
+		"""
+	queue = None
+	is_alert = None
 
-	def setup(self,conn):
-		pass
-		
+	def __init__(self, fn,name=None):
+		if name is None:
+			name = fn.__module__+'.'+fn.__name__
+		self.fn = fn
+		self.name = name
+	
+	def run(self, *a,**k):
+		import pdb;pdb.set_trace()
+		return self.fn(*a,**k)
+
