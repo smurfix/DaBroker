@@ -48,7 +48,7 @@ class Connection(object):
 					a.close()
 			raise
 
-	def _setup_one(self,name,typ,callback=None, q=None, route_key=None):
+	def _setup_one(self,name,typ,callback=None, q=None, route_key=None, exclusive=False):
 		"""\
 			Register
 			"""
@@ -58,10 +58,12 @@ class Connection(object):
 		setattr(self,name,ch)
 		logger.debug("setup RPC for %s",name)
 		ch.channel = self.amqp.channel()
-		ch.exchange = ch.channel.exchange_declare(exchange=cfg['exchanges'][name], type=typ, auto_delete=False, passive=False)
+		ch.exchange = cfg['exchanges'][name]
+		ch.channel.exchange_declare(exchange=cfg['exchanges'][name], type=typ, auto_delete=False, passive=False)
+
 		if q is not None:
 			assert callback is not None
-			ch.queue = ch.channel.queue_declare(queue=cfg['queues'][name]+q, auto_delete=True, passive=False)
+			ch.queue = ch.channel.queue_declare(queue=cfg['queues'][name]+q, auto_delete=True, passive=False, exclusive=exclusive)
 			ch.channel.basic_qos(prefetch_count=1,prefetch_size=0,a_global=False)
 			ch.channel.basic_consume(callback=callback, queue=cfg['queues'][name]+q)
 			if route_key is not None:
@@ -76,7 +78,7 @@ class Connection(object):
 		u = self.unit()
 		self._setup_one("alert",'topic', self._on_alert, str(u.uuid))
 		self._setup_one("rpc",'topic')
-		self._setup_one("reply",'direct', self._on_reply, str(u.uuid),'')
+		self._setup_one("reply",'direct', self._on_reply, str(u.uuid), str(u.uuid))
 
 	def _on_alert(self,*a,**k):
 		import pdb;pdb.set_trace()
@@ -99,7 +101,8 @@ class Connection(object):
 
 	def register_alert(self,rpc):
 		ch = self.alert
-		rpc.channel.queue_bind(ch.queue.queue, exchange=ch.exchange.name, routing_key=rpc.name)
+		cfg = self.unit().config['amqp']
+		ch.channel.queue_bind(ch.queue.queue, exchange=ch.exchange, routing_key=rpc.name)
 
 	def call(self,fn,*a,**k):
 		import pdb;pdb.set_trace()
@@ -112,15 +115,11 @@ class Connection(object):
 	def close(self):
 		a,self.amqp = self.amqp,None
 		if a is not None and a.transport is not None:
+			# This code deadlocks.
 			try:
-				a.close()
+				a.close(nowait=True)
 			except Exception:
 				logger.exception("closing the connection")
-			if a.transport is not None:
-				try:
-					a._do_close() # layering violation
-				except Exception:
-					logger.exception("force-closing the connection 2")
 
 		t,self.task = self.task,None
 		if t is not None:
@@ -128,6 +127,12 @@ class Connection(object):
 				t.join(10)
 			except Exception:
 				logger.exception("stopping the reader task")
+
+		if a is not None and a.transport is not None:
+			try:
+				a._do_close() # layering violation
+			except Exception:
+				logger.exception("force-closing the connection 2")
 
 	def __del__(self):
 		a,self.amqp = self.amqp,None
@@ -148,8 +153,8 @@ def _run(self):
 			except ReferenceError:
 				return
 			except Exception:
-				logger.exception("reading from AMQP")
 				if amqp is not None:
+					logger.exception("reading from AMQP")
 					try:
 						amqp.close()
 						while amqp.transport is not None:

@@ -55,6 +55,5 @@ def _unit(name):
 	yield u
 	u.stop()
 	
-#def test_unit(unit1, unit2):
-#	import pdb;pdb.set_trace()
-#	pass
+def test_unit(unit1, unit2):
+	pass

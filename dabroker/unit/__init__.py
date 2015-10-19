@@ -104,7 +104,8 @@ class Unit(object):
 	def start(self):
 		self.rpc_endpoints = {}
 		self.alert_endpoints = {}
-		self.register_rpc(self._server_info,"dabroker.info")
+		self.register_alert(self._alert_ping,"dabroker.ping")
+		self.register_rpc(self._reply_ping,"dabroker.ping")
 		self.uuid = uuid.uuid1()
 
 		self._create_conn()
@@ -155,9 +156,6 @@ class Unit(object):
 				return reg
 			else:
 				return reg(a)
-
-			
-
 	
 	def register_alert(self, fn, name=None):
 		"""Register a listener"""
@@ -174,7 +172,13 @@ class Unit(object):
 		self.alert_endpoints[name] = fn
 		fn.is_alert = True
 
-	def _server_info(self, msg):
+	def _alert_ping(self, msg):
+		msg.reply(dict(
+			app=self.app,
+			recv_id=self.uuid,
+			))
+
+	def _reply_ping(self,msg):
 		msg.reply(dict(
 			app=self.app,
 			recv_id=self.uuid,
@@ -228,6 +232,9 @@ class Unit(object):
 
 	def _kill(self):
 		self._kill_conn()
+		c,self.cfgtree = self.cfgtree,None
+		if c is not None:
+			c._kill()
 
 	def _kill_conn(self):
 		c,self.conn = self.conn,None
