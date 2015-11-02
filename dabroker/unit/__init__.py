@@ -113,7 +113,14 @@ class Unit(object):
 		yield from self._create_conn()
 		_units[self.app] = self
 	
+	@asyncio.coroutine
 	def stop(self):
+		c,self.conn = self.conn,None
+		if c:
+			try:
+				yield from c.close()
+			except Exception:
+				logger.exception("closing connection")
 		self._kill()
 		
 	def register_rpc(self, *a):

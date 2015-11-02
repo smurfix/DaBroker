@@ -26,7 +26,6 @@ class _ch(object):
 	queue = None
 
 class Connection(object):
-	task = None # background reader
 	amqp = None # connection
 
 	def __init__(self,unit):
@@ -39,6 +38,7 @@ class Connection(object):
 			cfg['ssl'] = cfg['ssl'].lower() == 'true'
 		if 'port' in cfg:
 			cfg['port'] = int(cfg['port'])
+		self.cfg = cfg
 
 	@asyncio.coroutine
 	def connect(self):
@@ -117,21 +117,15 @@ class Connection(object):
 		import pdb;pdb.set_trace()
 		pass
 
+	@asyncio.coroutine
 	def close(self):
 		a,self.amqp = self.amqp,None
 		if a is not None and a.transport is not None:
 			# This code deadlocks.
 			try:
-				a.close(nowait=True)
+				yield from a.close_async(nowait=True)
 			except Exception:
 				logger.exception("closing the connection")
-
-		t,self.task = self.task,None
-		if t is not None:
-			try:
-				t.join(10)
-			except Exception:
-				logger.exception("stopping the reader task")
 
 		if a is not None and a.transport is not None:
 			try:

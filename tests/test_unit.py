@@ -14,6 +14,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 import pytest
 import os
+import asyncio
 from dabroker.unit import Unit
 from yaml import safe_load
 
@@ -38,25 +39,32 @@ def load_cfg(cfg):
 def test_basic():
 	cfg = load_cfg("test.cfg")
 	u = Unit("test.zero", cfg)
-	u.start()
-	u.stop()
+	loop = asyncio.get_event_loop()
+	loop.run_until_complete(u.start())
+	loop.run_until_complete(u.stop())
 
 @pytest.yield_fixture
 def unit1():
-	yield from _unit("one")
+	g =  _unit("one")
+	yield next(g)
+	next(g)
 @pytest.yield_fixture
 def unit2():
-	yield from _unit("two")
+	g = _unit("two")
+	yield next(g)
+	next(g)
+@asyncio.coroutine
 def _unit(name):
 	cfg = load_cfg("test.cfg")
 	u = Unit("test."+name, cfg)
-	u.start()
+	loop = asyncio.get_event_loop()
+	loop.run_until_complete(u.start())
 	yield u
-	u.stop()
+	import pdb;pdb.set_trace()
+	loop.run_until_complete(u.stop())
 	
 def test_unit(unit1, unit2):
-	unit1.start()
-	unit2.start()
-	unit1.stop()
-	unit2.stop()
+	loop = asyncio.get_event_loop()
+	loop.run_until_complete(asyncio.wait([unit1.start(), unit2.start()]))
+	loop.run_until_complete(asyncio.wait([unit1.stop(), unit2.stop()]))
 
