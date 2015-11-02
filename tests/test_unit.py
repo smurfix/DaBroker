@@ -55,5 +55,8 @@ def _unit(name):
 	u.stop()
 	
 def test_unit(unit1, unit2):
-	pass
+	unit1.start()
+	unit2.start()
+	unit1.stop()
+	unit2.stop()
 

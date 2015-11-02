@@ -23,6 +23,7 @@ import weakref
 from threading import Thread,Condition,Lock
 import uuid
 import etcd
+import asyncio
 from dabroker.util import attrdict
 from etctree.node import mtValue
 
@@ -101,6 +102,7 @@ class Unit(object):
 		self.config = self._get_config(cfg, **kw)
 		self.conn_lock = Condition()
 
+	@asyncio.coroutine
 	def start(self):
 		self.rpc_endpoints = {}
 		self.alert_endpoints = {}
@@ -108,7 +110,7 @@ class Unit(object):
 		self.register_rpc(self._reply_ping,"dabroker.ping")
 		self.uuid = uuid.uuid1()
 
-		self._create_conn()
+		yield from self._create_conn()
 		_units[self.app] = self
 	
 	def stop(self):
@@ -244,13 +246,14 @@ class Unit(object):
 			except Exception:
 				logger.exception("closing connection")
 
+	@asyncio.coroutine
 	def _create_conn(self):
 		from .conn import Connection
 		conn = Connection(self)
+		yield from conn.connect()
 		for d in self.rpc_endpoints.values():
-			conn.register_rpc(d)
+			yield from conn.register_rpc(d)
 		for d in self.alert_endpoints.values():
-			conn.register_alert(d)
-		conn.run()
+			yield from conn.register_alert(d)
 		self.conn = conn
 

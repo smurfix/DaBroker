@@ -13,8 +13,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ##BP
 
 import weakref
-import amqp
-from threading import Thread
+import asyncio
+import aioamqp
 
 import logging
 logger = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ class Connection(object):
 	amqp = None # connection
 
 	def __init__(self,unit):
+		self.rpc = {}
 		self.unit = weakref.ref(unit)
 		cfg = unit.config['amqp']['server']
 		if 'connect_timeout' in cfg:
@@ -38,9 +39,13 @@ class Connection(object):
 			cfg['ssl'] = cfg['ssl'].lower() == 'true'
 		if 'port' in cfg:
 			cfg['port'] = int(cfg['port'])
-		self.amqp = amqp.connection.Connection(**cfg)
+
+	@asyncio.coroutine
+	def connect(self):
+		self.amqp = aioamqp.Connection(async=True, **self.cfg)
+		yield from self.amqp.wait_connected()
 		try:
-			self.setup_channels()
+			yield from self.setup_channels()
 		except Exception as e:
 			logger.exception("Not connected to AMPQ: host=%s vhost=%s user=%s", cfg['host'],cfg['virtual_host'],cfg['userid'])
 			a,self.amqp = self.amqp,None
@@ -48,6 +53,7 @@ class Connection(object):
 					a.close()
 			raise
 
+	@asyncio.coroutine
 	def _setup_one(self,name,typ,callback=None, q=None, route_key=None, exclusive=False):
 		"""\
 			Register
@@ -57,28 +63,29 @@ class Connection(object):
 		ch = _ch()
 		setattr(self,name,ch)
 		logger.debug("setup RPC for %s",name)
-		ch.channel = self.amqp.channel()
+		ch.channel = yield from self.amqp.channel_async()
 		ch.exchange = cfg['exchanges'][name]
-		ch.channel.exchange_declare(exchange=cfg['exchanges'][name], type=typ, auto_delete=False, passive=False)
+		yield from ch.channel.exchange_declare_async(exchange=cfg['exchanges'][name], type=typ, auto_delete=False, passive=False)
 
 		if q is not None:
 			assert callback is not None
-			ch.queue = ch.channel.queue_declare(queue=cfg['queues'][name]+q, auto_delete=True, passive=False, exclusive=exclusive)
-			ch.channel.basic_qos(prefetch_count=1,prefetch_size=0,a_global=False)
-			ch.channel.basic_consume(callback=callback, queue=cfg['queues'][name]+q)
+			ch.queue = yield from ch.channel.queue_declare_async(queue=cfg['queues'][name]+q, auto_delete=True, passive=False, exclusive=exclusive)
+			yield from ch.channel.basic_qos_async(prefetch_count=1,prefetch_size=0,a_global=False)
+			yield from ch.channel.basic_consume_async(callback=callback, queue=cfg['queues'][name]+q)
 			if route_key is not None:
-				ch.channel.queue_bind(ch.queue.queue, exchange=cfg['exchanges'][name], routing_key=route_key)
+				yield from ch.channel.queue_bind_async(ch.queue.queue, exchange=cfg['exchanges'][name], routing_key=route_key)
 		else:
 			assert callback is None
 
 		logger.debug("setup RPC for %s done",name)
 
+	@asyncio.coroutine
 	def setup_channels(self):
 		"""Configure global channels"""
 		u = self.unit()
-		self._setup_one("alert",'topic', self._on_alert, str(u.uuid))
-		self._setup_one("rpc",'topic')
-		self._setup_one("reply",'direct', self._on_reply, str(u.uuid), str(u.uuid))
+		yield from self._setup_one("alert",'topic', self._on_alert, str(u.uuid))
+		yield from self._setup_one("rpc",'topic')
+		yield from self._setup_one("reply",'direct', self._on_reply, str(u.uuid), str(u.uuid))
 
 	def _on_alert(self,*a,**k):
 		import pdb;pdb.set_trace()
@@ -88,29 +95,27 @@ class Connection(object):
 		import pdb;pdb.set_trace()
 		pass
 
+	@asyncio.coroutine
 	def register_rpc(self,rpc):
 		ch = self.rpc
 		cfg = self.unit().config['amqp']
 		assert rpc.queue is None
-		rpc.channel = self.amqp.channel()
-		rpc.queue = rpc.channel.queue_declare(queue=cfg['queues']['rpc']+rpc.name.replace('.','_'), auto_delete=True, passive=False)
-		rpc.channel.queue_bind(rpc.queue.queue, exchange=cfg['exchanges']['rpc'], routing_key=rpc.name)
+		rpc.channel = yield from self.amqp.channel_async()
+		rpc.queue = yield from rpc.channel.queue_declare_async(queue=cfg['queues']['rpc']+rpc.name.replace('.','_'), auto_delete=True, passive=False)
+		yield from rpc.channel.queue_bind_async (rpc.queue.queue, exchange=cfg['exchanges']['rpc'], routing_key=rpc.name)
 
-		rpc.channel.basic_qos(prefetch_count=1,prefetch_size=0,a_global=False)
-		rpc.channel.basic_consume(callback=rpc.run, queue=rpc.queue.queue)
+		yield from rpc.channel.basic_qos_async(prefetch_count=1,prefetch_size=0,a_global=False)
+		yield from rpc.channel.basic_consume_async(callback=rpc.run, queue=rpc.queue.queue)
 
+	@asyncio.coroutine
 	def register_alert(self,rpc):
 		ch = self.alert
 		cfg = self.unit().config['amqp']
-		ch.channel.queue_bind(ch.queue.queue, exchange=ch.exchange, routing_key=rpc.name)
+		yield from ch.channel.queue_bind_async(ch.queue.queue, exchange=ch.exchange, routing_key=rpc.name)
 
 	def call(self,fn,*a,**k):
 		import pdb;pdb.set_trace()
 		pass
-
-	def run(self):
-		self.task = Thread(target=_run, args=(self,))
-		self.task.start()
 
 	def close(self):
 		a,self.amqp = self.amqp,None
@@ -144,32 +149,4 @@ class Connection(object):
 				a.collect() # renamed in amqp 1.5
 			except AttributeError:
 				a._do_close()
-
-def _run(self):
-	self = weakref.ref(self)
-	logger.debug("Start conn thread")
-	try:
-		while True:
-			amqp = None
-			try:
-				amqp = self().amqp
-				if amqp.transport is None:
-					return # got closed
-				amqp.drain_events()
-			except ReferenceError:
-				return
-			except Exception:
-				if amqp is not None:
-					logger.exception("reading from AMQP")
-					try:
-						amqp.close()
-						while amqp.transport is not None:
-							amqp.drain_events(timeout=10)
-					except BrokenPipeError:
-						pass
-					except Exception:
-						logger.exception("closing AMQP")
-				return
-	finally:
-		logger.debug("Stop conn thread")
 
