@@ -130,14 +130,20 @@ class Connection(object):
 
 		if a is not None and a.transport is not None:
 			try:
-				a._do_close() # layering violation
+				try:
+					a.collect() # renamed in amqp 1.5
+				except AttributeError:
+					a._do_close() # layering violation
 			except Exception:
 				logger.exception("force-closing the connection 2")
 
 	def __del__(self):
 		a,self.amqp = self.amqp,None
 		if a is not None and a.transport is not None:
-			a._do_close() # layering violation
+			try:
+				a.collect() # renamed in amqp 1.5
+			except AttributeError:
+				a._do_close()
 
 def _run(self):
 	self = weakref.ref(self)

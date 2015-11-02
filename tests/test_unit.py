@@ -39,7 +39,6 @@ def test_basic():
 	cfg = load_cfg("test.cfg")
 	u = Unit("test.zero", cfg)
 	u.start()
-	import pdb;pdb.set_trace()
 	u.stop()
 
 @pytest.yield_fixture
@@ -57,3 +56,4 @@ def _unit(name):
 	
 def test_unit(unit1, unit2):
 	pass
+
