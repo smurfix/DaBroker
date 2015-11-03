@@ -106,9 +106,10 @@ class Unit(object):
 	def start(self):
 		self.rpc_endpoints = {}
 		self.alert_endpoints = {}
-		self.register_alert(self._alert_ping,"dabroker.ping")
-		self.register_rpc(self._reply_ping,"dabroker.ping")
 		self.uuid = uuid.uuid1()
+
+		self.register_alert("dabroker.ping",self._alert_ping)
+		self.register_rpc("dabroker.ping",self._reply_ping)
 
 		yield from self._create_conn()
 		_units[self.app] = self
@@ -123,12 +124,39 @@ class Unit(object):
 				logger.exception("closing connection")
 		self._kill()
 		
-	def register_rpc(self, *a):
+	
+	## client
+
+	@asyncio.coroutine
+	def rpc(self,name, *a,**k):
+		"""Send a broadcast alert.
+		Returns the response. 
+		The (global) timeout is set in etcd.
+		"""
+		yield from self.conn.call(name,*a, **k)
+		
+	@asyncio.coroutine
+	def alert(self,name, *a, timeout=None,**k):
+		"""Send a broadcast alert.
+		If @timeout is not None, iterate responses until the time runs out
+
+		Usage::
+			for r in unit.alert("dabroker.ping"):
+				if isinstance(r,asyncio.Future):
+					yield r
+					continue
+				do_something_with(r)
+		"""
+		yield from self.conn.alert(name,*a, timeout=timeout, **k)
+		
+	## server
+
+	def register_rpc(self, *a, async=False, alert=False):
 		"""\
 			Register a listener.
 				
 				conn.register_rpc(RPCservice(fn,name))
-				conn.register_rpc(fn,name)
+				conn.register_rpc(name,fn)
 				conn.register_rpc(fn)
 				@conn_register(name)
 				def fn(…): pass
@@ -136,6 +164,13 @@ class Unit(object):
 				def fn(…): pass
 			"""
 		name = None
+		@asyncio.coroutine
+		def reg_async(fn,epl):
+			if alert:
+				yield from self.conn.register_alert(fn)
+			else:
+				yield from self.conn.register_rpc(fn)
+			epl[name] = fn
 		def reg(fn):
 			nonlocal name
 			from .rpc import RPCservice
@@ -147,17 +182,24 @@ class Unit(object):
 				fn = RPCservice(name=name,fn=fn)
 			elif name is None:
 				name = fn.name
-			assert name not in self.rpc_endpoints, name
 			assert fn.is_alert is None
-			self.rpc_endpoints[name] = fn
-			fn.is_alert = False
+			if alert:
+				epl = self.alert_endpoints
+			else:
+				epl = self.rpc_endpoints
+			assert name not in epl, name
+			fn.is_alert = alert
+			if async and self.conn is not None:
+				return reg_async(fn,epl)
+			else:
+				assert self.conn is None,"Use register_rpc_async when online"
 			return fn.fn
 		assert len(a) <= 2
 		if len(a) == 0:
 			return reg
 		elif len(a) == 2:
-			name = a[1]
-			return reg(a[0])
+			name = a[0]
+			return reg(a[1])
 		else:
 			a = a[0]
 			if isinstance(a,str):
@@ -166,20 +208,9 @@ class Unit(object):
 			else:
 				return reg(a)
 	
-	def register_alert(self, fn, name=None):
+	def register_alert(self, *a, async=False):
 		"""Register a listener"""
-		from .rpc import RPCservice
-		if not isinstance(fn,RPCservice):
-			if name is None:
-				name = fn.__name__
-				name = name.replace('._','.')
-				name = name.replace('_','.')
-			fn = RPCservice(name=name,fn=fn)
-		elif name is None:
-			name = fn.name
-		assert name not in self.alert_endpoints, name
-		self.alert_endpoints[name] = fn
-		fn.is_alert = True
+		return self.register_rpc(*a, async=async, alert=True)
 
 	def _alert_ping(self, msg):
 		msg.reply(dict(

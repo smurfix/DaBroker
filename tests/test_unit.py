@@ -13,10 +13,13 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ##BP
 
 import pytest
+import pytest_asyncio.plugin
 import os
 import asyncio
 from dabroker.unit import Unit
 from yaml import safe_load
+import unittest
+from unittest.mock import Mock
 
 # load a config file
 def load_cfg(cfg):
@@ -44,27 +47,42 @@ def test_basic():
 	loop.run_until_complete(u.stop())
 
 @pytest.yield_fixture
-def unit1():
-	g =  _unit("one")
+def unit1(event_loop):
+	g = _unit("one",event_loop)
 	yield next(g)
 	next(g)
 @pytest.yield_fixture
-def unit2():
-	g = _unit("two")
+def unit2(event_loop):
+	g = _unit("two",event_loop)
 	yield next(g)
 	next(g)
 @asyncio.coroutine
-def _unit(name):
+def _unit(name,loop):
 	cfg = load_cfg("test.cfg")
 	u = Unit("test."+name, cfg)
-	loop = asyncio.get_event_loop()
 	loop.run_until_complete(u.start())
 	yield u
-	import pdb;pdb.set_trace()
 	loop.run_until_complete(u.stop())
 	
-def test_unit(unit1, unit2):
-	loop = asyncio.get_event_loop()
-	loop.run_until_complete(asyncio.wait([unit1.start(), unit2.start()]))
-	loop.run_until_complete(asyncio.wait([unit1.stop(), unit2.stop()]))
+@pytest.mark.asyncio
+def test_unit(unit1, unit2, event_loop):
+	call_me = Mock(side_effect=lambda x: "foo "+x)
+	alert_me = Mock(side_effect=lambda y: "bar "+y)
+	with pytest.raises(AssertionError):
+		yield from unit1.register_rpc("my.call",call_me)
+	yield from unit1.register_rpc("my.call",call_me, async=True)
+	yield from unit1.register_alert("my.alert",alert_me, async=True)
+	res = yield from unit2.rpc("my.call", "one")
+	assert res == "foo one"
+	res = yield from unit1.rpc("my.call", x="two")
+	assert res == "foo bar"
+	n = 0
+	for res in unit2.alert("my.alert","dud"):
+		if isinstance(x,asyncio.Future):
+			yield res
+			continue
+		assert res == "bar dud"
+		n += 1
+	assert n == 2
+
 

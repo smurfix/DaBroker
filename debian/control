@@ -11,6 +11,7 @@ Build-Depends: debhelper (>= 7),
   python-pytest, python3-pytest,
   python-werkzeug, python3-werkzeug,
   python-six (>= 1.7), python3-six (>= 1.7),
+  python3-pytest-asyncio
 Standards-Version: 3.9.1
 X-Python-Version: >= 2.7
 X-Python3-Version: >= 3.3

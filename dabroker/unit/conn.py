@@ -117,6 +117,10 @@ class Connection(object):
 		import pdb;pdb.set_trace()
 		pass
 
+	def alert(self,fn,*a,timeout=None,**k):
+		import pdb;pdb.set_trace()
+		pass
+
 	@asyncio.coroutine
 	def close(self):
 		a,self.amqp = self.amqp,None
