@@ -24,7 +24,7 @@ from threading import Thread,Condition,Lock
 import uuid
 import etcd
 import asyncio
-from dabroker.util import attrdict
+from dabroker.util import attrdict, import_string
 from etctree.node import mtValue
 
 import logging
@@ -56,6 +56,7 @@ DEFAULT_CONFIG=_d(
 		ttl=_d(
 			rpc=10,
 		),
+		codec='json',
 	))
 
 class _NOTGIVEN:
@@ -84,6 +85,7 @@ class Unit(object):
 	config = None # configuration data
 	conn = None # AMQP receiver
 	recv_id = None # my UUID
+	codec = None
 
 	rpc_endpoints = None # RPC listeners
 	alert_endpoints = None # 
@@ -101,6 +103,8 @@ class Unit(object):
 
 		self.config = self._get_config(cfg, **kw)
 		self.conn_lock = Condition()
+		self.codec_type = self.config['amqp']['codec']
+		self.codec = import_string('dabroker.base.codec.%s.Codec' % (self.codec_type,))
 
 	@asyncio.coroutine
 	def start(self):
