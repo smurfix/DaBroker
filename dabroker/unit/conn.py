@@ -15,6 +15,10 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 import weakref
 import asyncio
 import aioamqp
+import functools
+
+from .msg import _RequestMessage
+from ..util import import_string
 
 import logging
 logger = logging.getLogger(__name__)
@@ -29,7 +33,7 @@ class Connection(object):
 	amqp = None # connection
 
 	def __init__(self,unit):
-		self.rpc = {}
+		self.alerts = {}
 		self.unit = weakref.ref(unit)
 		cfg = unit.config['amqp']['server']
 		if 'connect_timeout' in cfg:
@@ -39,6 +43,17 @@ class Connection(object):
 		if 'port' in cfg:
 			cfg['port'] = int(cfg['port'])
 		self.cfg = cfg
+
+		codec_type = unit.config['amqp']['codec']
+		if codec_type[0] == '_':
+            codec_type = codec_type[1:]
+            self.codec = import_string('dabroker.base.codec.%s.RawCodec' % (codec_type,))
+			self.mime_type = "application/"+codec_type
+        else:
+            self.codec = import_string('dabroker.base.codec.%s.Codec' % (codec_type,))
+			self.codec_type = codec_type
+			self.mime_type = "application/"+codec_type+"+dabroker"
+
 
 	@asyncio.coroutine
 	def connect(self):
@@ -84,15 +99,93 @@ class Connection(object):
 		yield from self._setup_one("reply",'direct', self._on_reply, str(u.uuid), str(u.uuid))
 
 	@asyncio.coroutine
-	def _on_alert(self,*a,**k):
+	def _on_alert(self, body,envelope,properties):
 		import pdb;pdb.set_trace()
-		pass
+		try:
+			msg = self.codec.decode(body)
+			msg = BaseMsg.load(msg)
+			rpc = self.alerts[msg.header.name]
+			reply_to = msg.header.get('reply_to',None)
+			if reply_to:
+				reply = ResponseMsg(msg)
+				try:
+					reply.data = yield from rpc.run(**msg.data)
+				except Exception as exc:
+					reply.set_error(exc, rpc.name,"reply")
+				reply = reply.dump()
+				reply = self.codec.encode(reply)
+				yield from rpc.channel.publish(reply, self.reply.exchange, reply_to)
+			else:
+				yield from rpc.run(msg)
+		except Exception as exc:
+			logger.exception("problem receiving message: ",body)
+			yield from rpc.channel.basic_reject(envelope.delivery_tag)
+		else:
+			yield from rpc.channel.basic_client_ack(envelope.delivery_tag)
 
 	@asyncio.coroutine
-	def _on_reply(self,*a,**k):
+	def _on_rpc(self, rpc, body,envelope,properties):
 		import pdb;pdb.set_trace()
-		pass
+		try:
+			msg = self.codec.decode(body)
+			msg = BaseMsg.load(msg)
+			assert msg.header.name == rpc.name, (msg.header.name, rpc.name)
+			reply = ResponseMsg(msg)
+		except Exception as exc:
+			logger.exception("problem receiving message: ",body)
+			yield from rpc.channel.basic_reject(envelope.delivery_tag)
+			return
+		try:
+			try:
+				reply.data = yield from rpc.run(**msg.data)
+			except Exception as exc:
+				reply.set_error(exc, rpc.name,"reply")
+			reply = reply.dump()
+			reply = self.codec.encode(reply)
+			yield from rpc.channel.publish(reply, self.reply.exchange, msg.header.reply_to)
 
+		yield from rpc.channel.basic_client_ack(envelope.delivery_tag)
+
+	@asyncio.coroutine
+	def _on_reply(self, body,envelope,properties):
+		try:
+			msg = self.codec.decode(body)
+			msg = BaseMsg.load(msg)
+			f,req = self.replies[msg.header.message_id]
+			try:
+				yield from req.recv_reply(f,msg)
+			except Exception:
+				if not f.done():
+					f.set_exception(exc)
+		except Exception as exc:
+			yield from rpc.channel.basic_reject(envelope.delivery_tag)
+			logger.exception("problem receiving message: %s",body)
+		else:
+			yield from rpc.channel.basic_client_ack(envelope.delivery_tag)
+
+	@asyncio.coroutine
+	def call(self,msg, timeout=None):
+		if timeout is None:
+			if isinstance(msg,PollMsg):
+				timeout = float(unit.config['amqp']['timeout']['poll'])
+			else:
+				timeout = float(unit.config['amqp']['timeout']['rpc'])
+		data = msg.dump()
+		data = self.codec.encode(data)
+		f = asyncio.Future()
+		assert isinstance(data,_RequestMsg)
+		id = data.message_id
+		self.replies[id] = (f,msg)
+		try:
+			yield from wait_for(f,timeout)
+		except asyncio.TimeoutError:
+			if isinstance(msg,PollMsg):
+				return msg.replies
+			raise
+		finally:
+			del self.replies[id]
+		return f.result()
+		
 	@asyncio.coroutine
 	def register_rpc(self,rpc):
 		ch = self.rpc
@@ -103,25 +196,14 @@ class Connection(object):
 		yield from rpc.channel.queue_bind(rpc.queue['queue'], cfg['exchanges']['rpc'], routing_key=rpc.name)
 
 		yield from rpc.channel.basic_qos(prefetch_count=1,prefetch_size=0,connection_global=False)
-		yield from rpc.channel.basic_consume(rpc.queue['queue'], callback=rpc.run)
+		yield from rpc.channel.basic_consume(rpc.queue['queue'], callback=functools.partial(self._on_rpc,rpc))
 
 	@asyncio.coroutine
 	def register_alert(self,rpc):
 		ch = self.alert
 		cfg = self.unit().config['amqp']
 		yield from ch.channel.queue_bind(ch.queue['queue'], ch.exchange, routing_key=rpc.name)
-
-	@asyncio.coroutine
-	def call(self,fn,data):
-
-
-		import pdb;pdb.set_trace()
-		pass
-
-	@asyncio.coroutine
-	def alert(self,fn,*a,timeout=None,**k):
-		import pdb;pdb.set_trace()
-		pass
+		self.alerts[rpc.name] = rpc
 
 	@asyncio.coroutine
 	def close(self):

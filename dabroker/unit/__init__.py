@@ -20,12 +20,12 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## 
 
 import weakref
-from threading import Thread,Condition,Lock
 import uuid
 import etcd
 import asyncio
-from dabroker.util import attrdict, import_string
+from ..util import attrdict, import_string
 from etctree.node import mtValue
+from .msg import RequestMessage
 
 import logging
 logger = logging.getLogger(__name__)
@@ -56,7 +56,11 @@ DEFAULT_CONFIG=_d(
 		ttl=_d(
 			rpc=10,
 		),
-		codec='json',
+		timeout=_d(
+			rpc=15,
+			poll=30,
+		),
+		codec='_json',
 	))
 
 class _NOTGIVEN:
@@ -85,7 +89,6 @@ class Unit(object):
 	config = None # configuration data
 	conn = None # AMQP receiver
 	recv_id = None # my UUID
-	codec = None
 
 	rpc_endpoints = None # RPC listeners
 	alert_endpoints = None # 
@@ -102,9 +105,6 @@ class Unit(object):
 		self.app = app
 
 		self.config = self._get_config(cfg, **kw)
-		self.conn_lock = Condition()
-		self.codec_type = self.config['amqp']['codec']
-		self.codec = import_string('dabroker.base.codec.%s.Codec' % (self.codec_type,))
 
 	@asyncio.coroutine
 	def start(self):
@@ -132,17 +132,20 @@ class Unit(object):
 	## client
 
 	@asyncio.coroutine
-	def rpc(self,name, *a,**k):
-		"""Send a broadcast alert.
+	def rpc(self,name, **data):
+		"""Send a RPC request.
 		Returns the response. 
 		The (global) timeout is set in etcd.
 		"""
-		yield from self.conn.call(name,*a, **k)
-		
+        msg = RequestMsg(fn, self, data)
+		res = yield from self.conn.call(msg)
+		res.raise_if_error()
+		return res.data
+
 	@asyncio.coroutine
-	def alert(self,name, *a, timeout=None,**k):
+	def alert(self,name, timeout=None,reply_proc=None, **data):
 		"""Send a broadcast alert.
-		If @timeout is not None, iterate responses until the time runs out
+		If @reply_proc is not None, iterate responses until the time runs out
 
 		Usage::
 			for r in unit.alert("dabroker.ping"):
@@ -151,7 +154,20 @@ class Unit(object):
 					continue
 				do_something_with(r)
 		"""
-		yield from self.conn.alert(name,*a, timeout=timeout, **k)
+		if reply_proc:
+			msg = PollMsg(fn, self, data, callback=reply_proc)
+		else:
+			msg = AlertMsg(fn, self, data)
+        data = msg.dump()
+		if reply_proc:
+			@asyncio.coroutine
+			def rproc(data):
+		else:
+			rproc = None
+		yield from self.conn.call(name, data, )
+		res.raise_if_error()
+		return res.data
+
 		
 	## server
 

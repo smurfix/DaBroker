@@ -29,11 +29,21 @@ class Codec(BaseCodec):
 		msg = super(Codec,self).encode_error(err, tb=tb)
 		msg = dumps(msg)
 		logger.info("ERR %s",msg)
-		logger.info(msg)
 		return msg
 	
 	def decode(self, data, *a,**k):
 		msg = loads(data)
 		logger.info("IN  %s",msg)
 		return super(Codec,self).decode(msg, *a,**k)
+
+class RawCodec(object):
+	def encode(self, data):
+		msg = dumps(msg)
+		logger.info("OUT %s",msg)
+		return msg
+	
+	def decode(self, data):
+		msg = loads(data)
+		logger.info("IN  %s",msg)
+		return msg
 
