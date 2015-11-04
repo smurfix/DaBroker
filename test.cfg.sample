@@ -7,6 +7,6 @@ config:
   amqp:
     server:
       host: localhost
-      userid: test
+      login: test
       password: test
-      virtual_host: /test
+      virtualhost: /test

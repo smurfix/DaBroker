@@ -42,16 +42,12 @@ class Connection(object):
 
 	@asyncio.coroutine
 	def connect(self):
-		self.amqp = aioamqp.Connection(async=True, **self.cfg)
-		yield from self.amqp.wait_connected()
 		try:
-			yield from self.setup_channels()
+			self.amqp_transport,self.amqp = yield from aioamqp.connect(**self.cfg)
 		except Exception as e:
-			logger.exception("Not connected to AMPQ: host=%s vhost=%s user=%s", cfg['host'],cfg['virtual_host'],cfg['userid'])
-			a,self.amqp = self.amqp,None
-			if a is not None:
-					a.close()
+			logger.exception("Not connected to AMPQ: host=%s vhost=%s user=%s", self.cfg['host'],self.cfg['virtualhost'],self.cfg['login'])
 			raise
+		yield from self.setup_channels()
 
 	@asyncio.coroutine
 	def _setup_one(self,name,typ,callback=None, q=None, route_key=None, exclusive=False):
@@ -63,17 +59,17 @@ class Connection(object):
 		ch = _ch()
 		setattr(self,name,ch)
 		logger.debug("setup RPC for %s",name)
-		ch.channel = yield from self.amqp.channel_async()
+		ch.channel = yield from self.amqp.channel()
 		ch.exchange = cfg['exchanges'][name]
-		yield from ch.channel.exchange_declare_async(exchange=cfg['exchanges'][name], type=typ, auto_delete=False, passive=False)
+		yield from ch.channel.exchange_declare(cfg['exchanges'][name], typ, auto_delete=False, passive=False)
 
 		if q is not None:
 			assert callback is not None
-			ch.queue = yield from ch.channel.queue_declare_async(queue=cfg['queues'][name]+q, auto_delete=True, passive=False, exclusive=exclusive)
-			yield from ch.channel.basic_qos_async(prefetch_count=1,prefetch_size=0,a_global=False)
-			yield from ch.channel.basic_consume_async(callback=callback, queue=cfg['queues'][name]+q)
+			ch.queue = yield from ch.channel.queue_declare(cfg['queues'][name]+q, auto_delete=True, passive=False, exclusive=exclusive)
+			yield from ch.channel.basic_qos(prefetch_count=1,prefetch_size=0,connection_global=False)
+			yield from ch.channel.basic_consume(cfg['queues'][name]+q, callback=callback)
 			if route_key is not None:
-				yield from ch.channel.queue_bind_async(ch.queue.queue, exchange=cfg['exchanges'][name], routing_key=route_key)
+				yield from ch.channel.queue_bind(ch.queue['queue'], cfg['exchanges'][name], routing_key=route_key)
 		else:
 			assert callback is None
 
@@ -87,10 +83,12 @@ class Connection(object):
 		yield from self._setup_one("rpc",'topic')
 		yield from self._setup_one("reply",'direct', self._on_reply, str(u.uuid), str(u.uuid))
 
+	@asyncio.coroutine
 	def _on_alert(self,*a,**k):
 		import pdb;pdb.set_trace()
 		pass
 
+	@asyncio.coroutine
 	def _on_reply(self,*a,**k):
 		import pdb;pdb.set_trace()
 		pass
@@ -100,23 +98,27 @@ class Connection(object):
 		ch = self.rpc
 		cfg = self.unit().config['amqp']
 		assert rpc.queue is None
-		rpc.channel = yield from self.amqp.channel_async()
-		rpc.queue = yield from rpc.channel.queue_declare_async(queue=cfg['queues']['rpc']+rpc.name.replace('.','_'), auto_delete=True, passive=False)
-		yield from rpc.channel.queue_bind_async (rpc.queue.queue, exchange=cfg['exchanges']['rpc'], routing_key=rpc.name)
+		rpc.channel = yield from self.amqp.channel()
+		rpc.queue = yield from rpc.channel.queue_declare(cfg['queues']['rpc']+rpc.name.replace('.','_'), auto_delete=True, passive=False)
+		yield from rpc.channel.queue_bind(rpc.queue['queue'], cfg['exchanges']['rpc'], routing_key=rpc.name)
 
-		yield from rpc.channel.basic_qos_async(prefetch_count=1,prefetch_size=0,a_global=False)
-		yield from rpc.channel.basic_consume_async(callback=rpc.run, queue=rpc.queue.queue)
+		yield from rpc.channel.basic_qos(prefetch_count=1,prefetch_size=0,connection_global=False)
+		yield from rpc.channel.basic_consume(rpc.queue['queue'], callback=rpc.run)
 
 	@asyncio.coroutine
 	def register_alert(self,rpc):
 		ch = self.alert
 		cfg = self.unit().config['amqp']
-		yield from ch.channel.queue_bind_async(ch.queue.queue, exchange=ch.exchange, routing_key=rpc.name)
+		yield from ch.channel.queue_bind(ch.queue['queue'], ch.exchange, routing_key=rpc.name)
 
-	def call(self,fn,*a,**k):
+	@asyncio.coroutine
+	def call(self,fn,data):
+
+
 		import pdb;pdb.set_trace()
 		pass
 
+	@asyncio.coroutine
 	def alert(self,fn,*a,timeout=None,**k):
 		import pdb;pdb.set_trace()
 		pass
@@ -124,27 +126,10 @@ class Connection(object):
 	@asyncio.coroutine
 	def close(self):
 		a,self.amqp = self.amqp,None
-		if a is not None and a.transport is not None:
-			# This code deadlocks.
+		if a is not None:
 			try:
-				yield from a.close_async(nowait=True)
+				yield from a.close(timeout=1)
 			except Exception:
 				logger.exception("closing the connection")
-
-		if a is not None and a.transport is not None:
-			try:
-				try:
-					a.collect() # renamed in amqp 1.5
-				except AttributeError:
-					a._do_close() # layering violation
-			except Exception:
-				logger.exception("force-closing the connection 2")
-
-	def __del__(self):
-		a,self.amqp = self.amqp,None
-		if a is not None and a.transport is not None:
-			try:
-				a.collect() # renamed in amqp 1.5
-			except AttributeError:
-				a._do_close()
+			self.amqp_transport = None
 

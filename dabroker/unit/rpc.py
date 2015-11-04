@@ -12,6 +12,8 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
+import asyncio
+
 class RPCservice(object):
 	"""\
 		This object handles one specific RPC service
@@ -25,6 +27,7 @@ class RPCservice(object):
 		self.fn = fn
 		self.name = name
 	
+	@asyncio.coroutine
 	def run(self, *a,**k):
 		import pdb;pdb.set_trace()
 		return self.fn(*a,**k)

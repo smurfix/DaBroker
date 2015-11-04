@@ -35,9 +35,9 @@ DEFAULT_CONFIG=_d(
 	amqp=_d(
 		server=_d(
 			host='localhost',
-			userid='guest',
+			login='guest',
 			password='guest',
-			virtual_host='/dabroker',
+			virtualhost='/dabroker',
 			ssl=False,
 			connect_timeout=10,
 		),
