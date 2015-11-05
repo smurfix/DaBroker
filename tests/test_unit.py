@@ -71,18 +71,20 @@ def test_unit(unit1, unit2, event_loop):
 	with pytest.raises(AssertionError):
 		yield from unit1.register_rpc("my.call",call_me)
 	yield from unit1.register_rpc("my.call",call_me, async=True)
+	with pytest.raises(AssertionError):
+		yield from unit1.register_alert("my.alert",alert_me)
 	yield from unit1.register_alert("my.alert",alert_me, async=True)
+	yield from unit2.register_alert("my.alert",alert_me, async=True)
 	res = yield from unit2.rpc("my.call", "one")
 	assert res == "foo one"
 	res = yield from unit1.rpc("my.call", x="two")
 	assert res == "foo bar"
 	n = 0
-	for res in unit2.alert("my.alert","dud"):
-		if isinstance(x,asyncio.Future):
-			yield res
-			continue
-		assert res == "bar dud"
+	def cb(x):
+		nonlocal n
 		n += 1
+		assert x == "bar dud", x
+	yield from unit2.alert("my.alert","dud")
 	assert n == 2
 
 

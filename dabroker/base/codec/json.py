@@ -37,10 +37,10 @@ class Codec(BaseCodec):
 		return super(Codec,self).decode(msg, *a,**k)
 
 class RawCodec(object):
-	def encode(self, data):
-		msg = dumps(msg)
-		logger.info("OUT %s",msg)
-		return msg
+	def encode(self, msg):
+		data = dumps(msg)
+		logger.info("OUT %s",data)
+		return data
 	
 	def decode(self, data):
 		msg = loads(data)

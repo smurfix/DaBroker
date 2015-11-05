@@ -32,6 +32,13 @@ with open("/etc/localtime", 'rb') as tzfile:
 from pprint import PrettyPrinter,_safe_repr
 import datetime as _dt
 from io import StringIO as _StringIO
+from base64 import b64encode
+
+def uuidstr(u=None):
+	if u is None:
+		import uuid
+		u=uuid.uuid1()
+	return b64encode(u.bytes, altchars=b'-_').decode('ascii')
 
 class UTFPrinter(PrettyPrinter,object):
 	def _format(self, object, *a,**k):

@@ -12,7 +12,10 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## Thus, please do not remove the next line, or insert any blank lines.
 ##BP
 
-import uuid
+import asyncio
+
+from ..util import uuidstr
+
 _types = {}
 _fmap = {}
 
@@ -96,8 +99,8 @@ class BaseMsg(_MsgPart):
 	data = None
 	error = None
 
-	def __init__(self, hdr):
-		self.msgid = uuid.uuid1()
+	def __init__(self, data=None, hdr=None):
+		self.msgid = uuidstr()
 		if hdr:
 			super(BaseMsg,self)._load(hdr)
 
@@ -118,12 +121,13 @@ class BaseMsg(_MsgPart):
 		return _types[t]._load(data)
 
 	@classmethod
-	def _load(cls, data):
+	def _load(cls, msg):
 		obj = cls()
-		if 'data' in data:
-			obj.data = data['data']
-		if 'error' in data:
-			obj.error = MsgError(data['error'])
+		super()._load(msg['header'])
+		if 'data' in msg:
+			obj.data = msg['data']
+		if 'error' in msg:
+			obj.error = MsgError(msg['error'])
 		return obj
 
 	@property
@@ -138,11 +142,11 @@ class _RequestMsg(BaseMsg):
 	"""A request packet. The remaining fields are data elements."""
 	fields = "name message-id reply-to"
 
-	def __init__(self, _name, **data):
+	def __init__(self, _name, data=None):
 		super().__init__()
 		self.name = _name
 		self.data = data
-		self.message_id = uuid.uuid1()
+		self.message_id = uuidstr()
 
 	def make_response(self, **data):
 		return ResponseMsg(self, **data)
@@ -155,21 +159,21 @@ class _RequestMsg(BaseMsg):
 class RequestMsg(_RequestMsg):
 	type = "request"
 
-	def __init__(self, _name, _unit, **k):
-		super().__init__(_name, **k)
+	def __init__(self, _name, _unit, data=None):
+		super().__init__(_name, data)
 		self.reply_to = _unit.recv_id
 
 class AlertMsg(_RequestMsg):
 	"""An alert which is not replied to"""
 	type = "alert"
 
-	def __init__(self, _name, _unit, **k):
-		super().__init__(_name, **k)
+	def __init__(self, _name, _unit, data=None):
+		super().__init__(_name, data)
 		# do not set reply_to
 
 class PollMsg(AlertMsg):
 	"""An alert which requests replies"""
-	def __init__(self, _name, _unit, callback, **k):
+	def __init__(self, _name, _unit, callback, data=None):
 		next(callback)
 		super().__init__(_name, _unit, *a,**k)
 		self.reply_to = _unit.recv_id
@@ -195,8 +199,8 @@ class ResponseMsg(BaseMsg):
 	type = "reply"
 	fields = "in-reply-to"
 
-	def __init__(self,request, **data):
-		super().__init__(**data)
+	def __init__(self,request, data):
+		super().__init__(data)
 		self.in_reply_to = request.message_id
 
 	@asyncio.coroutine

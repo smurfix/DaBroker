@@ -213,7 +213,7 @@ class BaseCodec(object):
 		registered.
 		"""
 
-	def __init__(self,loader,adapters=(), cfg={}):
+	def __init__(self,loader=None,adapters=(), cfg={}):
 		super(BaseCodec,self).__init__()
 		self.loader = loader
 		self.cfg = default_config.copy()
