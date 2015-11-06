@@ -14,7 +14,11 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 import asyncio
 
+from . import CC_MSG,CC_DICT,CC_DATA
 from ..util import uuidstr
+
+class _NOTGIVEN:
+	pass
 
 _types = {}
 _fmap = {}
@@ -56,10 +60,12 @@ class _MsgPart(object, metaclass=FieldCollect):
 	
 	def _load(self, data):
 		for f in self.fields:
-			setattr(self, _fmap[f], data.get(v,None))
+			v = data.get(f,_NOTGIVEN)
+			if v is not _NOTGIVEN:
+				setattr(self, _fmap[f], v)
 
 class ReturnedError(RuntimeError):
-	def __init__(self,err,msg=None):
+	def __init__(self,err=None,msg=None):
 		self.error = err
 		self.message = msg
 	
@@ -68,6 +74,10 @@ class ReturnedError(RuntimeError):
 
 class MsgError(_MsgPart):
 	fields = "status id part message"
+
+	def __init__(self, data=None):
+		if data is not None:
+			self._load(data)
 
 	@property
 	def failed(self):
@@ -94,15 +104,16 @@ class BaseMsg(_MsgPart):
 	version = 1
 	debug = False
 	# type: needs to be overridden
-	fields = "type version debug"
+	fields = "type version debug message-id"
 
 	data = None
 	error = None
 
 	def __init__(self, data=None, hdr=None):
-		self.msgid = uuidstr()
 		if hdr:
 			super(BaseMsg,self)._load(hdr)
+		if not hasattr(self,'message_id'):
+			self.message_id = uuidstr()
 
 	def dump(self):
 		obj = { 'header': super().dump() }
@@ -123,7 +134,7 @@ class BaseMsg(_MsgPart):
 	@classmethod
 	def _load(cls, msg):
 		obj = cls()
-		super()._load(msg['header'])
+		super(BaseMsg,obj)._load(msg['header'])
 		if 'data' in msg:
 			obj.data = msg['data']
 		if 'error' in msg:
@@ -140,9 +151,9 @@ class BaseMsg(_MsgPart):
 
 class _RequestMsg(BaseMsg):
 	"""A request packet. The remaining fields are data elements."""
-	fields = "name message-id reply-to"
+	fields = "name reply-to"
 
-	def __init__(self, _name, data=None):
+	def __init__(self, _name=None, data=None):
 		super().__init__()
 		self.name = _name
 		self.data = data
@@ -158,36 +169,54 @@ class _RequestMsg(BaseMsg):
 
 class RequestMsg(_RequestMsg):
 	type = "request"
+	_exchange = "rpc" # lookup key for the exchange name
+	_timer = "rpc" # lookup key for the timeout
 
-	def __init__(self, _name, _unit, data=None):
+	def __init__(self, _name=None, _unit=None, data=None):
 		super().__init__(_name, data)
-		self.reply_to = _unit.recv_id
+		if _unit is not None:
+			self.reply_to = _unit.uuid
+
+	@asyncio.coroutine
+	def recv_reply(self, f,reply):
+		"""Client side: Incoming reply. @f is the future to trigger when complete."""
+		f.set_result(reply)
 
 class AlertMsg(_RequestMsg):
 	"""An alert which is not replied to"""
 	type = "alert"
+	_exchange = "alert" # lookup key for the exchange name
 
-	def __init__(self, _name, _unit, data=None):
-		super().__init__(_name, data)
+	def __init__(self, _name=None, _unit=None, data=None):
+		super().__init__(_name=_name, data=data)
 		# do not set reply_to
 
 class PollMsg(AlertMsg):
 	"""An alert which requests replies"""
-	def __init__(self, _name, _unit, callback, data=None):
-		next(callback)
-		super().__init__(_name, _unit, *a,**k)
-		self.reply_to = _unit.recv_id
+	_timer = "poll" # lookup key for the timeout
+
+	def __init__(self, _name=None, _unit=None, callback=None,call_conv=CC_MSG, data=None):
+		super().__init__(_name=_name, _unit=_name, data=data)
+		if _unit is not None:
+			self.reply_to = _unit.uuid
 		self.callback = callback
+		self.call_conv = call_conv
 		self.replies = 0
 
 	@asyncio.coroutine
 	def recv_reply(self, f,msg):
 		"""Incoming reply. @f is the future to trigger when complete."""
 		try:
-			if asyncio.iscoroutinefunction(self.callback):
-				yield from self.callback(msg)
+			if self.call_conv == CC_DICT:
+				a=(); k=msg.data
+			elif self.call_conv == CC_DATA:
+				a=(msg.data,); k={}
 			else:
-				self.callback(msg)
+				a=(msg,); k={}
+			if asyncio.iscoroutinefunction(self.callback):
+				yield from self.callback(*a,**k)
+			else:
+				self.callback(*a,**k)
 		except StopIteration:
 			f.set_result(self.replies+1)
 		except Exception as exc:
@@ -199,15 +228,8 @@ class ResponseMsg(BaseMsg):
 	type = "reply"
 	fields = "in-reply-to"
 
-	def __init__(self,request, data):
-		super().__init__(data)
-		self.in_reply_to = request.message_id
-
-	@asyncio.coroutine
-	def recv_reply(self, f,msg):
-		"""Client side: Incoming reply. @f is the future to trigger when complete."""
-		if msg.failed:
-			f.set_exception(msg.error.returned_error())
-		else:
-			f.set_result(msg.data)
+	def __init__(self,request=None, data=None):
+		super().__init__(data=data)
+		if request is not None:
+			self.in_reply_to = request.message_id
 

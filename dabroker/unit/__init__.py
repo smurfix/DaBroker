@@ -24,6 +24,11 @@ from ..util import attrdict
 import logging
 logger = logging.getLogger(__name__)
 
+# Calling conventions for RPC-registered procedures
+CC_MSG="_msg" # pass the whole message (default)
+CC_DATA="_data" # pass the data element
+CC_DICT="_dict" # assume data is a dict and apply it
+
 _d=attrdict
 DEFAULT_CONFIG=_d(
 	amqp=_d(

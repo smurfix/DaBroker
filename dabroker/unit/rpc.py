@@ -14,21 +14,24 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 import asyncio
 
+from . import CC_MSG,CC_DICT,CC_DATA
+
 class RPCservice(object):
 	"""\
 		This object handles one specific RPC service
 		"""
 	queue = None
 	is_alert = None
+	call_conv = None
 
-	def __init__(self, fn,name=None):
+	def __init__(self, fn,name=None, call_conv=CC_MSG):
 		if name is None:
 			name = fn.__module__+'.'+fn.__name__
 		self.fn = fn
 		self.name = name
+		self.call_conv = call_conv
 	
 	@asyncio.coroutine
 	def run(self, *a,**k):
-		import pdb;pdb.set_trace()
 		return self.fn(*a,**k)
 

@@ -38,7 +38,7 @@ def uuidstr(u=None):
 	if u is None:
 		import uuid
 		u=uuid.uuid1()
-	return b64encode(u.bytes, altchars=b'-_').decode('ascii')
+	return b64encode(u.bytes, altchars=b'-_').decode('ascii').rstrip('=')
 
 class UTFPrinter(PrettyPrinter,object):
 	def _format(self, object, *a,**k):

@@ -16,7 +16,8 @@ import pytest
 import pytest_asyncio.plugin
 import os
 import asyncio
-from dabroker.unit import Unit
+from dabroker.unit import Unit, CC_DICT,CC_DATA
+from dabroker.unit.msg import ReturnedError
 from yaml import safe_load
 import unittest
 from unittest.mock import Mock
@@ -70,21 +71,23 @@ def test_unit(unit1, unit2, event_loop):
 	alert_me = Mock(side_effect=lambda y: "bar "+y)
 	with pytest.raises(AssertionError):
 		yield from unit1.register_rpc("my.call",call_me)
-	yield from unit1.register_rpc("my.call",call_me, async=True)
+	yield from unit1.register_rpc("my.call",call_me, async=True,call_conv=CC_DATA)
 	with pytest.raises(AssertionError):
 		yield from unit1.register_alert("my.alert",alert_me)
-	yield from unit1.register_alert("my.alert",alert_me, async=True)
-	yield from unit2.register_alert("my.alert",alert_me, async=True)
+	yield from unit1.register_alert("my.alert",alert_me, async=True,call_conv=CC_DICT)
+	yield from unit2.register_alert("my.alert",alert_me, async=True,call_conv=CC_DICT)
 	res = yield from unit2.rpc("my.call", "one")
 	assert res == "foo one"
-	res = yield from unit1.rpc("my.call", x="two")
-	assert res == "foo bar"
+	res = yield from unit1.rpc("my.call", "two")
+	assert res == "foo two"
+	with pytest.raises(ReturnedError):
+		res = yield from unit1.rpc("my.call", x="two")
 	n = 0
 	def cb(x):
 		nonlocal n
 		n += 1
 		assert x == "bar dud", x
-	yield from unit2.alert("my.alert","dud")
+	yield from unit2.alert("my.alert",y="dud",callback=cb,call_conv=CC_DATA, timeout=0.2)
 	assert n == 2
 
 

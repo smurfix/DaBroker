@@ -24,7 +24,8 @@ import etcd
 import asyncio
 from ..util import attrdict, import_string, uuidstr
 from etctree.node import mtValue
-from .msg import RequestMsg
+from .msg import RequestMsg,PollMsg,AlertMsg
+from .rpc import CC_MSG
 from . import DEFAULT_CONFIG
 
 import logging
@@ -55,7 +56,7 @@ class Unit(object):
 	etcd = None # etcd client
 	config = None # configuration data
 	conn = None # AMQP receiver
-	recv_id = None # my UUID
+	uuid = None # my UUID
 
 	rpc_endpoints = None # RPC listeners
 	alert_endpoints = None # 
@@ -113,24 +114,24 @@ class Unit(object):
 		return res.data
 
 	@asyncio.coroutine
-	def alert(self,name, _data=None, *, timeout=None,reply_proc=None, **data):
+	def alert(self,name, _data=None, *, timeout=None,callback=None,call_conv=CC_MSG, **data):
 		"""Send a broadcast alert.
-		If @reply_proc is not None, call on each response until the time runs out
+		If @callback is not None, call on each response until the time runs out
 		"""
 		if _data is not None:
 			assert not data
 			data = _data
-		if reply_proc:
-			msg = PollMsg(fn, self, data, callback=reply_proc)
+		if callback:
+			msg = PollMsg(name, self, data=data, callback=callback,call_conv=call_conv)
 		else:
-			msg = AlertMsg(fn, self, data)
+			msg = AlertMsg(name, self, data=data)
 		data = msg.dump()
-		res = yield from self.conn.call(name, msg, timeout=timeout)
+		res = yield from self.conn.call(msg, timeout=timeout)
 		return res
 		
 	## server
 
-	def register_rpc(self, *a, async=False, alert=False):
+	def register_rpc(self, *a, async=False, alert=False, call_conv=CC_MSG):
 		"""\
 			Register a listener.
 				
@@ -158,7 +159,7 @@ class Unit(object):
 					name = fn.__name__
 					name = name.replace('._','.')
 					name = name.replace('_','.')
-				fn = RPCservice(name=name,fn=fn)
+				fn = RPCservice(name=name,fn=fn, call_conv=call_conv)
 			elif name is None:
 				name = fn.name
 			assert fn.is_alert is None
@@ -187,11 +188,11 @@ class Unit(object):
 			else:
 				return reg(a)
 	
-	def register_alert(self, *a, async=False):
+	def register_alert(self, *a, async=False, call_conv=CC_MSG):
 		"""Register a listener"""
-		return self.register_rpc(*a, async=async, alert=True)
+		return self.register_rpc(*a, async=async, alert=True, call_conv=call_conv)
 
-	def _alert_ping(self, msg):
+	def _alert_ping(self,msg):
 		msg.reply(dict(
 			app=self.app,
 			recv_id=self.uuid,

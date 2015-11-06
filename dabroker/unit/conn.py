@@ -17,7 +17,8 @@ import asyncio
 import aioamqp
 import functools
 
-from .msg import _RequestMsg,PollMsg,RequestMsg
+from .msg import _RequestMsg,PollMsg,RequestMsg,BaseMsg,ResponseMsg
+from .rpc import CC_DICT,CC_DATA
 from ..util import import_string
 
 import logging
@@ -101,12 +102,11 @@ class Connection(object):
 
 	@asyncio.coroutine
 	def _on_alert(self, body,envelope,properties):
-		import pdb;pdb.set_trace()
 		try:
 			msg = self.codec.decode(body)
 			msg = BaseMsg.load(msg)
-			rpc = self.alerts[msg.header.name]
-			reply_to = msg.header.get('reply_to',None)
+			rpc = self.alerts[msg.name]
+			reply_to = getattr(msg, 'reply_to',None)
 			if reply_to:
 				reply = ResponseMsg(msg)
 				try:
@@ -115,32 +115,37 @@ class Connection(object):
 					reply.set_error(exc, rpc.name,"reply")
 				reply = reply.dump()
 				reply = self.codec.encode(reply)
-				yield from rpc.channel.publish(reply, self.reply.exchange, reply_to)
+				yield from self.reply.channel.publish(reply, self.reply.exchange, reply_to)
 			else:
 				yield from rpc.run(msg)
 		except Exception as exc:
-			logger.exception("problem receiving message: ",body)
-			yield from rpc.channel.basic_reject(envelope.delivery_tag)
+			logger.exception("problem receiving message: %s",body)
+			yield from self.alert.channel.basic_reject(envelope.delivery_tag)
 		else:
-			yield from rpc.channel.basic_client_ack(envelope.delivery_tag)
+			yield from self.alert.channel.basic_client_ack(envelope.delivery_tag)
 
 	@asyncio.coroutine
 	def _on_rpc(self, rpc, body,envelope,properties):
-		import pdb;pdb.set_trace()
 		try:
 			msg = self.codec.decode(body)
 			msg = BaseMsg.load(msg)
-			assert msg.header.name == rpc.name, (msg.header.name, rpc.name)
+			assert msg.name == rpc.name, (msg.name, rpc.name)
 			reply = ResponseMsg(msg)
 			try:
-				reply.data = yield from rpc.run(**msg.data)
+				if rpc.call_conv == CC_DICT:
+					a=(); k=msg.data
+				elif rpc.call_conv == CC_DATA:
+					a=(msg.data,); k={}
+				else:
+					a=(msg,); k={}
+				reply.data = yield from rpc.run(*a,**k)
 			except Exception as exc:
 				reply.set_error(exc, rpc.name,"reply")
 			reply = reply.dump()
 			reply = self.codec.encode(reply)
-			yield from rpc.channel.publish(reply, self.reply.exchange, msg.header.reply_to)
+			yield from rpc.channel.publish(reply, self.reply.exchange, msg.reply_to)
 		except Exception as exc:
-			logger.exception("problem with message: ",body)
+			logger.exception("problem with message: %s",body)
 			yield from rpc.channel.basic_reject(envelope.delivery_tag)
 		else:
 			yield from rpc.channel.basic_client_ack(envelope.delivery_tag)
@@ -150,31 +155,32 @@ class Connection(object):
 		try:
 			msg = self.codec.decode(body)
 			msg = BaseMsg.load(msg)
-			f,req = self.replies[msg.header.message_id]
+			f,req = self.replies[msg.in_reply_to]
 			try:
 				yield from req.recv_reply(f,msg)
-			except Exception:
+			except Exception as exc:
 				if not f.done():
 					f.set_exception(exc)
 		except Exception as exc:
-			yield from rpc.channel.basic_reject(envelope.delivery_tag)
+			yield from self.reply.channel.basic_reject(envelope.delivery_tag)
 			logger.exception("problem receiving message: %s",body)
 		else:
-			yield from rpc.channel.basic_client_ack(envelope.delivery_tag)
+			yield from self.reply.channel.basic_client_ack(envelope.delivery_tag)
 
 	@asyncio.coroutine
 	def call(self,msg, timeout=None):
+		cfg = self.unit().config['amqp']
 		if timeout is None:
-			if isinstance(msg,PollMsg):
-				timeout = float(self.unit().config['amqp']['timeout']['poll'])
-			elif isinstance(msg,RequestMsg):
-				timeout = float(self.unit().config['amqp']['timeout']['rpc'])
+			timeout = self.unit().config['amqp']['timeout'].get(msg._timer,None)
+			if timeout is not None:
+				timeout = float(timeout)
 		assert isinstance(msg,_RequestMsg)
 		data = msg.dump()
 		data = self.codec.encode(data)
 		f = asyncio.Future()
 		id = msg.message_id
 		self.replies[id] = (f,msg)
+		yield from getattr(self,msg._exchange).channel.publish(data, cfg['exchanges'][msg._exchange], msg.name)
 		try:
 			yield from asyncio.wait_for(f,timeout)
 		except asyncio.TimeoutError:
