@@ -64,6 +64,15 @@ class _MsgPart(object, metaclass=FieldCollect):
 			if v is not _NOTGIVEN:
 				setattr(self, _fmap[f], v)
 
+	def __eq__(self, other):
+		for f in "type version data error".split(): # self.fields:
+			a = getattr(self, f, _NOTGIVEN)
+			b = getattr(other, f, _NOTGIVEN)
+			if a == b:
+				continue
+			return False # pragma: no cover
+		return True
+
 class ReturnedError(RuntimeError):
 	def __init__(self,err=None,msg=None):
 		self.error = err
@@ -73,7 +82,7 @@ class ReturnedError(RuntimeError):
 		return self.error.message
 
 class MsgError(_MsgPart):
-	fields = "status id part message"
+	fields = "status id part message cls"
 
 	def __init__(self, data=None):
 		if data is not None:
@@ -85,7 +94,7 @@ class MsgError(_MsgPart):
 			return False
 		if self.status in ('error','fail'):
 			return True
-		raise RuntimeError("Unknown error status: "+str(self.status))
+		raise RuntimeError("Unknown error status: "+str(self.status)) # pragma: no cover
 	
 	@classmethod
 	def build(cls, exc, eid,part, fail=False):
@@ -93,6 +102,7 @@ class MsgError(_MsgPart):
 		obj.status = "fail" if fail else "error"
 		obj.eid = eid
 		obj.part = part
+		obj.cls = exc.__class__.__name__
 		obj.message = str(exc)
 		return obj
 
@@ -114,6 +124,9 @@ class BaseMsg(_MsgPart):
 			super(BaseMsg,self)._load(hdr)
 		if not hasattr(self,'message_id'):
 			self.message_id = uuidstr()
+
+	def __repr__(self):
+		return "%s._load(%s)" % (self.__class__.__name__, repr(self.dump()))
 
 	def dump(self):
 		obj = { 'header': super().dump() }

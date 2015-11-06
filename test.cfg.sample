@@ -10,3 +10,10 @@ config:
       login: test
       password: test
       virtualhost: /test
+  specific:
+    test:
+      no_port:
+        config:
+          amqp:
+            server:
+              port: 65530

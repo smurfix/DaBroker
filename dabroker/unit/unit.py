@@ -34,12 +34,10 @@ logger = logging.getLogger(__name__)
 class _NOTGIVEN:
 	pass
 
-_units = {}
-
 # helper for recursive dict.[set]default()
 def _r_setdefault(d,kv):
 	for k,v in kv.items():
-		if isinstance(v,mtValue):
+		if isinstance(v,mtValue): # pragma: no cover
 			v = v.value
 		try:
 			dk = d[k]
@@ -61,15 +59,7 @@ class Unit(object):
 	rpc_endpoints = None # RPC listeners
 	alert_endpoints = None # 
 
-	def __new__(cls, app, cfg, **kw):
-		self = _units.get(app, None)
-		if self is not None:
-			return self
-		return super(Unit,cls).__new__(cls)
-
 	def __init__(self, app, cfg, **kw):
-		if app in _units:
-			return
 		self.app = app
 
 		self.config = self._get_config(cfg, **kw)
@@ -84,7 +74,6 @@ class Unit(object):
 		self.register_rpc("dabroker.ping",self._reply_ping)
 
 		yield from self._create_conn()
-		_units[self.app] = self
 	
 	@asyncio.coroutine
 	def stop(self):
@@ -92,10 +81,9 @@ class Unit(object):
 		if c:
 			try:
 				yield from c.close()
-			except Exception:
+			except Exception: # pragma: no cover
 				logger.exception("closing connection")
 		self._kill()
-		
 	
 	## client
 
@@ -221,22 +209,23 @@ class Unit(object):
 		from etctree import client as etcd_client
 		self.etcd = etcd_client(cfg)
 		self.cfgtree = self.etcd.tree("/config", immediate=True)
-		if 'specific' in self.cfgtree:
-			specs = []
-			try:
-				spectree = self.cfgtree['specific']
-				for part in self.app.split('.'):
-					spectree = spectree[part]
-					specs.append(spectree)
-			except KeyError:
-				pass
-			for tree in specs:
+		for s in (cfg['config'], self.cfgtree):
+			if 'specific' in s:
+				specs = []
 				try:
-					tree = tree.config
+					spectree = s['specific']
+					for part in self.app.split('.'):
+						spectree = spectree[part]
+						specs.append(spectree)
 				except KeyError:
 					pass
-				else:
-					_r_setdefault(cfg,tree)
+				for tree in specs:
+					try:
+						tree = tree['config']
+					except KeyError:
+						pass
+					else:
+						_r_setdefault(cfg.config,tree)
 
 		_r_setdefault(cfg.config,self.cfgtree)
 		_r_setdefault(cfg.config,DEFAULT_CONFIG)

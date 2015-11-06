@@ -106,18 +106,25 @@ class Connection(object):
 			msg = self.codec.decode(body)
 			msg = BaseMsg.load(msg)
 			rpc = self.alerts[msg.name]
+			if rpc.call_conv == CC_DICT:
+				a=(); k=msg.data
+			elif rpc.call_conv == CC_DATA:
+				a=(msg.data,); k={}
+			else:
+				a=(msg,); k={}
+
 			reply_to = getattr(msg, 'reply_to',None)
 			if reply_to:
 				reply = ResponseMsg(msg)
 				try:
-					reply.data = yield from rpc.run(**msg.data)
+					reply.data = yield from rpc.run(*a,**k)
 				except Exception as exc:
 					reply.set_error(exc, rpc.name,"reply")
 				reply = reply.dump()
 				reply = self.codec.encode(reply)
 				yield from self.reply.channel.publish(reply, self.reply.exchange, reply_to)
 			else:
-				yield from rpc.run(msg)
+				yield from rpc.run(*a,**k)
 		except Exception as exc:
 			logger.exception("problem receiving message: %s",body)
 			yield from self.alert.channel.basic_reject(envelope.delivery_tag)
@@ -171,16 +178,21 @@ class Connection(object):
 	def call(self,msg, timeout=None):
 		cfg = self.unit().config['amqp']
 		if timeout is None:
-			timeout = self.unit().config['amqp']['timeout'].get(msg._timer,None)
-			if timeout is not None:
-				timeout = float(timeout)
+			tn = getattr(msg,'_timer',None)
+			if tn is not None:
+				timeout = self.unit().config['amqp']['timeout'].get(tn,None)
+				if timeout is not None:
+					timeout = float(timeout)
 		assert isinstance(msg,_RequestMsg)
 		data = msg.dump()
 		data = self.codec.encode(data)
-		f = asyncio.Future()
-		id = msg.message_id
-		self.replies[id] = (f,msg)
+		if timeout is not None:
+			f = asyncio.Future()
+			id = msg.message_id
+			self.replies[id] = (f,msg)
 		yield from getattr(self,msg._exchange).channel.publish(data, cfg['exchanges'][msg._exchange], msg.name)
+		if timeout is None:
+			return
 		try:
 			yield from asyncio.wait_for(f,timeout)
 		except asyncio.TimeoutError:
