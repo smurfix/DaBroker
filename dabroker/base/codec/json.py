@@ -43,6 +43,8 @@ class RawCodec(object):
 		return data
 	
 	def decode(self, data):
+		if isinstance(data,bytes):
+			data = data.decode('utf-8')
 		msg = loads(data)
 		logger.info("IN  %s",msg)
 		return msg
