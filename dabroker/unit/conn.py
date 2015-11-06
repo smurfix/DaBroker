@@ -78,14 +78,17 @@ class Connection(object):
 		logger.debug("setup RPC for %s",name)
 		ch.channel = yield from self.amqp.channel()
 		ch.exchange = cfg['exchanges'][name]
+		logging.debug("Chan %s: exchange %s", ch.channel,cfg['exchanges'][name])
 		yield from ch.channel.exchange_declare(cfg['exchanges'][name], typ, auto_delete=False, passive=False)
 
 		if q is not None:
 			assert callback is not None
 			ch.queue = yield from ch.channel.queue_declare(cfg['queues'][name]+q, auto_delete=True, passive=False, exclusive=exclusive)
 			yield from ch.channel.basic_qos(prefetch_count=1,prefetch_size=0,connection_global=False)
+			logging.debug("Chan %s: read %s", ch.channel,cfg['queues'][name]+q)
 			yield from ch.channel.basic_consume(cfg['queues'][name]+q, callback=callback)
 			if route_key is not None:
+				logging.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges'][name], route_key, ch.queue['queue'])
 				yield from ch.channel.queue_bind(ch.queue['queue'], cfg['exchanges'][name], routing_key=route_key)
 		else:
 			assert callback is None
@@ -102,6 +105,7 @@ class Connection(object):
 
 	@asyncio.coroutine
 	def _on_alert(self, body,envelope,properties):
+		logger.debug("read alert message %s",envelope.delivery_tag)
 		try:
 			msg = self.codec.decode(body)
 			msg = BaseMsg.load(msg)
@@ -126,13 +130,15 @@ class Connection(object):
 			else:
 				yield from rpc.run(*a,**k)
 		except Exception as exc:
-			logger.exception("problem receiving message: %s",body)
+			logger.exception("problem with message %s: %s", envelope.delivery_tag, body)
 			yield from self.alert.channel.basic_reject(envelope.delivery_tag)
 		else:
+			logger.debug("ack message %s",envelope.delivery_tag)
 			yield from self.alert.channel.basic_client_ack(envelope.delivery_tag)
 
 	@asyncio.coroutine
 	def _on_rpc(self, rpc, body,envelope,properties):
+		logger.debug("read rpc message %s",envelope.delivery_tag)
 		try:
 			msg = self.codec.decode(body)
 			msg = BaseMsg.load(msg)
@@ -152,13 +158,15 @@ class Connection(object):
 			reply = self.codec.encode(reply)
 			yield from rpc.channel.publish(reply, self.reply.exchange, msg.reply_to)
 		except Exception as exc:
-			logger.exception("problem with message: %s",body)
+			logger.exception("problem with message %s: %s", envelope.delivery_tag, body)
 			yield from rpc.channel.basic_reject(envelope.delivery_tag)
 		else:
+			logger.debug("ack message %s",envelope.delivery_tag)
 			yield from rpc.channel.basic_client_ack(envelope.delivery_tag)
 
 	@asyncio.coroutine
 	def _on_reply(self, body,envelope,properties):
+		logger.debug("read reply message %s",envelope.delivery_tag)
 		try:
 			msg = self.codec.decode(body)
 			msg = BaseMsg.load(msg)
@@ -170,8 +178,9 @@ class Connection(object):
 					f.set_exception(exc)
 		except Exception as exc:
 			yield from self.reply.channel.basic_reject(envelope.delivery_tag)
-			logger.exception("problem receiving message: %s",body)
+			logger.exception("problem with message %s: %s", envelope.delivery_tag, body)
 		else:
+			logger.debug("ack message %s",envelope.delivery_tag)
 			yield from self.reply.channel.basic_client_ack(envelope.delivery_tag)
 
 	@asyncio.coroutine
@@ -190,6 +199,7 @@ class Connection(object):
 			f = asyncio.Future()
 			id = msg.message_id
 			self.replies[id] = (f,msg)
+		logger.debug("Send %s to %s: %s", msg.name, cfg['exchanges'][msg._exchange], data)
 		yield from getattr(self,msg._exchange).channel.publish(data, cfg['exchanges'][msg._exchange], msg.name)
 		if timeout is None:
 			return
@@ -210,15 +220,18 @@ class Connection(object):
 		assert rpc.queue is None
 		rpc.channel = yield from self.amqp.channel()
 		rpc.queue = yield from rpc.channel.queue_declare(cfg['queues']['rpc']+rpc.name.replace('.','_'), auto_delete=True, passive=False)
+		logging.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges']['rpc'], rpc.name, rpc.queue['queue'])
 		yield from rpc.channel.queue_bind(rpc.queue['queue'], cfg['exchanges']['rpc'], routing_key=rpc.name)
 
 		yield from rpc.channel.basic_qos(prefetch_count=1,prefetch_size=0,connection_global=False)
+		logging.debug("Chan %s: read %s", rpc.channel,rpc.queue['queue'])
 		yield from rpc.channel.basic_consume(rpc.queue['queue'], callback=functools.partial(self._on_rpc,rpc))
 
 	@asyncio.coroutine
 	def register_alert(self,rpc):
 		ch = self.alert
 		cfg = self.unit().config['amqp']
+		logging.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges']['rpc'], rpc.name, ch.exchange)
 		yield from ch.channel.queue_bind(ch.queue['queue'], ch.exchange, routing_key=rpc.name)
 		self.alerts[rpc.name] = rpc
 

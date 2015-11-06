@@ -56,22 +56,20 @@ class Unit(object):
 	conn = None # AMQP receiver
 	uuid = None # my UUID
 
-	rpc_endpoints = None # RPC listeners
-	alert_endpoints = None # 
-
 	def __init__(self, app, cfg, **kw):
 		self.app = app
 
 		self.config = self._get_config(cfg, **kw)
 
-	@asyncio.coroutine
-	def start(self):
 		self.rpc_endpoints = {}
 		self.alert_endpoints = {}
-		self.uuid = uuidstr()
 
 		self.register_alert("dabroker.ping",self._alert_ping)
 		self.register_rpc("dabroker.ping",self._reply_ping)
+
+	@asyncio.coroutine
+	def start(self):
+		self.uuid = uuidstr()
 
 		yield from self._create_conn()
 	
@@ -161,6 +159,7 @@ class Unit(object):
 				return reg_async(fn,epl)
 			else:
 				assert self.conn is None,"Use register_rpc_async when online"
+			epl[name] = fn
 			return fn.fn
 		assert len(a) <= 2
 		if len(a) == 0:

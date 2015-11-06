@@ -16,6 +16,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 
 from gevent import spawn,sleep,GreenletExit
 from weakref import ref, WeakValueDictionary
+from yaml import safe_load
 
 import logging,sys,os
 logger = logging.getLogger("tests")
@@ -30,6 +31,24 @@ def test_init(who):
 	logging.basicConfig(stream=sys.stderr,level=level)
 
 	return logger
+
+def load_cfg(cfg):
+	"""load a config file"""
+	global cfgpath
+	if os.path.exists(cfg):
+		pass
+	elif os.path.exists(os.path.join("tests",cfg)):
+		cfg = os.path.join("tests",cfg)
+	elif os.path.exists(os.path.join(os.pardir,cfg)):
+		cfg = os.path.join(os.pardir,cfg)
+	else:
+		raise RuntimeError("Config file '%s' not found" % (cfg,))
+
+	cfgpath = cfg
+	with open(cfg) as f:
+		cfg = safe_load(f)
+
+	return cfg
 
 # reduce cache sizes and timers
 

@@ -18,27 +18,9 @@ import os
 import asyncio
 from dabroker.unit import Unit, CC_DICT,CC_DATA
 from dabroker.unit.msg import ReturnedError,AlertMsg
-from yaml import safe_load
+from dabroker.util.tests import load_cfg
 import unittest
 from unittest.mock import Mock
-
-# load a config file
-def load_cfg(cfg):
-	global cfgpath
-	if os.path.exists(cfg):
-		pass
-	elif os.path.exists(os.path.join("tests",cfg)):
-		cfg = os.path.join("tests",cfg)
-	elif os.path.exists(os.path.join(os.pardir,cfg)):
-		cfg = os.path.join(os.pardir,cfg)
-	else:
-		raise RuntimeError("Config file '%s' not found" % (cfg,))
-
-	cfgpath = cfg
-	with open(cfg) as f:
-		cfg = safe_load(f)
-
-	return cfg
 
 def test_basic():
 	cfg = load_cfg("test.cfg")
