@@ -13,15 +13,23 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ##BP
 
 import asyncio
+from time import time
 
 from . import CC_MSG,CC_DICT,CC_DATA
 from ..util import uuidstr
+from aioamqp.properties import Properties
 
 class _NOTGIVEN:
 	pass
 
 _types = {}
-_fmap = {}
+_fmap = {
+	}
+def fmap(s):
+	r = _fmap.get(s,_NOTGIVEN)
+	if r is _NOTGIVEN:
+		_fmap[s] = r = s.replace('-','_')
+	return r
 
 class FieldCollect(type):
 	def __new__(meta, name, bases, dct):
@@ -37,10 +45,6 @@ class FieldCollect(type):
 			s.update(b)
 		dct['fields'] = s
 
-		# map them, so that obj.field_name goes to field-name
-		for n in s:
-			_fmap[n] = n.replace('-','_')
-
 		res = super(FieldCollect, meta).__new__(meta, name, bases, dct)
 		t = dct.get('type',None)
 		if t is not None:
@@ -53,16 +57,16 @@ class _MsgPart(object, metaclass=FieldCollect):
 		obj = {}
 		for f in self.fields:
 			try:
-				obj[f] = getattr(self, _fmap[f])
+				obj[f] = getattr(self, fmap(f))
 			except AttributeError:
 				pass
 		return obj
 	
-	def _load(self, data):
+	def _load(self, props):
 		for f in self.fields:
-			v = data.get(f,_NOTGIVEN)
+			v = props.headers.get(f,_NOTGIVEN)
 			if v is not _NOTGIVEN:
-				setattr(self, _fmap[f], v)
+				setattr(self, fmap(f), v)
 
 	def __eq__(self, other):
 		for f in "type version data error".split(): # self.fields:
@@ -86,7 +90,8 @@ class MsgError(_MsgPart):
 
 	def __init__(self, data=None):
 		if data is not None:
-			self._load(data)
+			for f,v in data.items():
+				setattr(self,fmap(f),v)
 
 	@property
 	def failed(self):
@@ -126,32 +131,51 @@ class BaseMsg(_MsgPart):
 			self.message_id = uuidstr()
 
 	def __repr__(self):
-		return "%s._load(%s)" % (self.__class__.__name__, repr(self.dump()))
+		return "%s._load(%s)" % (self.__class__.__name__, repr(self.__dict__()))
 
-	def dump(self):
-		obj = { 'header': super().dump() }
-		if self.data is not None:
-			obj['data'] = self.data
+	def dump(self,conn):
+		props = Properties()
+		obj = super().dump()
+		for f in 'type message-id reply-to correlation-id'.split(' '):
+			m = obj.pop(f,None)
+			if m is not None:
+				setattr(props,fmap(f), m)
+		props.timestamp = int(time())
+		props.user_id = conn.cfg['login']
+		props.content_type = conn.mime_type
+		props.app_id = conn.unit().uuid
 		if self.error is not None:
 			obj['error'] = self.error.dump()
-		return obj
+		if obj:
+			props.headers = obj
+
+		data = self.data
+		if data is None:
+			data = ""
+		return data,props
 
 	def set_error(self, *a, **k):
 		self.error = MsgError.build(*a,**k)
 
 	@staticmethod
-	def load(data):
-		t = data['header']['type']
-		return _types[t]._load(data)
+	def load(data,props):
+		t = props.type
+		res = _types[t]._load(data,props)
+
+		for f in 'type message-id reply-to user-id timestamp content-type app-id correlation-id'.split(' '):
+			ff = fmap(f)
+			m = getattr(props,ff,_NOTGIVEN)
+			if m is not _NOTGIVEN:
+				setattr(res,ff,m)
+		return res
 
 	@classmethod
-	def _load(cls, msg):
+	def _load(cls, msg,props):
 		obj = cls()
-		super(BaseMsg,obj)._load(msg['header'])
-		if 'data' in msg:
-			obj.data = msg['data']
-		if 'error' in msg:
-			obj.error = MsgError(msg['error'])
+		super(BaseMsg,obj)._load(props)
+		obj.data = msg
+		if 'error' in props.headers:
+			obj.error = MsgError(props.headers['error'])
 		return obj
 
 	@property
@@ -239,10 +263,10 @@ class PollMsg(AlertMsg):
 
 class ResponseMsg(BaseMsg):
 	type = "reply"
-	fields = "in-reply-to"
+	fields = "correlation-id"
 
 	def __init__(self,request=None, data=None):
 		super().__init__(data=data)
 		if request is not None:
-			self.in_reply_to = request.message_id
+			self.correlation_id = request.message_id
 

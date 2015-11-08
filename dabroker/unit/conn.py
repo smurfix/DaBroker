@@ -108,7 +108,7 @@ class Connection(object):
 		logger.debug("read alert message %s",envelope.delivery_tag)
 		try:
 			msg = self.codec.decode(body)
-			msg = BaseMsg.load(msg)
+			msg = BaseMsg.load(msg,properties)
 			rpc = self.alerts[msg.name]
 			if rpc.call_conv == CC_DICT:
 				a=(); k=msg.data
@@ -124,9 +124,12 @@ class Connection(object):
 					reply.data = yield from rpc.run(*a,**k)
 				except Exception as exc:
 					reply.set_error(exc, rpc.name,"reply")
-				reply = reply.dump()
-				reply = self.codec.encode(reply)
-				yield from self.reply.channel.publish(reply, self.reply.exchange, reply_to)
+				reply,props = reply.dump(self)
+				if reply == "":
+					reply = "0"
+				else:
+					reply = self.codec.encode(reply)
+				yield from self.reply.channel.publish(reply, self.reply.exchange, reply_to, properties=props)
 			else:
 				yield from rpc.run(*a,**k)
 		except Exception as exc:
@@ -141,7 +144,7 @@ class Connection(object):
 		logger.debug("read rpc message %s",envelope.delivery_tag)
 		try:
 			msg = self.codec.decode(body)
-			msg = BaseMsg.load(msg)
+			msg = BaseMsg.load(msg,properties)
 			assert msg.name == rpc.name, (msg.name, rpc.name)
 			reply = ResponseMsg(msg)
 			try:
@@ -154,9 +157,12 @@ class Connection(object):
 				reply.data = yield from rpc.run(*a,**k)
 			except Exception as exc:
 				reply.set_error(exc, rpc.name,"reply")
-			reply = reply.dump()
-			reply = self.codec.encode(reply)
-			yield from rpc.channel.publish(reply, self.reply.exchange, msg.reply_to)
+			reply,props = reply.dump(self)
+			if reply == "":
+				reply = "0"
+			else:
+				reply = self.codec.encode(reply)
+			yield from rpc.channel.publish(reply, self.reply.exchange, msg.reply_to, properties=props)
 		except Exception as exc:
 			logger.exception("problem with message %s: %s", envelope.delivery_tag, body)
 			yield from rpc.channel.basic_reject(envelope.delivery_tag)
@@ -169,8 +175,8 @@ class Connection(object):
 		logger.debug("read reply message %s",envelope.delivery_tag)
 		try:
 			msg = self.codec.decode(body)
-			msg = BaseMsg.load(msg)
-			f,req = self.replies[msg.in_reply_to]
+			msg = BaseMsg.load(msg,properties)
+			f,req = self.replies[msg.correlation_id]
 			try:
 				yield from req.recv_reply(f,msg)
 			except Exception as exc:
@@ -193,14 +199,17 @@ class Connection(object):
 				if timeout is not None:
 					timeout = float(timeout)
 		assert isinstance(msg,_RequestMsg)
-		data = msg.dump()
-		data = self.codec.encode(data)
+		data,props = msg.dump(self)
+		if data == "":
+			data = "0"
+		else:
+			data = self.codec.encode(data)
 		if timeout is not None:
 			f = asyncio.Future()
 			id = msg.message_id
 			self.replies[id] = (f,msg)
 		logger.debug("Send %s to %s: %s", msg.name, cfg['exchanges'][msg._exchange], data)
-		yield from getattr(self,msg._exchange).channel.publish(data, cfg['exchanges'][msg._exchange], msg.name)
+		yield from getattr(self,msg._exchange).channel.publish(data, cfg['exchanges'][msg._exchange], msg.name, properties=props)
 		if timeout is None:
 			return
 		try:

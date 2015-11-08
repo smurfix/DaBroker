@@ -111,7 +111,6 @@ class Unit(object):
 			msg = PollMsg(name, self, data=data, callback=callback,call_conv=call_conv)
 		else:
 			msg = AlertMsg(name, self, data=data)
-		data = msg.dump()
 		res = yield from self.conn.call(msg, timeout=timeout)
 		return res
 		
