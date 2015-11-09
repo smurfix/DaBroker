@@ -16,7 +16,7 @@ import pytest
 import pytest_asyncio.plugin
 import os
 import asyncio
-from dabroker.unit import Unit, CC_DICT,CC_DATA
+from dabroker.unit import Unit, CC_DICT,CC_DATA,CC_MSG
 from dabroker.unit.msg import ReturnedError,AlertMsg
 from dabroker.util.tests import load_cfg
 import unittest
@@ -57,13 +57,39 @@ def test_conn_not(event_loop):
 @pytest.mark.asyncio
 def test_rpc_basic(unit1, unit2, event_loop):
 	call_me = Mock(side_effect=lambda x: "foo "+x)
+	call_msg = Mock(side_effect=lambda m: "foo "+m.data['x'])
 	yield from unit1.register_rpc("my.call",call_me, async=True,call_conv=CC_DATA)
+	yield from unit1.register_rpc("my.call.x",call_me, async=True,call_conv=CC_DICT)
+	yield from unit1.register_rpc("my.call.m",call_msg, async=True,call_conv=CC_MSG)
 	res = yield from unit2.rpc("my.call", "one")
 	assert res == "foo one"
 	res = yield from unit1.rpc("my.call", "two")
 	assert res == "foo two"
 	with pytest.raises(ReturnedError):
 		res = yield from unit1.rpc("my.call", x="two")
+	res = yield from unit1.rpc("my.call.x", x="three")
+	assert res == "foo three"
+	with pytest.raises(ReturnedError):
+		res = yield from unit1.rpc("my.call", y="duh")
+	res = yield from unit1.rpc("my.call.m", x="four")
+	assert res == "foo four"
+
+@pytest.mark.asyncio
+def test_rpc_unencoded(unit1, unit2, event_loop):
+	call_me = Mock(side_effect=lambda : object())
+	yield from unit1.register_rpc("my.call",call_me, async=True,call_conv=CC_DICT)
+	try:
+		r = unit2.rpc("my.call")
+		r = yield from asyncio.wait_for(r, timeout=0.2)
+	except ReturnedError as exc:
+		import pdb;pdb.set_trace()
+		assert False,"should not reply"
+	except asyncio.TimeoutError:
+		pass
+	except Exception as exc:
+		assert False,exc
+	else:
+		assert False,r
 
 def something_named(foo):
 	return "bar "+foo
@@ -101,6 +127,15 @@ def test_alert_callback(unit1, unit2, event_loop):
 	n = 0
 	yield from unit1.alert("my.alert",_data={'y':"dud"},callback=cb,call_conv=CC_DATA, timeout=0.2)
 	assert n == 2
+
+@pytest.mark.asyncio
+def test_alert_uncodeable(unit1, unit2, event_loop):
+	alert_me = Mock(side_effect=lambda : object())
+	yield from unit1.register_alert("my.alert",alert_me, async=True,call_conv=CC_DICT)
+	def cb(msg):
+		assert False,"Called?"
+	n = yield from unit2.alert("my.alert",callback=cb, timeout=0.2)
+	assert n == 0
 
 @pytest.mark.asyncio
 def test_alert_oneway(unit1, unit2, event_loop):
@@ -154,6 +189,22 @@ def test_alert_stop(unit1, unit2, event_loop):
 	assert res == 1
 
 @pytest.mark.asyncio
+def test_reg(unit1, unit2, event_loop):
+	def recv(**d):
+		if d['uuid'] == unit1.uuid:
+			assert d['app'] == unit1.app
+		elif d['uuid'] == unit2.uuid:
+			assert d['app'] == unit2.app
+		else:
+			assert False,d
+	res = yield from unit2.alert("dabroker.ping", callback=recv, timeout=0.2, call_conv=CC_DICT)
+	assert res == 2
+
+	res = yield from unit2.rpc("dabroker.ping."+unit1.uuid)
+	assert res['app'] == unit1.app
+	assert "dabroker.ping."+unit1.uuid in res['rpc_endpoints']
+
+@pytest.mark.asyncio
 def test_alert_error(unit1, unit2, event_loop):
 	def err(x):
 		raise RuntimeError("dad")
@@ -193,4 +244,24 @@ def test_rpc_bad_params(unit1, unit2, event_loop):
 	else:
 		assert False,"exception not called"
 	
+def test_reg_sync(event_loop):
+	cfg = load_cfg("test.cfg")
+	u = Unit("test.three", cfg)
+	@u.register_rpc("foo.bar")
+	def foo_bar_0(msg):
+		return "quux from "+msg.data['baz']
+	@u.register_rpc
+	def foo_bar_1(msg):
+		return "quux from "+msg.data['baz']
+	@u.register_rpc(call_conv=CC_DICT)
+	def foo_bar_2(baz):
+		return "quux from "+baz
+	event_loop.run_until_complete(u.start())
+	x = event_loop.run_until_complete(u.rpc("foo.bar",baz="nixx"))
+	y = event_loop.run_until_complete(u.rpc("foo.bar.1",baz="nixy"))
+	z = event_loop.run_until_complete(u.rpc("foo.bar.2",baz="nixz"))
+	assert x == "quux from nixx"
+	assert y == "quux from nixy"
+	assert z == "quux from nixz"
+	event_loop.run_until_complete(u.stop())
 

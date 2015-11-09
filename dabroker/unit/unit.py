@@ -65,16 +65,19 @@ class Unit(object):
 		self.alert_endpoints = {}
 
 		self.register_alert("dabroker.ping",self._alert_ping)
-		self.register_rpc("dabroker.ping",self._reply_ping)
 
 	@asyncio.coroutine
 	def start(self):
 		self.uuid = uuidstr()
 
+		self.register_rpc("dabroker.ping."+self.uuid, self._reply_ping)
+
 		yield from self._create_conn()
 	
 	@asyncio.coroutine
 	def stop(self):
+		self.rpc_endpoints.pop("dabroker.ping."+self.uuid, None)
+
 		c,self.conn = self.conn,None
 		if c:
 			try:
@@ -179,21 +182,21 @@ class Unit(object):
 		return self.register_rpc(*a, async=async, alert=True, call_conv=call_conv)
 
 	def _alert_ping(self,msg):
-		msg.reply(dict(
+		return dict(
 			app=self.app,
-			recv_id=self.uuid,
-			))
+			uuid=self.uuid,
+			)
 
 	def _reply_ping(self,msg):
-		msg.reply(dict(
+		return dict(
 			app=self.app,
-			recv_id=self.uuid,
+			uuid=self.uuid,
 			rpc_endpoints=list(self.rpc_endpoints.keys())
-			))
+			)
 		
 	def _get_config(self, cfg, **kw):
 		"""Read config data from cfg and etcd"""
-		if not isinstance(cfg,dict): # pragma: no branch
+		if not isinstance(cfg,dict): # pragma: no cover
 			from etctree.util import from_yaml
 			cfg = from_yaml(cfg)
 		_r_setdefault(kw,cfg)
@@ -201,7 +204,7 @@ class Unit(object):
 
 		if 'amqp' in cfg.config:
 			self.config = cfg.config.amqp
-		else:
+		else: # pragma: no cover
 			cfg.config.amqp = self.config = {}
 
 		from etctree import client as etcd_client
@@ -245,7 +248,7 @@ class Unit(object):
 
 	def _kill_conn(self):
 		c,self.conn = self.conn,None
-		if c:
+		if c: # pragma: no cover
 			try:
 				c.close()
 			except Exception:

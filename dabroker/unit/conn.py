@@ -179,7 +179,7 @@ class Connection(object):
 			f,req = self.replies[msg.correlation_id]
 			try:
 				yield from req.recv_reply(f,msg)
-			except Exception as exc:
+			except Exception as exc: # pragma: no cover
 				if not f.done():
 					f.set_exception(exc)
 		except Exception as exc:
@@ -217,7 +217,7 @@ class Connection(object):
 		except asyncio.TimeoutError:
 			if isinstance(msg,PollMsg):
 				return msg.replies
-			raise
+			raise # pragma: no cover
 		finally:
 			del self.replies[id]
 		return f.result()
@@ -250,7 +250,7 @@ class Connection(object):
 		if a is not None:
 			try:
 				yield from a.close(timeout=1)
-			except Exception:
+			except Exception: # pragma: no cover
 				logger.exception("closing the connection")
 			self.amqp_transport = None
 
