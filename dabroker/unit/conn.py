@@ -17,7 +17,7 @@ import asyncio
 import aioamqp
 import functools
 
-from .msg import _RequestMsg,PollMsg,RequestMsg,BaseMsg,ResponseMsg
+from .msg import _RequestMsg,PollMsg,RequestMsg,BaseMsg
 from .rpc import CC_DICT,CC_DATA
 from ..util import import_string
 
@@ -119,7 +119,7 @@ class Connection(object):
 
 			reply_to = getattr(msg, 'reply_to',None)
 			if reply_to:
-				reply = ResponseMsg(msg)
+				reply = msg.make_response()
 				try:
 					reply.data = yield from rpc.run(*a,**k)
 				except Exception as exc:
@@ -146,7 +146,7 @@ class Connection(object):
 			msg = self.codec.decode(body)
 			msg = BaseMsg.load(msg,properties)
 			assert msg.name == rpc.name, (msg.name, rpc.name)
-			reply = ResponseMsg(msg)
+			reply = msg.make_response()
 			try:
 				if rpc.call_conv == CC_DICT:
 					a=(); k=msg.data

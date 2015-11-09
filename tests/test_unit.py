@@ -119,6 +119,62 @@ def test_alert_oneway(unit1, unit2, event_loop):
 	alert_me3.assert_called_with(AlertMsg(data=dict(y='dud')))
 
 @pytest.mark.asyncio
+def test_alert_no_data(unit1, unit2, event_loop):
+	alert_me1 = Mock(side_effect=lambda x: "")
+	alert_me2 = Mock(side_effect=lambda : {})
+	yield from unit1.register_alert("my.alert1",alert_me1, async=True,call_conv=CC_DATA)
+	yield from unit2.register_alert("my.alert2",alert_me2, async=True,call_conv=CC_DICT)
+	def recv1(d):
+		assert d == 0
+	@asyncio.coroutine
+	def recv2(*a,**k):
+		yield from asyncio.sleep(0.01)
+		assert not a
+		assert not k
+		return {}
+	res = yield from unit2.alert("my.alert1",_data="", callback=recv1, call_conv=CC_DATA, timeout=0.2)
+	alert_me1.assert_called_with(0)
+	assert res == 1
+	res = yield from unit2.alert("my.alert2", callback=recv2, call_conv=CC_DICT, timeout=0.2)
+	alert_me2.assert_called_with()
+	assert res == 1
+
+@pytest.mark.asyncio
+def test_alert_stop(unit1, unit2, event_loop):
+	@asyncio.coroutine
+	def sleep1():
+		yield from asyncio.sleep(0.1)
+	def sleep2():
+		yield from asyncio.sleep(0.2)
+	yield from unit1.register_alert("my.sleep",sleep1, async=True)
+	yield from unit2.register_alert("my.sleep",sleep2, async=True)
+	def recv(msg):
+		raise StopIteration
+	res = yield from unit2.alert("my.sleep",_data="", callback=recv, timeout=0.15)
+	assert res == 1
+
+@pytest.mark.asyncio
+def test_alert_error(unit1, unit2, event_loop):
+	def err(x):
+		raise RuntimeError("dad")
+	error_me1 = Mock(side_effect=err)
+	yield from unit1.register_alert("my.error1",error_me1, async=True, call_conv=CC_DATA)
+	def recv1(d):
+		assert d.error.cls == "RuntimeError"
+		assert d.error.message == "dad"
+	res = yield from unit2.alert("my.error1", _data="", callback=recv1, timeout=0.2)
+	error_me1.assert_called_with(0)
+	assert res == 1
+
+	res = yield from unit2.alert("my.error1", callback=recv1, call_conv=CC_DATA, timeout=0.2)
+	assert res == 0
+
+	def recv2(msg):
+		msg.raise_if_error()
+	with pytest.raises(ReturnedError):
+		yield from unit2.alert("my.error1", callback=recv2, timeout=0.2)
+
+@pytest.mark.asyncio
 def test_reg_error(unit1):
 	with pytest.raises(AssertionError):
 		yield from unit1.register_rpc("my.call",Mock())

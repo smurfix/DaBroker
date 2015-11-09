@@ -82,7 +82,7 @@ class ReturnedError(RuntimeError):
 		self.error = err
 		self.message = msg
 	
-	def __str__(self):
+	def __str__(self): # pragma: no cover
 		return self.error.message
 
 class MsgError(_MsgPart):
@@ -95,7 +95,7 @@ class MsgError(_MsgPart):
 
 	@property
 	def failed(self):
-		if self.status in ('ok','warn'):
+		if self.status in ('ok','warn'): # pragma: no cover ## XXX TODO
 			return False
 		if self.status in ('error','fail'):
 			return True
@@ -124,14 +124,12 @@ class BaseMsg(_MsgPart):
 	data = None
 	error = None
 
-	def __init__(self, data=None, hdr=None):
-		if hdr:
-			super(BaseMsg,self)._load(hdr)
+	def __init__(self, data=None):
 		if not hasattr(self,'message_id'):
 			self.message_id = uuidstr()
 
-	def __repr__(self):
-		return "%s._load(%s)" % (self.__class__.__name__, repr(self.__dict__()))
+	def __repr__(self): # pragma: no cover
+		return "%s._load(%s)" % (self.__class__.__name__, repr(self.__dict__))
 
 	def dump(self,conn):
 		props = Properties()
@@ -199,10 +197,10 @@ class _RequestMsg(BaseMsg):
 	def make_response(self, **data):
 		return ResponseMsg(self, **data)
 
-	def make_error_response(self, exc, eid,part, fail=False):
-		res = ResponseMsg(self)
-		res.error = MsgError.build(exc, eid,part)
-		return error
+#	def make_error_response(self, exc, eid,part, fail=False):
+#		res = ResponseMsg(self)
+#		res.error = MsgError.build(exc, eid,part)
+#		return error
 
 class RequestMsg(_RequestMsg):
 	type = "request"
@@ -244,16 +242,19 @@ class PollMsg(AlertMsg):
 	def recv_reply(self, f,msg):
 		"""Incoming reply. @f is the future to trigger when complete."""
 		try:
-			if self.call_conv == CC_DICT:
+			if self.call_conv == CC_MSG:
+				a=(msg,); k={}
+			elif msg.failed:
+				return # ignore error replies
+			elif self.call_conv == CC_DICT:
 				a=(); k=msg.data
 			elif self.call_conv == CC_DATA:
 				a=(msg.data,); k={}
-			else:
-				a=(msg,); k={}
-			if asyncio.iscoroutinefunction(self.callback):
-				yield from self.callback(*a,**k)
-			else:
-				self.callback(*a,**k)
+			else: # pragma: no cover
+				raise RuntimeError("Unknown encoding: %s"%self.call_conv) 
+			r = self.callback(*a,**k)
+			if asyncio.iscoroutine(r):
+				yield from r
 		except StopIteration:
 			f.set_result(self.replies+1)
 		except Exception as exc:
