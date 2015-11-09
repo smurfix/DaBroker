@@ -129,6 +129,7 @@ def test_alert_callback(unit1, unit2, event_loop):
 	assert n == 2
 
 @pytest.mark.asyncio
+<<<<<<< HEAD
 def test_alert_uncodeable(unit1, unit2, event_loop):
 	alert_me = Mock(side_effect=lambda : object())
 	yield from unit1.register_alert("my.alert",alert_me, async=True,call_conv=CC_DICT)
@@ -138,6 +139,8 @@ def test_alert_uncodeable(unit1, unit2, event_loop):
 	assert n == 0
 
 @pytest.mark.asyncio
+=======
+>>>>>>> iron/master
 def test_alert_oneway(unit1, unit2, event_loop):
 	alert_me1 = Mock()
 	alert_me2 = Mock()
@@ -152,6 +155,7 @@ def test_alert_oneway(unit1, unit2, event_loop):
 	alert_me1.assert_called_with(y='dud')
 	alert_me2.assert_called_with(dict(y='dud'))
 	alert_me3.assert_called_with(AlertMsg(data=dict(y='dud')))
+<<<<<<< HEAD
 
 @pytest.mark.asyncio
 def test_alert_no_data(unit1, unit2, event_loop):
@@ -233,6 +237,17 @@ def test_reg_error(unit1):
 		yield from unit1.register_alert("my.alert",Mock())
 
 @pytest.mark.asyncio
+=======
+
+@pytest.mark.asyncio
+def test_reg_error(unit1):
+	with pytest.raises(AssertionError):
+		yield from unit1.register_rpc("my.call",Mock())
+	with pytest.raises(AssertionError):
+		yield from unit1.register_alert("my.alert",Mock())
+
+@pytest.mark.asyncio
+>>>>>>> iron/master
 def test_rpc_bad_params(unit1, unit2, event_loop):
 	call_me = Mock(side_effect=lambda x: "foo "+x)
 	yield from unit1.register_rpc("my.call",call_me, async=True,call_conv=CC_DATA)
@@ -244,6 +259,7 @@ def test_rpc_bad_params(unit1, unit2, event_loop):
 	else:
 		assert False,"exception not called"
 	
+<<<<<<< HEAD
 def test_reg_sync(event_loop):
 	cfg = load_cfg("test.cfg")
 	u = Unit("test.three", cfg)
@@ -264,4 +280,6 @@ def test_reg_sync(event_loop):
 	assert y == "quux from nixy"
 	assert z == "quux from nixz"
 	event_loop.run_until_complete(u.stop())
+=======
+>>>>>>> iron/master
 
