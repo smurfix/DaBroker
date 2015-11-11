@@ -53,13 +53,14 @@ class Unit(object):
 	"""The basic DaBroker messenger. Singleton per app (normally)."""
 	etcd = None # etcd client
 	config = None # configuration data
+	cfgtree = None
 	conn = None # AMQP receiver
 	uuid = None # my UUID
 
 	def __init__(self, app, cfg, **kw):
 		self.app = app
-
-		self.config = self._get_config(cfg, **kw)
+		self._cfg = cfg
+		self._kw = kw
 
 		self.rpc_endpoints = {}
 		self.alert_endpoints = {}
@@ -69,6 +70,7 @@ class Unit(object):
 	@asyncio.coroutine
 	def start(self):
 		self.uuid = uuidstr()
+		self.config = self._get_config(self._cfg, **self._kw)
 
 		self.register_rpc("dabroker.ping."+self.uuid, self._reply_ping)
 
