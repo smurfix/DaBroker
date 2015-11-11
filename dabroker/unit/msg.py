@@ -77,15 +77,6 @@ class _MsgPart(object, metaclass=FieldCollect):
 			return False # pragma: no cover
 		return True
 
-	def __eq__(self, other):
-		for f in "type version data error".split(): # self.fields:
-			a = getattr(self, f, _NOTGIVEN)
-			b = getattr(other, f, _NOTGIVEN)
-			if a == b:
-				continue
-			return False # pragma: no cover
-		return True
-
 class ReturnedError(RuntimeError):
 	def __init__(self,err=None,msg=None):
 		self.error = err
