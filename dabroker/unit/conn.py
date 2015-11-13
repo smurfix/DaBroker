@@ -67,7 +67,7 @@ class Connection(object):
 		yield from self.setup_channels()
 
 	@asyncio.coroutine
-	def _setup_one(self,name,typ,callback=None, q=None, route_key=None, exclusive=False):
+	def _setup_one(self,name,typ,callback=None, q=None, route_key=None, exclusive=None):
 		"""\
 			Register
 			"""
@@ -79,6 +79,8 @@ class Connection(object):
 		ch.channel = yield from self.amqp.channel()
 		ch.exchange = cfg['exchanges'][name]
 		logging.debug("Chan %s: exchange %s", ch.channel,cfg['exchanges'][name])
+		if exclusive is None:
+			exclusive = (q is not None)
 		yield from ch.channel.exchange_declare(cfg['exchanges'][name], typ, auto_delete=False, passive=False)
 
 		if q is not None:
