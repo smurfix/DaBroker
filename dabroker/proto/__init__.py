@@ -17,6 +17,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 	"""
 import asyncio
 from time import time
+import weakref
 
 class Disconnected(BaseException):
 	pass
@@ -76,10 +77,13 @@ class ProtocolInteraction(object):
 			
 		"""
 
+	_conn = None
+
 	def __init__(self, *, loop=None, conn=None):
 		self._protocol = None
 		self._loop = loop if loop is not None else asyncio.get_event_loop()
-		self._conn = conn
+		if conn is not None:
+			self._conn = weakref.ref(conn)
 
 	@property
 	def paused(self): # pragma: no cover
@@ -95,7 +99,10 @@ class ProtocolInteraction(object):
 		"""\
 			If you submitted the connection while creating, you can run the interaction on this connection here.
 			"""
-		return self._conn.run(self,*a,**kw)
+		c = self._conn()
+		if c is None:
+			raise RuntimeError("Connection has gone away")
+		return c.run(self,*a,**kw)
 	run._is_coroutine = True
 
 
