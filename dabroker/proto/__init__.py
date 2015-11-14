@@ -16,6 +16,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 	This implements a bunch of mostly-generic protocol handling classes.
 	"""
 import asyncio
+from time import time
 
 class Disconnected(BaseException):
 	pass
@@ -29,7 +30,12 @@ class Protocol(asyncio.Protocol):
 
 	def close(self):
 		self.transport.close()
-	
+
+	def connection_made(self, transport):
+		#peername = transport.get_extra_info('peername')
+		#print('Connection from {}'.format(peername))
+		self.transport = transport
+
 	def connection_lost(self, exc):
 		if exc is None:
 			exc = Disconnected()
@@ -40,7 +46,7 @@ class Protocol(asyncio.Protocol):
 	def data_received(self, data):
 		"""Override this method to assemble and yield messages."""
 		try:
-			for m in self.received(self,data):
+			for m in self.received(data):
 				self.queue.put_nowait(m)
 		except BaseException as exc:
 			if not self.paused.done():
@@ -102,39 +108,46 @@ class ProtocolClient(object):
 		A generic streaming client, using multiple connections
 		"""
 	MAX_IDLE = 10
-    def __init__(self, host,port):
+	def __init__(self, protocol, host,port, loop=None):
 		self.protocol = protocol
-        self.host = host
-        self.port = port
-        self.conns = []
+		self.host = host
+		self.port = port
+		self.conns = []
+		self._loop = loop if loop is not None else asyncio.get_event_loop()
 
-    @asyncio.coroutine
-    def _get_conn(self):
-        now = time()
-        while self.conns:
-            ts,conn = conns.pop()
-            if ts > now-self.MAX_IDLE:
-                break
+	@asyncio.coroutine
+	def _get_conn(self):
+		now = time()
+		while self.conns:
+			ts,conn = conns.pop()
+			if ts > now-self.MAX_IDLE:
+				break
+			assert conn.queue.empty()
 			conn.close()
-        else:
-            conn = yield from loop.create_connection(self.protocol, self.host,self.port)
-        return conn
-        
-    @asyncio.coroutine
-    def run(self, interaction):
+		else:
+			_,conn = yield from self._loop.create_connection(self.protocol, self.host,self.port)
+		return conn
+		
+	def _put_conn(self,conn):
+		self.conns.append((time(),conn))
+
+	@asyncio.coroutine
+	def run(self, interaction, *a,**k):
 		"""\
 			Run the interaction on this connection.
 			"""
-        conn = yield from self._get_conn()
-        try:
+		conn = yield from self._get_conn()
+		try:
 			assert interaction._protocol is None
 			interaction._protocol = conn
-            yield from interaction.interact(conn)
-        else:
-            self._put_conn(conn)
-            conn = None
-        finally:
+			yield from interaction.interact(*a,**k)
+		except Exception as exc:
+			raise
+		else:
+			self._put_conn(conn)
+			conn = None
+		finally:
 			interaction._protocol = None
-            if conn is not None:
-                conn.close()
+			if conn is not None:
+				conn.close()
 
