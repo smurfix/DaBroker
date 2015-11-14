@@ -4,7 +4,7 @@ export PYTHONPATH=$(shell pwd)
 
 test: test.cfg
 	@rm -f test.log
-	py.test-3 --cov-report term-missing --cov-config .coveragerc --cov=dabroker.unit
+	py.test-3 --cov-report term-missing --cov-config .coveragerc --cov=dabroker.unit --cov=dabroker.proto
 
 test.cfg:
 	@cp test.cfg.sample $@

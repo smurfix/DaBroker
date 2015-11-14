@@ -40,7 +40,7 @@ class Protocol(asyncio.Protocol):
 		if exc is None:
 			exc = Disconnected()
 		if not self.paused.done():
-			self.paused.set_exception(exc)
+			self.paused.set_exception(exc) # pragma: no cover
 		self.queue.put_nowait(exc)
 		
 	def data_received(self, data):
@@ -53,12 +53,12 @@ class Protocol(asyncio.Protocol):
 				self.paused.set_exception(exc)
 			self.queue.put_nowait(exc)
 
-	def received(self, data):
+	def received(self, data): # pragma: no cover
 		raise NotImplementedError("You need to override %s.receive" % self.__class__.__name__)
 
-	def pause_writing(self):
+	def pause_writing(self): # pragma: no cover
 		self.paused = asyncio.Future(loop=self._loop)
-	def resume_writing(self):
+	def resume_writing(self): # pragma: no cover
 		self.paused.set_result(True)
 		
 class ProtocolInteraction(object):
@@ -81,17 +81,17 @@ class ProtocolInteraction(object):
 		self._loop = loop if loop is not None else asyncio.get_event_loop()
 
 	@property
-	def paused(self):
+	def paused(self): # pragma: no cover
 		return self._paused()
 	@asyncio.coroutine
-	def _paused(self):
+	def _paused(self): # pragma: no cover
 		p = self._protocol.paused
 		if not p.done():
 			yield p
 			self._protocol.paused.result()
 
 	@asyncio.coroutine
-	def interact(self,*a,**k):
+	def interact(self,*a,**k): # pragma: no cover
 		raise NotImplementedError("You need to override %s.interact" % self.__class__.__name__)
 
 	def send(self,*a,**k):
@@ -122,13 +122,13 @@ class ProtocolClient(object):
 	def _get_conn(self):
 		now = time()
 		while self.conns:
-			ts,conn = conns.pop()
+			ts,conn = self.conns.pop()
 			if ts > now-self.MAX_IDLE:
 				break
 			assert conn.queue.empty()
 			try:
 				conn.close()
-			except Exception:
+			except Exception: # pragma: no cover
 				logger.exception("Closing idle connection")
 		else:
 			_,conn = yield from self._loop.create_connection(self.protocol, self.host,self.port)
@@ -152,26 +152,30 @@ class ProtocolClient(object):
 		f = None
 		id = self.next_id
 		try:
-			assert interaction._protocol is None
-			interaction._protocol = conn
-			f = asyncio.async(interaction.interact(*a,**k), loop=self._loop)
-			self.tasks[id] = f
-			yield from f
-			f.result()
-		except Exception as exc:
+			if interaction._protocol is not None:
+				raise RuntimeError("%s is running twice" % repr(interaction))
+			try:
+				interaction._protocol = conn
+				f = asyncio.async(interaction.interact(*a,**k), loop=self._loop)
+				self.tasks[id] = f
+				yield from f
+				f.result()
+			finally:
+				asssert interaction._protocol is conn
+				interaction._protocol = None
+		except BaseException as exc:
 			if f is not None and not f.done():
 				f.set_Exception(exc)
 			raise
 		else:
 			if f is not None and not f.done():
-				f.set(True)
+				f.set(True) # pragma: no cover
 			self._put_conn(conn)
 			conn = None
 		finally:
 			if f is not None and not f.done():
-				f.set(False)
+				f.set(False) # pragma: no cover
 			self.tasks.pop(id,None)
-			interaction._protocol = None
 			if conn is not None:
 				conn.close()
 
@@ -180,17 +184,18 @@ class ProtocolClient(object):
 		for id,f in self.tasks.items():
 			try:
 				f.cancel()
-			except Exception:
+			except Exception: # pragma: no cover
 				pass
 		while self.conns:
 			_,conn = self.conns.pop()
 			try:
 				conn.close()
-			except Exception:
+			except Exception: # pragma: no cover
 				logger.exception("Trying to abort")
 
 	@asyncio.coroutine
 	def close(self):
 		while self.tasks:
-			yield from self.tasks.pop()
+			for k in list(self.tasks.keys()):
+				yield from self.tasks.pop(k,None)
 		self.abort()

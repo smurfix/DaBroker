@@ -22,12 +22,11 @@ from dabroker.util.tests import load_cfg
 import unittest
 from unittest.mock import Mock
 
-def test_basic():
+def test_basic(event_loop):
 	cfg = load_cfg("test.cfg")
 	u = Unit("test.zero", cfg)
-	loop = asyncio.get_event_loop()
-	loop.run_until_complete(u.start())
-	loop.run_until_complete(u.stop())
+	event_loop.run_until_complete(u.start())
+	event_loop.run_until_complete(u.stop())
 
 @pytest.yield_fixture
 def unit1(event_loop):

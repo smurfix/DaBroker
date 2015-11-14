@@ -81,8 +81,14 @@ def test_echo(event_loop, echoserver):
 	assert f.result() is True
 
 class LinesTester(ProtocolInteraction):
+	def __init__(self,conn_store=None,**k):
+		self.conn_store = conn_store
+		super().__init__(**k)
+
 	@asyncio.coroutine
 	def interact(self):
+		if self.conn_store is not None:
+			self.conn_store.append(self._protocol)
 		self.send("whatever\nwherever")
 		yield from asyncio.sleep(D/2, loop=self._loop)
 		self.send("whenever")
@@ -95,20 +101,55 @@ class LinesTester(ProtocolInteraction):
 	
 @pytest.mark.asyncio
 def test_lines(echoserver, event_loop):
+	"""Use the "lines" protocol to go through the basic protocol features"""
 	c = ProtocolClient(LineProtocol, "127.0.0.1",echoserver.port, loop=event_loop)
 	yield from c.run(LinesTester(loop=event_loop))
+	assert len(c.conns) == 1
+	fff=[]
+	tp = LinesTester(fff,loop=event_loop)
+	e = asyncio.async(c.run(tp), loop=event_loop)
+	# give 'e' time to start up
+	yield from asyncio.sleep(D/3, loop=event_loop)
+	# make sure close() waits for 'e' and doesn't break it
 	yield from c.close()
+	assert e.done()
+	e.result()
+	assert len(c.conns) == 0
+	# create an idle connection which the next step can re-use
+	eee=[]
+	yield from c.run(LinesTester(eee, loop=event_loop))
+	assert len(c.conns) == 1
 
 	# now do two at the same time, and abort
-	f = asyncio.async(c.run(LinesTester(loop=event_loop)), loop=event_loop)
+	fff.pop()
+	ff = c.run(tp)
+	f = asyncio.async(ff, loop=event_loop)
 	yield from asyncio.sleep(D)
+	with pytest.raises(RuntimeError):
+		yield from c.run(tp)
 	g = asyncio.async(c.run(LinesTester(loop=event_loop)), loop=event_loop)
+	yield from asyncio.sleep(D)
 	yield from f
+	# check that the connection is reused
+	assert len(eee) == 1
+	assert len(fff) == 1
+	assert eee[0] == fff[0]
+
+	c.MAX_IDLE = 0
+	hhh = []
+	hh = c.run(LinesTester(hhh, loop=event_loop))
+	h = asyncio.async(hh, loop=event_loop)
+	yield from asyncio.sleep(D/3, loop=event_loop)
+	assert len(hhh) == 1
+	assert eee[0] != hhh[0]
 	c.abort()
+	assert len(c.conns) == 0
 	with pytest.raises(asyncio.CancelledError):
 		yield from g
 	with pytest.raises(asyncio.CancelledError):
 		g.result()
+	with pytest.raises(asyncio.CancelledError):
+		yield from h
 
 	# let the mainloop process things
 	yield from asyncio.sleep(D/2, loop=event_loop)
