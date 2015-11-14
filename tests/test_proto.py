@@ -106,8 +106,8 @@ def test_lines(echoserver, event_loop):
 	yield from c.run(LinesTester(loop=event_loop))
 	assert len(c.conns) == 1
 	fff=[]
-	tp = LinesTester(fff,loop=event_loop)
-	e = asyncio.async(c.run(tp), loop=event_loop)
+	tp = LinesTester(fff,loop=event_loop,conn=c)
+	e = asyncio.async(tp.run(), loop=event_loop)
 	# give 'e' time to start up
 	yield from asyncio.sleep(D/3, loop=event_loop)
 	# make sure close() waits for 'e' and doesn't break it
