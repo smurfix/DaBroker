@@ -161,7 +161,7 @@ class ProtocolClient(object):
 				yield from f
 				f.result()
 			finally:
-				asssert interaction._protocol is conn
+				assert interaction._protocol is conn
 				interaction._protocol = None
 		except BaseException as exc:
 			if f is not None and not f.done():
