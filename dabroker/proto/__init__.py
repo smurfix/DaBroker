@@ -22,11 +22,11 @@ class Disconnected(BaseException):
 	pass
 
 class Protocol(asyncio.Protocol):
-	paused = asyncio.Future()
-	paused.set_result(False)
-
-	def __init__(self):
+	def __init__(self, loop=None):
 		self.queue = asyncio.Queue()
+		self._loop = loop if loop is not None else asyncio.get_event_loop()
+		self.paused = asyncio.Future(loop=self._loop)
+		self.paused.set_result(False)
 
 	def close(self):
 		self.transport.close()
@@ -57,7 +57,7 @@ class Protocol(asyncio.Protocol):
 		raise NotImplementedError("You need to override %s.receive" % self.__class__.__name__)
 
 	def pause_writing(self):
-		self.paused = asyncio.Future()
+		self.paused = asyncio.Future(loop=self._loop)
 	def resume_writing(self):
 		self.paused.set_result(True)
 		
@@ -76,8 +76,9 @@ class ProtocolInteraction(object):
 			
 		"""
 
-	def __init__(self):
+	def __init__(self, *, loop=None):
 		self._protocol = None
+		self._loop = loop if loop is not None else asyncio.get_event_loop()
 
 	@property
 	def paused(self):
@@ -114,6 +115,8 @@ class ProtocolClient(object):
 		self.port = port
 		self.conns = []
 		self._loop = loop if loop is not None else asyncio.get_event_loop()
+		self._id = 1
+		self.tasks = {}
 
 	@asyncio.coroutine
 	def _get_conn(self):
@@ -123,7 +126,10 @@ class ProtocolClient(object):
 			if ts > now-self.MAX_IDLE:
 				break
 			assert conn.queue.empty()
-			conn.close()
+			try:
+				conn.close()
+			except Exception:
+				logger.exception("Closing idle connection")
 		else:
 			_,conn = yield from self._loop.create_connection(self.protocol, self.host,self.port)
 		return conn
@@ -131,23 +137,60 @@ class ProtocolClient(object):
 	def _put_conn(self,conn):
 		self.conns.append((time(),conn))
 
+	@property
+	def next_id(self):
+		id = self._id
+		self._id += 1
+		return id
+
 	@asyncio.coroutine
 	def run(self, interaction, *a,**k):
 		"""\
 			Run the interaction on this connection.
 			"""
 		conn = yield from self._get_conn()
+		f = None
+		id = self.next_id
 		try:
 			assert interaction._protocol is None
 			interaction._protocol = conn
-			yield from interaction.interact(*a,**k)
+			f = asyncio.async(interaction.interact(*a,**k), loop=self._loop)
+			self.tasks[id] = f
+			yield from f
+			f.result()
 		except Exception as exc:
+			if f is not None and not f.done():
+				f.set_Exception(exc)
 			raise
 		else:
+			if f is not None and not f.done():
+				f.set(True)
 			self._put_conn(conn)
 			conn = None
 		finally:
+			if f is not None and not f.done():
+				f.set(False)
+			self.tasks.pop(id,None)
 			interaction._protocol = None
 			if conn is not None:
 				conn.close()
 
+	def abort(self):
+		"""Kill all tasks and connections"""
+		for id,f in self.tasks.items():
+			try:
+				f.cancel()
+			except Exception:
+				pass
+		while self.conns:
+			_,conn = self.conns.pop()
+			try:
+				conn.close()
+			except Exception:
+				logger.exception("Trying to abort")
+
+	@asyncio.coroutine
+	def close(self):
+		while self.tasks:
+			yield from self.tasks.pop()
+		self.abort()
