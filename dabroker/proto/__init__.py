@@ -159,7 +159,7 @@ class ProtocolClient(object):
 				f = asyncio.async(interaction.interact(*a,**k), loop=self._loop)
 				self.tasks[id] = f
 				yield from f
-				f.result()
+				res = f.result()
 			finally:
 				assert interaction._protocol is conn
 				interaction._protocol = None
@@ -172,6 +172,7 @@ class ProtocolClient(object):
 				f.set(True) # pragma: no cover
 			self._put_conn(conn)
 			conn = None
+			return res
 		finally:
 			if f is not None and not f.done():
 				f.set(False) # pragma: no cover
