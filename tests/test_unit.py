@@ -50,7 +50,7 @@ def _unit(name,loop):
 def test_conn_not(event_loop):
 	cfg = load_cfg("test.cfg")
 	u = Unit("test.no_port", cfg)
-	with pytest.raises(ConnectionRefusedError):
+	with pytest.raises(OSError):
 		yield from u.start()
 
 @pytest.mark.asyncio
