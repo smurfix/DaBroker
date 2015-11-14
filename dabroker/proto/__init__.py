@@ -76,9 +76,10 @@ class ProtocolInteraction(object):
 			
 		"""
 
-	def __init__(self, *, loop=None):
+	def __init__(self, *, loop=None, conn=None):
 		self._protocol = None
 		self._loop = loop if loop is not None else asyncio.get_event_loop()
+		self._conn = conn
 
 	@property
 	def paused(self): # pragma: no cover
@@ -89,6 +90,14 @@ class ProtocolInteraction(object):
 		if not p.done():
 			yield p
 			self._protocol.paused.result()
+
+	def run(self,*a, **kw):
+		"""\
+			If you submitted the connection while creating, you can run the interaction on this connection here.
+			"""
+		return self._conn.run(self,*a,**kw)
+	run._is_coroutine = True
+
 
 	@asyncio.coroutine
 	def interact(self,*a,**k): # pragma: no cover
