@@ -16,7 +16,7 @@ import pytest
 import pytest_asyncio.plugin
 import os
 import asyncio
-from dabroker.unit import Unit, CC_DICT,CC_DATA,CC_MSG
+from dabroker.unit import make_unit as unit,Unit, CC_DICT,CC_DATA,CC_MSG
 from dabroker.unit.msg import ReturnedError,AlertMsg
 from dabroker.util.tests import load_cfg
 import unittest
@@ -41,17 +41,15 @@ def unit2(event_loop):
 @asyncio.coroutine
 def _unit(name,loop):
 	cfg = load_cfg("test.cfg")
-	u = Unit("test."+name, cfg)
-	loop.run_until_complete(u.start())
+	u = loop.run_until_complete(unit("test."+name, cfg))
 	yield u
 	loop.run_until_complete(u.stop())
 
 @pytest.mark.asyncio
 def test_conn_not(event_loop):
 	cfg = load_cfg("test.cfg")
-	u = Unit("test.no_port", cfg)
 	with pytest.raises(OSError):
-		yield from u.start()
+		yield from unit("test.no_port", cfg)
 
 @pytest.mark.asyncio
 def test_rpc_basic(unit1, unit2, event_loop):

@@ -19,6 +19,7 @@ from __future__ import absolute_import, print_function, division, unicode_litera
 ## etcd.config
 ## 
 
+import asyncio
 from ..util import attrdict
 
 import logging
@@ -62,4 +63,11 @@ DEFAULT_CONFIG=_d(
 		codec='_json',
 	))
 
+@asyncio.coroutine
+def make_unit(*a,**kw):
+	c = Unit(*a,**kw)
+	yield from c.start()
+	return c
+
 from .unit import Unit
+

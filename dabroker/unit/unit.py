@@ -70,7 +70,7 @@ class Unit(object):
 	@asyncio.coroutine
 	def start(self):
 		self.uuid = uuidstr()
-		self.config = self._get_config(self._cfg, **self._kw)
+		self.config = yield from self._get_config(self._cfg, **self._kw)
 
 		self.register_rpc("dabroker.ping."+self.uuid, self._reply_ping)
 
@@ -196,6 +196,7 @@ class Unit(object):
 			rpc_endpoints=list(self.rpc_endpoints.keys())
 			)
 		
+	@asyncio.coroutine
 	def _get_config(self, cfg, **kw):
 		"""Read config data from cfg and etcd"""
 		if not isinstance(cfg,dict): # pragma: no cover
@@ -204,14 +205,14 @@ class Unit(object):
 		_r_setdefault(kw,cfg)
 		cfg=attrdict(**kw)
 
-		if 'amqp' in cfg.config:
-			self.config = cfg.config.amqp
+		if 'amqp' in cfg['config']:
+			self.config = cfg['config']['amqp']
 		else: # pragma: no cover
-			cfg.config.amqp = self.config = {}
+			cfg['config']['amqp'] = self.config = {}
 
 		from etctree import client as etcd_client
-		self.etcd = etcd_client(cfg)
-		self.cfgtree = self.etcd.tree("/config", immediate=True)
+		self.etcd = yield from etcd_client(cfg)
+		self.cfgtree = yield from self.etcd.tree("/config", immediate=True)
 		for s in (cfg['config'], self.cfgtree):
 			if 'specific' in s:
 				specs = []
