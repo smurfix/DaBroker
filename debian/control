@@ -20,22 +20,6 @@ Standards-Version: 3.9.1
 X-Python-Version: >= 2.7
 X-Python3-Version: >= 3.3
 
-Package: python-dabroker
-Architecture: all
-Depends: ${misc:Depends}, ${python:Depends}
-Recommends: python-amqp
-Description: Fast distributed object broker for large, mostly-read-only datasets
- DaBroker is short for Data Access Broker.
- .
- DaBroker exposes objects (e.g. database rows, or their NoSQL equivalent, or
- indeed anything you might think of) to clients. Clients cache these objects
- until they do not want them any more, or until they are invalidated by the
- server.
- .
- Multiple servers can run in parallel, for redundancy and increased speed.
- .
- This package contains the Python2 modules for client and server.
-
 Package: python3-dabroker
 Architecture: all
 Depends: ${misc:Depends}, ${python3:Depends}
