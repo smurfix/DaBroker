@@ -1,3 +1,9 @@
+dabroker (0.1.2-1) smurf; urgency=medium
+
+  * Update to async etctree
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 15 Nov 2015 09:58:31 +0100
+
 dabroker (0.1.1-1) smurf; urgency=low
 
   * Interim build

@@ -16,18 +16,17 @@ import pytest
 import pytest_asyncio.plugin
 import os
 import asyncio
-from dabroker.unit import Unit, CC_DICT,CC_DATA,CC_MSG
+from dabroker.unit import make_unit as unit,Unit, CC_DICT,CC_DATA,CC_MSG
 from dabroker.unit.msg import ReturnedError,AlertMsg
 from dabroker.util.tests import load_cfg
 import unittest
 from unittest.mock import Mock
 
-def test_basic():
+def test_basic(event_loop):
 	cfg = load_cfg("test.cfg")
 	u = Unit("test.zero", cfg)
-	loop = asyncio.get_event_loop()
-	loop.run_until_complete(u.start())
-	loop.run_until_complete(u.stop())
+	event_loop.run_until_complete(u.start())
+	event_loop.run_until_complete(u.stop())
 
 @pytest.yield_fixture
 def unit1(event_loop):
@@ -42,17 +41,15 @@ def unit2(event_loop):
 @asyncio.coroutine
 def _unit(name,loop):
 	cfg = load_cfg("test.cfg")
-	u = Unit("test."+name, cfg)
-	loop.run_until_complete(u.start())
+	u = loop.run_until_complete(unit("test."+name, cfg))
 	yield u
 	loop.run_until_complete(u.stop())
 
 @pytest.mark.asyncio
 def test_conn_not(event_loop):
 	cfg = load_cfg("test.cfg")
-	u = Unit("test.no_port", cfg)
-	with pytest.raises(ConnectionRefusedError):
-		yield from u.start()
+	with pytest.raises(OSError):
+		yield from unit("test.no_port", cfg)
 
 @pytest.mark.asyncio
 def test_rpc_basic(unit1, unit2, event_loop):
