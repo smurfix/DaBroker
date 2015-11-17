@@ -13,7 +13,7 @@ Build-Depends: debhelper (>= 7),
   python3-six (>= 1.7),
   python3-pytest-asyncio,
   python3-etctree (> 0.4.1),
-  python3-aioamqp (>= 0.4.0.1-2),
+  python3-aioamqp (>= 0.4.0.2),
   python3-etctree,
   python3-blinker,
 Standards-Version: 3.9.1

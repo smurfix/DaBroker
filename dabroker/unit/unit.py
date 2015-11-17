@@ -23,7 +23,6 @@ import weakref
 import etcd
 import asyncio
 from ..util import attrdict, import_string, uuidstr
-from etctree.node import mtValue
 from .msg import RequestMsg,PollMsg,AlertMsg
 from .rpc import CC_MSG
 from . import DEFAULT_CONFIG
@@ -37,13 +36,9 @@ class _NOTGIVEN:
 # helper for recursive dict.[set]default()
 def _r_setdefault(d,kv):
 	for k,v in kv.items():
-		if isinstance(v,mtValue): # pragma: no cover
-			v = v.value
 		try:
 			dk = d[k]
 		except KeyError:
-			if isinstance(v,dict) and not isinstance(v,attrdict):
-				v = attrdict(**v)
 			d[k] = v
 		else:
 			if isinstance(d[k],dict):
@@ -57,10 +52,10 @@ class Unit(object):
 	conn = None # AMQP receiver
 	uuid = None # my UUID
 
-	def __init__(self, app, cfg, **kw):
+	def __init__(self, app, cfg, loop=None):
+		self._loop = loop or asyncio.get_event_loop()
 		self.app = app
 		self._cfg = cfg
-		self._kw = kw
 
 		self.rpc_endpoints = {}
 		self.alert_endpoints = {}
@@ -70,7 +65,7 @@ class Unit(object):
 	@asyncio.coroutine
 	def start(self):
 		self.uuid = uuidstr()
-		self.config = yield from self._get_config(self._cfg, **self._kw)
+		self.config = self._get_config(self._cfg)
 
 		self.register_rpc("dabroker.ping."+self.uuid, self._reply_ping)
 
@@ -196,47 +191,14 @@ class Unit(object):
 			rpc_endpoints=list(self.rpc_endpoints.keys())
 			)
 		
-	@asyncio.coroutine
-	def _get_config(self, cfg, **kw):
+	def _get_config(self, cfg):
 		"""Read config data from cfg and etcd"""
 		if not isinstance(cfg,dict): # pragma: no cover
 			from etctree.util import from_yaml
-			cfg = from_yaml(cfg)
-		_r_setdefault(kw,cfg)
-		cfg=attrdict(**kw)
+			cfg = from_yaml(cfg)['config']
 
-		if 'amqp' in cfg['config']:
-			self.config = cfg['config']['amqp']
-		else: # pragma: no cover
-			cfg['config']['amqp'] = self.config = {}
-
-		from etctree import client as etcd_client
-		self.etcd = yield from etcd_client(cfg)
-		self.cfgtree = yield from self.etcd.tree("/config", immediate=True)
-		for s in (cfg['config'], self.cfgtree):
-			if 'specific' in s:
-				specs = []
-				try:
-					spectree = s['specific']
-					for part in self.app.split('.'):
-						spectree = spectree[part]
-						specs.append(spectree)
-				except KeyError:
-					pass
-				for tree in specs:
-					try:
-						tree = tree['config']
-					except KeyError:
-						pass
-					else:
-						_r_setdefault(cfg.config,tree)
-
-		_r_setdefault(cfg.config,self.cfgtree)
-		_r_setdefault(cfg.config,DEFAULT_CONFIG)
-
-		# Also tell the user about our default settings
-		_r_setdefault(self.cfgtree,DEFAULT_CONFIG)
-		return cfg.config
+		_r_setdefault(cfg,DEFAULT_CONFIG)
+		return cfg
 		
 	## The following code is the non-interesting cleanup part
 

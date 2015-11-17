@@ -30,10 +30,9 @@ CC_MSG="_msg" # pass the whole message (default)
 CC_DATA="_data" # pass the data element
 CC_DICT="_dict" # assume data is a dict and apply it
 
-_d=attrdict
-DEFAULT_CONFIG=_d(
-	amqp=_d(
-		server=_d(
+DEFAULT_CONFIG=dict(
+	amqp=dict(
+		server=dict(
 			host='localhost',
 			login='guest',
 			password='guest',
@@ -41,22 +40,22 @@ DEFAULT_CONFIG=_d(
 			ssl=False,
 			connect_timeout=10,
 		),
-		exchanges=_d(	  # all are persistent
+		exchanges=dict(	  # all are persistent
 			alert='alert', # topic: broadcast messages, may elicit multiple replies
 			rpc='rpc',	 # topic: RPC requests, will trigger exactly one reply
 			reply='reply', # direct: all replies go here
 			dead='dead',   # fanout: dead messages (TTL expires, reject, RPC/alert unrouteable, …)
 		),
-		queues=_d(
+		queues=dict(
 			alert='alert_',# plus the unit UUID. Nonpersistent.
 			rpc='rpc_',	# plus the command name. Persistent.
 			reply='reply_',# plus the unit UUID
 			dead='dead',   # no add-on. Persistent. No TTL here!
 		),
-		ttl=_d(
+		ttl=dict(
 			rpc=10,
 		),
-		timeout=_d(
+		timeout=dict(
 			rpc=15,
 			poll=30,
 		),

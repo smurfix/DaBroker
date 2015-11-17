@@ -34,6 +34,7 @@ class Connection(object):
 	amqp = None # connection
 
 	def __init__(self,unit):
+		self._loop = unit._loop
 		self.alerts = {}
 		self.replies = {}
 		self.unit = weakref.ref(unit)
@@ -60,7 +61,7 @@ class Connection(object):
 	@asyncio.coroutine
 	def connect(self):
 		try:
-			self.amqp_transport,self.amqp = yield from aioamqp.connect(**self.cfg)
+			self.amqp_transport,self.amqp = yield from aioamqp.connect(loop=self._loop, **self.cfg)
 		except Exception as e:
 			logger.exception("Not connected to AMPQ: host=%s vhost=%s user=%s", self.cfg['host'],self.cfg['virtualhost'],self.cfg['login'])
 			raise

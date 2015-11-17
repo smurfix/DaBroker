@@ -24,7 +24,7 @@ from unittest.mock import Mock
 
 def test_basic(event_loop):
 	cfg = load_cfg("test.cfg")
-	u = Unit("test.zero", cfg)
+	u = Unit("test.zero", cfg['config'])
 	event_loop.run_until_complete(u.start())
 	event_loop.run_until_complete(u.stop())
 
@@ -40,14 +40,15 @@ def unit2(event_loop):
 	next(g)
 @asyncio.coroutine
 def _unit(name,loop):
-	cfg = load_cfg("test.cfg")
+	cfg = load_cfg("test.cfg")['config']
 	u = loop.run_until_complete(unit("test."+name, cfg))
 	yield u
 	loop.run_until_complete(u.stop())
 
 @pytest.mark.asyncio
-def test_conn_not(event_loop):
-	cfg = load_cfg("test.cfg")
+def test_conn_not(event_loop, unused_tcp_port):
+	cfg = load_cfg("test.cfg")['config']
+	cfg['amqp']['server']['port'] = unused_tcp_port
 	with pytest.raises(OSError):
 		yield from unit("test.no_port", cfg)
 
@@ -249,7 +250,7 @@ def test_rpc_bad_params(unit1, unit2, event_loop):
 		assert False,"exception not called"
 	
 def test_reg_sync(event_loop):
-	cfg = load_cfg("test.cfg")
+	cfg = load_cfg("test.cfg")['config']
 	u = Unit("test.three", cfg)
 	@u.register_rpc("foo.bar")
 	def foo_bar_0(msg):
