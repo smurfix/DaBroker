@@ -1,10 +1,10 @@
 #!/usr/bin/make -f
 
-export PYTHONPATH=$(shell pwd)
+export PYTHONPATH=$(shell pwd):$(shell pwd)/../aioamqp
 
 test: test.cfg
 	@rm -f test.log
-	py.test-3 --cov-report term-missing --cov-config .coveragerc --cov=dabroker.unit --cov=dabroker.proto
+	py.test-3 --cov-report term-missing --cov-config .coveragerc --cov=dabroker.unit --cov=dabroker.proto --assert=plain
 
 test.cfg:
 	@cp test.cfg.sample $@
