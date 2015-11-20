@@ -17,7 +17,8 @@ from time import time
 
 from . import CC_MSG,CC_DICT,CC_DATA
 from ..util import uuidstr
-from aioamqp.properties import Properties
+#from aioamqp.properties import Properties
+from dabroker.util import attrdict; Properties = attrdict
 
 class _NOTGIVEN:
 	pass
@@ -212,8 +213,7 @@ class RequestMsg(_RequestMsg):
 		if _unit is not None:
 			self.reply_to = _unit.uuid
 
-	@asyncio.coroutine
-	def recv_reply(self, f,reply):
+	async def recv_reply(self, f,reply):
 		"""Client side: Incoming reply. @f is the future to trigger when complete."""
 		f.set_result(reply)
 
@@ -238,8 +238,7 @@ class PollMsg(AlertMsg):
 		self.call_conv = call_conv
 		self.replies = 0
 
-	@asyncio.coroutine
-	def recv_reply(self, f,msg):
+	async def recv_reply(self, f,msg):
 		"""Incoming reply. @f is the future to trigger when complete."""
 		try:
 			if self.call_conv == CC_MSG:
@@ -254,7 +253,7 @@ class PollMsg(AlertMsg):
 				raise RuntimeError("Unknown encoding: %s"%self.call_conv) 
 			r = self.callback(*a,**k)
 			if asyncio.iscoroutine(r):
-				yield from r
+				await r
 		except StopIteration:
 			f.set_result(self.replies+1)
 		except Exception as exc:

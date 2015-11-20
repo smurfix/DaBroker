@@ -69,11 +69,10 @@ class ProtocolInteraction(object):
 		You override interact() to send and receive messages.
 		A client typically sends a message, waits for a reply (or more), possibly repeats, then exits.
 
-		@asyncio.coroutine
-		def interact(self):
-			yield from self.paused ## periodically do this if you send lots
+		async def interact(self):
+			await self.paused ## periodically do this if you send lots
 			self.send("Foo!")
-			assert (yield from self.recv()) == "Bar?"
+			assert (await self.recv()) == "Bar?"
 			
 		"""
 
@@ -88,11 +87,10 @@ class ProtocolInteraction(object):
 	@property
 	def paused(self): # pragma: no cover
 		return self._paused()
-	@asyncio.coroutine
-	def _paused(self): # pragma: no cover
+	async def _paused(self): # pragma: no cover
 		p = self._protocol.paused
 		if not p.done():
-			yield p
+			await p
 			self._protocol.paused.result()
 
 	def run(self,*a, **kw):
@@ -105,17 +103,14 @@ class ProtocolInteraction(object):
 		return c.run(self,*a,**kw)
 	run._is_coroutine = True
 
-
-	@asyncio.coroutine
-	def interact(self,*a,**k): # pragma: no cover
+	async def interact(self,*a,**k): # pragma: no cover
 		raise NotImplementedError("You need to override %s.interact" % self.__class__.__name__)
 
 	def send(self,*a,**k):
 		self._protocol.send(*a,**k)
 
-	@asyncio.coroutine
-	def recv(self):
-		res = yield from self._protocol.queue.get()
+	async def recv(self):
+		res = await self._protocol.queue.get()
 		if isinstance(res,BaseException):
 			raise res
 		return res
@@ -134,8 +129,7 @@ class ProtocolClient(object):
 		self._id = 1
 		self.tasks = {}
 
-	@asyncio.coroutine
-	def _get_conn(self):
+	async def _get_conn(self):
 		now = time()
 		while self.conns:
 			ts,conn = self.conns.pop()
@@ -147,7 +141,7 @@ class ProtocolClient(object):
 			except Exception: # pragma: no cover
 				logger.exception("Closing idle connection")
 		else:
-			_,conn = yield from self._loop.create_connection(self.protocol, self.host,self.port)
+			_,conn = await self._loop.create_connection(self.protocol, self.host,self.port)
 		return conn
 		
 	def _put_conn(self,conn):
@@ -159,12 +153,11 @@ class ProtocolClient(object):
 		self._id += 1
 		return id
 
-	@asyncio.coroutine
-	def run(self, interaction, *a,**k):
+	async def run(self, interaction, *a,**k):
 		"""\
 			Run the interaction on this connection.
 			"""
-		conn = yield from self._get_conn()
+		conn = await self._get_conn()
 		f = None
 		id = self.next_id
 		try:
@@ -172,9 +165,9 @@ class ProtocolClient(object):
 				raise RuntimeError("%s is running twice" % repr(interaction))
 			try:
 				interaction._protocol = conn
-				f = asyncio.async(interaction.interact(*a,**k), loop=self._loop)
+				f = asyncio.ensure_future(interaction.interact(*a,**k), loop=self._loop)
 				self.tasks[id] = f
-				yield from f
+				await f
 				res = f.result()
 			finally:
 				assert interaction._protocol is conn
@@ -210,9 +203,8 @@ class ProtocolClient(object):
 			except Exception: # pragma: no cover
 				logger.exception("Trying to abort")
 
-	@asyncio.coroutine
-	def close(self):
+	async def close(self):
 		while self.tasks:
 			for k in list(self.tasks.keys()):
-				yield from self.tasks.pop(k,None)
+				await self.tasks.pop(k,None)
 		self.abort()

@@ -27,13 +27,12 @@ u=Unit("test.server", load_cfg("test.cfg"))
 def hello(name="Joe"):
 	return "Hello %s!" % name
 	
-@asyncio.coroutine
-def example():
-	yield from u.start()
+async def example():
+	await u.start()
 	try:
-		yield from asyncio.sleep(200)
+		await asyncio.sleep(200)
 	finally:
-		yield from u.stop()
+		await u.stop()
 
 def main():
 	loop = asyncio.get_event_loop()

@@ -58,17 +58,15 @@ class Connection(object):
 			self.mime_type = "application/"+codec_type+"+dabroker"
 
 
-	@asyncio.coroutine
-	def connect(self):
+	async def connect(self):
 		try:
-			self.amqp_transport,self.amqp = yield from aioamqp.connect(loop=self._loop, **self.cfg)
+			self.amqp_transport,self.amqp = await aioamqp.connect(loop=self._loop, **self.cfg)
 		except Exception as e:
 			logger.exception("Not connected to AMPQ: host=%s vhost=%s user=%s", self.cfg['host'],self.cfg['virtualhost'],self.cfg['login'])
 			raise
-		yield from self.setup_channels()
+		await self.setup_channels()
 
-	@asyncio.coroutine
-	def _setup_one(self,name,typ,callback=None, q=None, route_key=None, exclusive=None):
+	async def _setup_one(self,name,typ,callback=None, q=None, route_key=None, exclusive=None):
 		"""\
 			Register
 			"""
@@ -77,37 +75,35 @@ class Connection(object):
 		ch = _ch()
 		setattr(self,name,ch)
 		logger.debug("setup RPC for %s",name)
-		ch.channel = yield from self.amqp.channel()
+		ch.channel = await self.amqp.channel()
 		ch.exchange = cfg['exchanges'][name]
 		logging.debug("Chan %s: exchange %s", ch.channel,cfg['exchanges'][name])
 		if exclusive is None:
 			exclusive = (q is not None)
-		yield from ch.channel.exchange_declare(cfg['exchanges'][name], typ, auto_delete=False, passive=False)
+		await ch.channel.exchange_declare(cfg['exchanges'][name], typ, auto_delete=False, passive=False)
 
 		if q is not None:
 			assert callback is not None
-			ch.queue = yield from ch.channel.queue_declare(cfg['queues'][name]+q, auto_delete=True, passive=False, exclusive=exclusive)
-			yield from ch.channel.basic_qos(prefetch_count=1,prefetch_size=0,connection_global=False)
+			ch.queue = await ch.channel.queue_declare(cfg['queues'][name]+q, auto_delete=True, passive=False, exclusive=exclusive)
+			await ch.channel.basic_qos(prefetch_count=1,prefetch_size=0,connection_global=False)
 			logging.debug("Chan %s: read %s", ch.channel,cfg['queues'][name]+q)
-			yield from ch.channel.basic_consume(cfg['queues'][name]+q, callback=callback)
+			await ch.channel.basic_consume(cfg['queues'][name]+q, callback=callback)
 			if route_key is not None:
 				logging.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges'][name], route_key, ch.queue['queue'])
-				yield from ch.channel.queue_bind(ch.queue['queue'], cfg['exchanges'][name], routing_key=route_key)
+				await ch.channel.queue_bind(ch.queue['queue'], cfg['exchanges'][name], routing_key=route_key)
 		else:
 			assert callback is None
 
 		logger.debug("setup RPC for %s done",name)
 
-	@asyncio.coroutine
-	def setup_channels(self):
+	async def setup_channels(self):
 		"""Configure global channels"""
 		u = self.unit()
-		yield from self._setup_one("alert",'topic', self._on_alert, u.uuid)
-		yield from self._setup_one("rpc",'topic')
-		yield from self._setup_one("reply",'direct', self._on_reply, u.uuid, u.uuid)
+		await self._setup_one("alert",'topic', self._on_alert, u.uuid)
+		await self._setup_one("rpc",'topic')
+		await self._setup_one("reply",'direct', self._on_reply, u.uuid, u.uuid)
 
-	@asyncio.coroutine
-	def _on_alert(self, body,envelope,properties):
+	async def _on_alert(self, body,envelope,properties):
 		logger.debug("read alert message %s",envelope.delivery_tag)
 		try:
 			msg = self.codec.decode(body)
@@ -124,7 +120,7 @@ class Connection(object):
 			if reply_to:
 				reply = msg.make_response()
 				try:
-					reply.data = yield from rpc.run(*a,**k)
+					reply.data = await rpc.run(*a,**k)
 				except Exception as exc:
 					reply.set_error(exc, rpc.name,"reply")
 				reply,props = reply.dump(self)
@@ -132,18 +128,17 @@ class Connection(object):
 					reply = "0"
 				else:
 					reply = self.codec.encode(reply)
-				yield from self.reply.channel.publish(reply, self.reply.exchange, reply_to, properties=props)
+				await self.reply.channel.publish(reply, self.reply.exchange, reply_to, properties=props)
 			else:
-				yield from rpc.run(*a,**k)
+				await rpc.run(*a,**k)
 		except Exception as exc:
 			logger.exception("problem with message %s: %s", envelope.delivery_tag, body)
-			yield from self.alert.channel.basic_reject(envelope.delivery_tag)
+			await self.alert.channel.basic_reject(envelope.delivery_tag)
 		else:
 			logger.debug("ack message %s",envelope.delivery_tag)
-			yield from self.alert.channel.basic_client_ack(envelope.delivery_tag)
+			await self.alert.channel.basic_client_ack(envelope.delivery_tag)
 
-	@asyncio.coroutine
-	def _on_rpc(self, rpc, body,envelope,properties):
+	async def _on_rpc(self, rpc, body,envelope,properties):
 		logger.debug("read rpc message %s",envelope.delivery_tag)
 		try:
 			msg = self.codec.decode(body)
@@ -157,7 +152,7 @@ class Connection(object):
 					a=(msg.data,); k={}
 				else:
 					a=(msg,); k={}
-				reply.data = yield from rpc.run(*a,**k)
+				reply.data = await rpc.run(*a,**k)
 			except Exception as exc:
 				reply.set_error(exc, rpc.name,"reply")
 			reply,props = reply.dump(self)
@@ -165,35 +160,33 @@ class Connection(object):
 				reply = "0"
 			else:
 				reply = self.codec.encode(reply)
-			yield from rpc.channel.publish(reply, self.reply.exchange, msg.reply_to, properties=props)
+			await rpc.channel.publish(reply, self.reply.exchange, msg.reply_to, properties=props)
 		except Exception as exc:
 			logger.exception("problem with message %s: %s", envelope.delivery_tag, body)
-			yield from rpc.channel.basic_reject(envelope.delivery_tag)
+			await rpc.channel.basic_reject(envelope.delivery_tag)
 		else:
 			logger.debug("ack message %s",envelope.delivery_tag)
-			yield from rpc.channel.basic_client_ack(envelope.delivery_tag)
+			await rpc.channel.basic_client_ack(envelope.delivery_tag)
 
-	@asyncio.coroutine
-	def _on_reply(self, body,envelope,properties):
+	async def _on_reply(self, body,envelope,properties):
 		logger.debug("read reply message %s",envelope.delivery_tag)
 		try:
 			msg = self.codec.decode(body)
 			msg = BaseMsg.load(msg,properties)
 			f,req = self.replies[msg.correlation_id]
 			try:
-				yield from req.recv_reply(f,msg)
+				await req.recv_reply(f,msg)
 			except Exception as exc: # pragma: no cover
 				if not f.done():
 					f.set_exception(exc)
 		except Exception as exc:
-			yield from self.reply.channel.basic_reject(envelope.delivery_tag)
+			await self.reply.channel.basic_reject(envelope.delivery_tag)
 			logger.exception("problem with message %s: %s", envelope.delivery_tag, body)
 		else:
 			logger.debug("ack message %s",envelope.delivery_tag)
-			yield from self.reply.channel.basic_client_ack(envelope.delivery_tag)
+			await self.reply.channel.basic_client_ack(envelope.delivery_tag)
 
-	@asyncio.coroutine
-	def call(self,msg, timeout=None):
+	async def call(self,msg, timeout=None):
 		cfg = self.unit().config['amqp']
 		if timeout is None:
 			tn = getattr(msg,'_timer',None)
@@ -212,11 +205,11 @@ class Connection(object):
 			id = msg.message_id
 			self.replies[id] = (f,msg)
 		logger.debug("Send %s to %s: %s", msg.name, cfg['exchanges'][msg._exchange], data)
-		yield from getattr(self,msg._exchange).channel.publish(data, cfg['exchanges'][msg._exchange], msg.name, properties=props)
+		await getattr(self,msg._exchange).channel.publish(data, cfg['exchanges'][msg._exchange], msg.name, properties=props)
 		if timeout is None:
 			return
 		try:
-			yield from asyncio.wait_for(f,timeout)
+			await asyncio.wait_for(f,timeout)
 		except asyncio.TimeoutError:
 			if isinstance(msg,PollMsg):
 				return msg.replies
@@ -225,34 +218,33 @@ class Connection(object):
 			del self.replies[id]
 		return f.result()
 		
-	@asyncio.coroutine
-	def register_rpc(self,rpc):
+	async def register_rpc(self,rpc):
 		ch = self.rpc
 		cfg = self.unit().config['amqp']
 		assert rpc.queue is None
-		rpc.channel = yield from self.amqp.channel()
-		rpc.queue = yield from rpc.channel.queue_declare(cfg['queues']['rpc']+rpc.name.replace('.','_'), auto_delete=True, passive=False)
+		rpc.channel = await self.amqp.channel()
+		rpc.queue = await rpc.channel.queue_declare(cfg['queues']['rpc']+rpc.name.replace('.','_'), auto_delete=True, passive=False)
 		logging.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges']['rpc'], rpc.name, rpc.queue['queue'])
-		yield from rpc.channel.queue_bind(rpc.queue['queue'], cfg['exchanges']['rpc'], routing_key=rpc.name)
+		await rpc.channel.queue_bind(rpc.queue['queue'], cfg['exchanges']['rpc'], routing_key=rpc.name)
 
-		yield from rpc.channel.basic_qos(prefetch_count=1,prefetch_size=0,connection_global=False)
+		await rpc.channel.basic_qos(prefetch_count=1,prefetch_size=0,connection_global=False)
 		logging.debug("Chan %s: read %s", rpc.channel,rpc.queue['queue'])
-		yield from rpc.channel.basic_consume(rpc.queue['queue'], callback=functools.partial(self._on_rpc,rpc))
+		callback=functools.partial(self._on_rpc,rpc)
+		callback._is_coroutine = True
+		await rpc.channel.basic_consume(rpc.queue['queue'], callback=callback)
 
-	@asyncio.coroutine
-	def register_alert(self,rpc):
+	async def register_alert(self,rpc):
 		ch = self.alert
 		cfg = self.unit().config['amqp']
 		logging.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges']['rpc'], rpc.name, ch.exchange)
-		yield from ch.channel.queue_bind(ch.queue['queue'], ch.exchange, routing_key=rpc.name)
+		await ch.channel.queue_bind(ch.queue['queue'], ch.exchange, routing_key=rpc.name)
 		self.alerts[rpc.name] = rpc
 
-	@asyncio.coroutine
-	def close(self):
+	async def close(self):
 		a,self.amqp = self.amqp,None
 		if a is not None:
 			try:
-				yield from a.close(timeout=1)
+				await a.close(timeout=1)
 			except Exception: # pragma: no cover
 				logger.exception("closing the connection")
 			self.amqp_transport = None

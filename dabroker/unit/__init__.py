@@ -62,10 +62,9 @@ DEFAULT_CONFIG=dict(
 		codec='_json',
 	))
 
-@asyncio.coroutine
-def make_unit(*a,**kw):
+async def make_unit(*a,**kw):
 	c = Unit(*a,**kw)
-	yield from c.start()
+	await c.start()
 	return c
 
 from .unit import Unit

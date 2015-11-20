@@ -62,31 +62,28 @@ class Unit(object):
 
 		self.register_alert("dabroker.ping",self._alert_ping)
 
-	@asyncio.coroutine
-	def start(self):
+	async def start(self):
 		self.uuid = uuidstr()
 		self.config = self._get_config(self._cfg)
 
 		self.register_rpc("dabroker.ping."+self.uuid, self._reply_ping)
 
-		yield from self._create_conn()
+		await self._create_conn()
 	
-	@asyncio.coroutine
-	def stop(self):
+	async def stop(self):
 		self.rpc_endpoints.pop("dabroker.ping."+self.uuid, None)
 
 		c,self.conn = self.conn,None
 		if c:
 			try:
-				yield from c.close()
+				await c.close()
 			except Exception: # pragma: no cover
 				logger.exception("closing connection")
 		self._kill()
 	
 	## client
 
-	@asyncio.coroutine
-	def rpc(self,name, _data=None, **data):
+	async def rpc(self,name, _data=None, **data):
 		"""Send a RPC request.
 		Returns the response. 
 		The (global) timeout is set in etcd.
@@ -95,12 +92,11 @@ class Unit(object):
 			assert not data
 			data = _data
 		msg = RequestMsg(name, self, data)
-		res = yield from self.conn.call(msg)
+		res = await self.conn.call(msg)
 		res.raise_if_error()
 		return res.data
 
-	@asyncio.coroutine
-	def alert(self,name, _data=None, *, timeout=None,callback=None,call_conv=CC_MSG, **data):
+	async def alert(self,name, _data=None, *, timeout=None,callback=None,call_conv=CC_MSG, **data):
 		"""Send a broadcast alert.
 		If @callback is not None, call on each response until the time runs out
 		"""
@@ -111,12 +107,12 @@ class Unit(object):
 			msg = PollMsg(name, self, data=data, callback=callback,call_conv=call_conv)
 		else:
 			msg = AlertMsg(name, self, data=data)
-		res = yield from self.conn.call(msg, timeout=timeout)
+		res = await self.conn.call(msg, timeout=timeout)
 		return res
 		
 	## server
 
-	def register_rpc(self, *a, async=False, alert=False, call_conv=CC_MSG):
+	def register_rpc(self, *a, async_=False, alert=False, call_conv=CC_MSG):
 		"""\
 			Register a listener.
 				
@@ -129,12 +125,11 @@ class Unit(object):
 				def fn(…): pass
 			"""
 		name = None
-		@asyncio.coroutine
-		def reg_async(fn,epl):
+		async def reg_async(fn,epl):
 			if alert:
-				yield from self.conn.register_alert(fn)
+				await self.conn.register_alert(fn)
 			else:
-				yield from self.conn.register_rpc(fn)
+				await self.conn.register_rpc(fn)
 			epl[name] = fn
 		def reg(fn):
 			nonlocal name
@@ -154,10 +149,10 @@ class Unit(object):
 				epl = self.rpc_endpoints
 			assert name not in epl, name
 			fn.is_alert = alert
-			if async and self.conn is not None:
+			if async_ and self.conn is not None:
 				return reg_async(fn,epl)
 			else:
-				assert self.conn is None,"Use register_rpc_async when online"
+				assert self.conn is None,"Use register_*_async() when connected"
 			epl[name] = fn
 			return fn.fn
 		assert len(a) <= 2
@@ -174,9 +169,15 @@ class Unit(object):
 			else:
 				return reg(a)
 	
-	def register_alert(self, *a, async=False, call_conv=CC_MSG):
+	def register_rpc_async(self, *a, **kw):
+		return self.register_rpc(*a, async_=True, **kw)
+
+	def register_alert(self, *a, async_=False, **kw):
 		"""Register a listener"""
-		return self.register_rpc(*a, async=async, alert=True, call_conv=call_conv)
+		return self.register_rpc(*a, async_=async_, alert=True, **kw)
+
+	def register_alert_async(self, *a, **kw):
+		return self.register_rpc(*a, async_=True, alert=True, **kw)
 
 	def _alert_ping(self,msg):
 		return dict(
@@ -219,14 +220,13 @@ class Unit(object):
 			except Exception:
 				logger.exception("closing connection")
 
-	@asyncio.coroutine
-	def _create_conn(self):
+	async def _create_conn(self):
 		from .conn import Connection
 		conn = Connection(self)
-		yield from conn.connect()
+		await conn.connect()
 		for d in self.rpc_endpoints.values():
-			yield from conn.register_rpc(d)
+			await conn.register_rpc(d)
 		for d in self.alert_endpoints.values():
-			yield from conn.register_alert(d)
+			await conn.register_alert(d)
 		self.conn = conn
 

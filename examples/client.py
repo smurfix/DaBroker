@@ -22,14 +22,13 @@ logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
 u=Unit("test.client", load_cfg("test.cfg"))
 
-@asyncio.coroutine
-def example():
-	yield from u.start()
+async def example():
+	await u.start()
 	try:
-		res = yield from u.rpc("example.hello","Fred")
+		res = await u.rpc("example.hello","Fred")
 		print(res)
 	finally:
-		yield from u.stop()
+		await u.stop()
 
 def main():
 	loop = asyncio.get_event_loop()

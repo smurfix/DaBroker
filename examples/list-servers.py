@@ -24,13 +24,12 @@ u=Unit("test.client.list_servers", load_cfg("test.cfg"))
 
 def cb(data):
 	print(data)
-@asyncio.coroutine
-def example():
-	yield from u.start()
+async def example():
+	await u.start()
 	try:
-		yield from u.alert("dabroker.ping",callback=cb,call_conv=CC_DATA, timeout=2)
+		await u.alert("dabroker.ping",callback=cb,call_conv=CC_DATA, timeout=2)
 	finally:
-		yield from u.stop()
+		await u.stop()
 
 def main():
 	loop = asyncio.get_event_loop()

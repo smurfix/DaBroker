@@ -31,7 +31,6 @@ class RPCservice(object):
 		self.name = name
 		self.call_conv = call_conv
 	
-	@asyncio.coroutine
-	def run(self, *a,**k):
+	async def run(self, *a,**k):
 		return self.fn(*a,**k)
 
