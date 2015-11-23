@@ -201,7 +201,7 @@ class Connection(object):
 		else:
 			data = self.codec.encode(data)
 		if timeout is not None:
-			f = asyncio.Future()
+			f = asyncio.Future(loop=self._loop)
 			id = msg.message_id
 			self.replies[id] = (f,msg)
 		logger.debug("Send %s to %s: %s", msg.name, cfg['exchanges'][msg._exchange], data)
@@ -209,7 +209,7 @@ class Connection(object):
 		if timeout is None:
 			return
 		try:
-			await asyncio.wait_for(f,timeout)
+			await asyncio.wait_for(f,timeout, loop=self._loop)
 		except asyncio.TimeoutError:
 			if isinstance(msg,PollMsg):
 				return msg.replies

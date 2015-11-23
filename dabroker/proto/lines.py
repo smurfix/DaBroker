@@ -28,8 +28,8 @@ class LineProtocol(Protocol):
 	MAX_LENGTH=10*1024
 	LF=b'\n'
 
-	def __init__(self):
-		super().__init__()
+	def __init__(self, loop=None):
+		super().__init__(loop=loop)
 		self.data = b""
 
 	def received(self, data):

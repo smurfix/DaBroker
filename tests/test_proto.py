@@ -62,19 +62,19 @@ class EchoClientProtocol(asyncio.Protocol):
 		self.future.set_result(self.done)
 
 @pytest.yield_fixture
-def echoserver(event_loop, unused_tcp_port):
+def echoserver(loop, unused_tcp_port):
 	# Each client connection will create a new protocol instance
-	coro = event_loop.create_server(lambda: EchoServerClientProtocol(event_loop), '127.0.0.1', unused_tcp_port)
-	server = event_loop.run_until_complete(coro)
+	coro = loop.create_server(lambda: EchoServerClientProtocol(loop), '127.0.0.1', unused_tcp_port)
+	server = loop.run_until_complete(coro)
 	server.port = unused_tcp_port
 	yield server
 	server.close()
-	event_loop.run_until_complete(server.wait_closed())
+	loop.run_until_complete(server.wait_closed())
 
-@pytest.mark.asyncio
-async def test_echo(event_loop, echoserver):
-	f = asyncio.Future()
-	coro = event_loop.create_connection(lambda: EchoClientProtocol(f),
+@pytest.mark.run_loop
+async def test_echo(loop, echoserver):
+	f = asyncio.Future(loop=loop)
+	coro = loop.create_connection(lambda: EchoClientProtocol(f),
 							  '127.0.0.1', echoserver.port)
 	await coro
 	await f
@@ -98,17 +98,17 @@ class LinesTester(ProtocolInteraction):
 		assert n == "wherever"
 		assert o == "whenever"
 	
-@pytest.mark.asyncio
-async def test_lines(echoserver, event_loop):
+@pytest.mark.run_loop
+async def test_lines(echoserver, loop):
 	"""Use the "lines" protocol to go through the basic protocol features"""
-	c = ProtocolClient(LineProtocol, "127.0.0.1",echoserver.port, loop=event_loop)
-	await c.run(LinesTester(loop=event_loop))
+	c = ProtocolClient(LineProtocol, "127.0.0.1",echoserver.port, loop=loop)
+	await c.run(LinesTester(loop=loop))
 	assert len(c.conns) == 1
 	fff=[]
-	tp = LinesTester(fff,loop=event_loop,conn=c)
-	e = asyncio.ensure_future(tp.run(), loop=event_loop)
+	tp = LinesTester(fff,loop=loop,conn=c)
+	e = asyncio.ensure_future(tp.run(), loop=loop)
 	# give 'e' time to start up
-	await asyncio.sleep(D/3, loop=event_loop)
+	await asyncio.sleep(D/3, loop=loop)
 	# make sure close() waits for 'e' and doesn't break it
 	await c.close()
 	assert e.done()
@@ -116,18 +116,18 @@ async def test_lines(echoserver, event_loop):
 	assert len(c.conns) == 0
 	# create an idle connection which the next step can re-use
 	eee=[]
-	await c.run(LinesTester(eee, loop=event_loop))
+	await c.run(LinesTester(eee, loop=loop))
 	assert len(c.conns) == 1
 
 	# now do two at the same time, and abort
 	fff.pop()
 	ff = c.run(tp)
-	f = asyncio.ensure_future(ff, loop=event_loop)
-	await asyncio.sleep(D)
+	f = asyncio.ensure_future(ff, loop=loop)
+	await asyncio.sleep(D, loop=loop)
 	with pytest.raises(RuntimeError):
 		await c.run(tp)
-	g = asyncio.ensure_future(c.run(LinesTester(loop=event_loop)), loop=event_loop)
-	await asyncio.sleep(D)
+	g = asyncio.ensure_future(c.run(LinesTester(loop=loop)), loop=loop)
+	await asyncio.sleep(D, loop=loop)
 	await f
 	# check that the connection is reused
 	assert len(eee) == 1
@@ -136,9 +136,9 @@ async def test_lines(echoserver, event_loop):
 
 	c.MAX_IDLE = 0
 	hhh = []
-	hh = c.run(LinesTester(hhh, loop=event_loop))
-	h = asyncio.ensure_future(hh, loop=event_loop)
-	await asyncio.sleep(D/3, loop=event_loop)
+	hh = c.run(LinesTester(hhh, loop=loop))
+	h = asyncio.ensure_future(hh, loop=loop)
+	await asyncio.sleep(D/3, loop=loop)
 	assert len(hhh) == 1
 	assert eee[0] != hhh[0]
 	c.abort()
@@ -151,5 +151,5 @@ async def test_lines(echoserver, event_loop):
 		await h
 
 	# let the mainloop process things
-	await asyncio.sleep(D/2, loop=event_loop)
+	await asyncio.sleep(D/2, loop=loop)
 

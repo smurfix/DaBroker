@@ -24,8 +24,8 @@ class Disconnected(BaseException):
 
 class Protocol(asyncio.Protocol):
 	def __init__(self, loop=None):
-		self.queue = asyncio.Queue()
 		self._loop = loop if loop is not None else asyncio.get_event_loop()
+		self.queue = asyncio.Queue(loop=self._loop)
 		self.paused = asyncio.Future(loop=self._loop)
 		self.paused.set_result(False)
 
@@ -141,7 +141,7 @@ class ProtocolClient(object):
 			except Exception: # pragma: no cover
 				logger.exception("Closing idle connection")
 		else:
-			_,conn = await self._loop.create_connection(self.protocol, self.host,self.port)
+			_,conn = await self._loop.create_connection(lambda: self.protocol(loop=self._loop), self.host,self.port)
 		return conn
 		
 	def _put_conn(self,conn):

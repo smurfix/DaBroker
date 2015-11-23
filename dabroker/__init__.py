@@ -53,7 +53,7 @@ def patch():
 
 # Warnings are bad, except for some which are not
 from warnings import filterwarnings
-filterwarnings("error")
+#filterwarnings("error")
 #filterwarnings("ignore",category=DeprecationWarning)
 #filterwarnings("ignore",category=PendingDeprecationWarning)
 #filterwarnings("ignore",category=ImportWarning)
