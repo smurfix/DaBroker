@@ -9,6 +9,7 @@ from json.decoder import JSONDecoder
 from zuko import config
 from . import attrdict, TZ,UTC, format_dt
 import datetime as dt
+from collections.abc import Mapping
 
 type2cls = {}
 name2cls = {}
@@ -143,7 +144,7 @@ class Decoder(JSONDecoder):
 		super(Decoder,self).__init__(object_hook=self.hook)
 
 	def hook(self,data):
-		if not isinstance(data,dict):
+		if not isinstance(data,Mapping):
 			return data
 
 		ev = data.pop('_o',None)

@@ -26,6 +26,7 @@ from ..util import attrdict, import_string, uuidstr
 from .msg import RequestMsg,PollMsg,AlertMsg
 from .rpc import CC_MSG
 from . import DEFAULT_CONFIG
+from collections.abc import Mapping
 
 import logging
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ def _r_setdefault(d,kv):
 		except KeyError:
 			d[k] = v
 		else:
-			if isinstance(d[k],dict):
+			if isinstance(d[k],Mapping):
 				_r_setdefault(dk,v)
 
 class Unit(object):
@@ -194,7 +195,7 @@ class Unit(object):
 		
 	def _get_config(self, cfg):
 		"""Read config data from cfg and etcd"""
-		if not isinstance(cfg,dict): # pragma: no cover
+		if not isinstance(cfg,Mapping): # pragma: no cover
 			from etctree.util import from_yaml
 			cfg = from_yaml(cfg)['config']
 

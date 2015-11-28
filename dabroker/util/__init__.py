@@ -18,6 +18,7 @@ from importlib import import_module
 from pprint import pformat
 from six import PY2,PY3, string_types,text_type
 from functools import wraps
+from collections.abc import Mapping
 
 from .thread import AsyncResult
 
@@ -102,7 +103,7 @@ def format_dt(value, format='%Y-%m-%d %H:%M:%S'):
 		return value.replace(tzinfo=UTC).astimezone(TZ).strftime(format)
 
 def _p_filter(m,mids):
-	if isinstance(m,dict):
+	if isinstance(m,Mapping):
 		if m.get('_oi',0) not in mids:
 			del m['_oi']
 		for v in m.values():
@@ -111,7 +112,7 @@ def _p_filter(m,mids):
 		for v in m:
 			_p_filter(v,mids)
 def _p_find(m,mids):
-	if isinstance(m,dict):
+	if isinstance(m,Mapping):
 		mids.add(m.get('_or',0))
 		for v in m.values():
 			_p_find(v,mids)
