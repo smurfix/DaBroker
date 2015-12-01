@@ -202,7 +202,7 @@ class Unit(object):
 		_r_setdefault(cfg,DEFAULT_CONFIG)
 		return cfg
 		
-	## The following code is the non-interesting cleanup part
+	## cleanup, less interesting (hopefully)
 
 	def __del__(self):
 		self._kill()
@@ -217,7 +217,7 @@ class Unit(object):
 		c,self.conn = self.conn,None
 		if c: # pragma: no cover
 			try:
-				c.close()
+				c._kill()
 			except Exception:
 				logger.exception("closing connection")
 

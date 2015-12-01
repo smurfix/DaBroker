@@ -1,3 +1,9 @@
+dabroker (0.1.5.2) smurf; urgency=medium
+
+  * Fix connection killing
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 01 Dec 2015 12:11:09 +0100
+
 dabroker (0.1.5.1) smurf; urgency=medium
 
   * Allow mappings, not just dicts.

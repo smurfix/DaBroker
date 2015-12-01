@@ -249,3 +249,12 @@ class Connection(object):
 				logger.exception("closing the connection")
 			self.amqp_transport = None
 
+	def _kill(self):
+		self.amqp = None
+		a,self.amqp_transport = self.amqp_transport,None
+		if a is not None:
+			try:
+				a.close()
+			except Exception: # pragma: no cover
+				logger.exception("killing the connection")
+
