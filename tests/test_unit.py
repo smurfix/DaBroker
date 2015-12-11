@@ -51,7 +51,7 @@ async def test_conn_not(loop, unused_tcp_port):
 async def test_rpc_basic(unit1, unit2, loop):
 	call_me = Mock(side_effect=lambda x: "foo "+x)
 	call_msg = Mock(side_effect=lambda m: "foo "+m.data['x'])
-	await unit1.register_rpc_async("my.call",call_me, call_conv=CC_DATA)
+	r1 = await unit1.register_rpc_async("my.call",call_me, call_conv=CC_DATA)
 	await unit1.register_rpc_async("my.call.x",call_me, call_conv=CC_DICT)
 	await unit1.register_rpc_async("my.call.m",call_msg, call_conv=CC_MSG)
 	res = await unit2.rpc("my.call", "one")
@@ -66,6 +66,10 @@ async def test_rpc_basic(unit1, unit2, loop):
 		res = await unit1.rpc("my.call", y="duh")
 	res = await unit1.rpc("my.call.m", x="four")
 	assert res == "foo four"
+	await unit1.unregister_rpc_async(r1)
+	t = unit1.rpc("my.call", "No!")
+	with pytest.raises(asyncio.TimeoutError):
+		await asyncio.wait_for(t,timeout=0.5,loop=loop)
 
 @pytest.mark.run_loop
 async def test_rpc_unencoded(unit1, unit2, loop):
@@ -107,7 +111,7 @@ async def test_rpc_explicit(unit1, unit2, loop):
 @pytest.mark.run_loop
 async def test_alert_callback(unit1, unit2, loop):
 	alert_me = Mock(side_effect=lambda y: "bar "+y)
-	await unit1.register_alert_async("my.alert",alert_me, call_conv=CC_DICT)
+	r1 = await unit1.register_alert_async("my.alert",alert_me, call_conv=CC_DICT)
 	await unit2.register_alert_async("my.alert",alert_me, call_conv=CC_DICT)
 	n = 0
 	def cb(x):
@@ -119,6 +123,9 @@ async def test_alert_callback(unit1, unit2, loop):
 	n = 0
 	await unit1.alert("my.alert",_data={'y':"dud"},callback=cb,call_conv=CC_DATA, timeout=0.2)
 	assert n == 2
+	await unit1.unregister_alert_async(r1)
+	await unit1.alert("my.alert",_data={'y':"dud"},callback=cb,call_conv=CC_DATA, timeout=0.2)
+	assert n == 3
 
 @pytest.mark.run_loop
 async def test_alert_uncodeable(unit1, unit2, loop):
@@ -253,6 +260,7 @@ def test_reg_sync(loop):
 	@u.register_rpc(call_conv=CC_DICT)
 	def foo_bar_2(baz):
 		return "quux from "+baz
+	assert "foo.bar.2" in u.rpc_endpoints
 	loop.run_until_complete(u.start())
 	x = loop.run_until_complete(u.rpc("foo.bar",baz="nixx"))
 	y = loop.run_until_complete(u.rpc("foo.bar.1",baz="nixy"))
@@ -261,4 +269,6 @@ def test_reg_sync(loop):
 	assert y == "quux from nixy"
 	assert z == "quux from nixz"
 	loop.run_until_complete(u.stop())
+	u.unregister_rpc("foo.bar.2")
+	assert "foo.bar.2" not in u.rpc_endpoints
 

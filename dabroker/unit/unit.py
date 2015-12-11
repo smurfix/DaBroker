@@ -113,9 +113,9 @@ class Unit(object):
 		
 	## server
 
-	def register_rpc(self, *a, async_=False, alert=False, call_conv=CC_MSG):
+	def register_rpc(self, *a, _async=False, _alert=False, call_conv=CC_MSG):
 		"""\
-			Register a listener.
+			Register an RPC listener while not connected.
 				
 				conn.register_rpc(RPCservice(fn,name))
 				conn.register_rpc(name,fn)
@@ -127,11 +127,12 @@ class Unit(object):
 			"""
 		name = None
 		async def reg_async(fn,epl):
-			if alert:
+			if _alert:
 				await self.conn.register_alert(fn)
 			else:
 				await self.conn.register_rpc(fn)
 			epl[name] = fn
+			return fn
 		def reg(fn):
 			nonlocal name
 			from .rpc import RPCservice
@@ -144,13 +145,13 @@ class Unit(object):
 			elif name is None:
 				name = fn.name
 			assert fn.is_alert is None
-			if alert:
+			if _alert:
 				epl = self.alert_endpoints
 			else:
 				epl = self.rpc_endpoints
 			assert name not in epl, name
-			fn.is_alert = alert
-			if async_ and self.conn is not None:
+			fn.is_alert = _alert
+			if _async and self.conn is not None:
 				return reg_async(fn,epl)
 			else:
 				assert self.conn is None,"Use register_*_async() when connected"
@@ -171,14 +172,53 @@ class Unit(object):
 				return reg(a)
 	
 	def register_rpc_async(self, *a, **kw):
-		return self.register_rpc(*a, async_=True, **kw)
+		"""Register an RPC listener while connected.
+				
+				await conn.register_rpc(RPCservice(fn,name))
+				await conn.register_rpc(name,fn)
+				await conn.register_rpc(fn)
+			"""
+		return self.register_rpc(*a, _async=True, **kw)
 
-	def register_alert(self, *a, async_=False, **kw):
-		"""Register a listener"""
-		return self.register_rpc(*a, async_=async_, alert=True, **kw)
+	def register_alert(self, *a, _async=False, **kw):
+		"""Register an alert listener.
+		   See register_rpc for calling conventions."""
+		return self.register_rpc(*a, _async=_async, _alert=True, **kw)
 
 	def register_alert_async(self, *a, **kw):
-		return self.register_rpc(*a, async_=True, alert=True, **kw)
+		"""Register an alert listener.
+		   See register_rpc_async for calling conventions."""
+		return self.register_rpc(*a, _async=True, _alert=True, **kw)
+
+	def unregister_rpc(self, fn, _async=False,_alert=False):
+		if not isinstance(fn,str):
+			if hasattr(fn,'name'):
+				fn = fn.name
+			else:
+				fn = fn.__name__
+				fn = fn.replace('._','.')
+				fn = fn.replace('_','.')
+		if _alert:
+			epl = self.alert_endpoints
+		else:
+			epl = self.rpc_endpoints
+		fn = epl.pop(fn)
+		if fn.is_alert != _alert:
+			raise RuntimeError("register/unregister alter: %s/%s" % (fn.is_alert,_alert))
+		if _async:
+			if _alert:
+				return self.conn.unregister_alert(fn)
+			else:
+				return self.conn.unregister_rpc(fn)
+
+	def unregister_alert(self, fn):
+		return self.unregister_rpc(fn, _alert=True)
+
+	def unregister_rpc_async(self, fn):
+		return self.unregister_rpc(fn, _async=True)
+
+	def unregister_alert_async(self, fn):
+		return self.unregister_rpc(fn, _async=True, _alert=True)
 
 	def _alert_ping(self,msg):
 		return dict(

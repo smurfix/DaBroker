@@ -35,6 +35,7 @@ class Connection(object):
 
 	def __init__(self,unit):
 		self._loop = unit._loop
+		self.rpcs = {}
 		self.alerts = {}
 		self.replies = {}
 		self.unit = weakref.ref(unit)
@@ -226,19 +227,43 @@ class Connection(object):
 		rpc.queue = await rpc.channel.queue_declare(cfg['queues']['rpc']+rpc.name.replace('.','_'), auto_delete=True, passive=False)
 		logging.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges']['rpc'], rpc.name, rpc.queue['queue'])
 		await rpc.channel.queue_bind(rpc.queue['queue'], cfg['exchanges']['rpc'], routing_key=rpc.name)
+		self.rpcs[rpc.uuid] = rpc
 
 		await rpc.channel.basic_qos(prefetch_count=1,prefetch_size=0,connection_global=False)
 		logging.debug("Chan %s: read %s", rpc.channel,rpc.queue['queue'])
 		callback=functools.partial(self._on_rpc,rpc)
 		callback._is_coroutine = True
-		await rpc.channel.basic_consume(rpc.queue['queue'], callback=callback)
+		await rpc.channel.basic_consume(rpc.queue['queue'], callback=callback, consumer_tag=rpc.uuid)
+
+	async def unregister_rpc(self,rpc):
+		ch = self.rpc
+		cfg = self.unit().config['amqp']
+		if isinstance(rpc,str):
+			rpc = self.rpcs.pop(rpc)
+		else:
+			del self.rpcs[rpc.uuid]
+		assert rpc.queue is not None
+		logging.debug("Chan %s: unbind %s %s %s", ch.channel,cfg['exchanges']['rpc'], rpc.name, rpc.queue['queue'])
+		await rpc.channel.queue_unbind(rpc.queue['queue'], cfg['exchanges']['rpc'], routing_key=rpc.name)
+		logging.debug("Chan %s: noread %s", rpc.channel,rpc.queue['queue'])
+		await rpc.channel.basic_cancel(consumer_tag=rpc.uuid)
 
 	async def register_alert(self,rpc):
 		ch = self.alert
 		cfg = self.unit().config['amqp']
-		logging.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges']['rpc'], rpc.name, ch.exchange)
+		logging.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges']['alert'], rpc.name, ch.exchange)
 		await ch.channel.queue_bind(ch.queue['queue'], ch.exchange, routing_key=rpc.name)
 		self.alerts[rpc.name] = rpc
+
+	async def unregister_alert(self,rpc):
+		if isinstance(rpc,str):
+			rpc = self.alerts.pop(rpc)
+		else:
+			del self.alerts[rpc.name]
+		ch = self.alert
+		cfg = self.unit().config['amqp']
+		logging.debug("Chan %s: unbind %s %s %s", ch.channel,cfg['exchanges']['alert'], rpc.name, ch.exchange)
+		await ch.channel.queue_unbind(ch.queue['queue'], ch.exchange, routing_key=rpc.name)
 
 	async def close(self):
 		a,self.amqp = self.amqp,None

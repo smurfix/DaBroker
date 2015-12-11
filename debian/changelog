@@ -1,3 +1,9 @@
+dabroker (0.1.6.1) smurf; urgency=medium
+
+  * Add unregistering RPCs and alerts
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Fri, 11 Dec 2015 22:18:24 +0100
+
 dabroker (0.1.5.2) smurf; urgency=medium
 
   * Fix connection killing
