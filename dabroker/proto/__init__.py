@@ -23,6 +23,15 @@ class Disconnected(BaseException):
 	pass
 
 class Protocol(asyncio.Protocol):
+	"""\
+		This class is responsible for translating the protocol's byte
+		stream to messages, and vice versa.
+
+		If you stream data out, you should periodically do
+			await protocol.paused
+		to make sure that the buffer doesn't go out of bounds.
+
+		"""
 	def __init__(self, loop=None):
 		self._loop = loop if loop is not None else asyncio.get_event_loop()
 		self.queue = asyncio.Queue(loop=self._loop)
@@ -45,7 +54,6 @@ class Protocol(asyncio.Protocol):
 		self.queue.put_nowait(exc)
 		
 	def data_received(self, data):
-		"""Override this method to assemble and yield messages."""
 		try:
 			for m in self.received(data):
 				self.queue.put_nowait(m)
@@ -55,7 +63,21 @@ class Protocol(asyncio.Protocol):
 			self.queue.put_nowait(exc)
 
 	def received(self, data): # pragma: no cover
+		"""\
+			You must override this method!
+
+			Translate the incoming byte stream to messages and yield them.
+			"""
 		raise NotImplementedError("You need to override %s.receive" % self.__class__.__name__)
+	
+	def send(self, whatever=None, *a,**k):
+		"""\
+			You must override this method!
+
+			Translate the message to be sent to a bytestream
+			and call self.transport.write().
+			"""
+		raise NotImplementedError("You need to override %s.send" % self.__class__.__name__)
 
 	def pause_writing(self): # pragma: no cover
 		self.paused = asyncio.Future(loop=self._loop)
@@ -117,10 +139,20 @@ class ProtocolInteraction(object):
 		
 class ProtocolClient(object):
 	"""\
-		A generic streaming client, using multiple connections
+		A generic streaming client.
+
+		You use this object by encapsulating a sequence of read or write
+		calls in a ProtocolInteraction, then call this object's "run"
+		method with it.
+
+		This client uses multiple connections.
 		"""
 	MAX_IDLE = 10
 	def __init__(self, protocol, host,port, loop=None):
+		"""\
+			@protocol: factory for the protocol to run on the connection(s)
+			@host, @port: the service to talk to.
+			"""
 		self.protocol = protocol
 		self.host = host
 		self.port = port
@@ -155,7 +187,7 @@ class ProtocolClient(object):
 
 	async def run(self, interaction, *a,**k):
 		"""\
-			Run the interaction on this connection.
+			Run the interaction on (an instance of) this connection.
 			"""
 		conn = await self._get_conn()
 		f = None
@@ -204,6 +236,7 @@ class ProtocolClient(object):
 				logger.exception("Trying to abort")
 
 	async def close(self):
+		"""Wait for all tasks to finish"""
 		while self.tasks:
 			for k in list(self.tasks.keys()):
 				await self.tasks.pop(k,None)
