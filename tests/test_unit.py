@@ -199,7 +199,7 @@ async def test_reg(unit1, unit2, loop):
 
 	res = await unit2.rpc("dabroker.ping."+unit1.uuid)
 	assert res['app'] == unit1.app
-	assert "dabroker.ping."+unit1.uuid in res['rpc_endpoints']
+	assert "dabroker.ping."+unit1.uuid in res['rpc']
 
 @pytest.mark.run_loop
 async def test_alert_error(unit1, unit2, loop):

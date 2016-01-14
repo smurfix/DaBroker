@@ -230,7 +230,8 @@ class Unit(object):
 		return dict(
 			app=self.app,
 			uuid=self.uuid,
-			rpc_endpoints=list(self.rpc_endpoints.keys())
+			rpc=list(self.rpc_endpoints.keys()),
+			alert=list(self.alert_endpoints.keys()),
 			)
 		
 	def _get_config(self, cfg):
