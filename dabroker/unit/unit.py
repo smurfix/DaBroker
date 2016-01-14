@@ -204,7 +204,7 @@ class Unit(object):
 			epl = self.rpc_endpoints
 		fn = epl.pop(fn)
 		if fn.is_alert != _alert:
-			raise RuntimeError("register/unregister alter: %s/%s" % (fn.is_alert,_alert))
+			raise RuntimeError("register/unregister alert: %s/%s" % (fn.is_alert,_alert))
 		if _async:
 			if _alert:
 				return self.conn.unregister_alert(fn)
