@@ -70,6 +70,7 @@ class Unit(object):
 		self.register_rpc("dabroker.ping."+self.uuid, self._reply_ping)
 
 		await self._create_conn()
+		await self.alert('dabroker.start', uuid=self.uuid, app=self.app)
 	
 	async def stop(self):
 		self.rpc_endpoints.pop("dabroker.ping."+self.uuid, None)
