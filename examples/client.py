@@ -24,6 +24,7 @@ u=Unit("test.client", load_cfg("test.cfg")['config'])
 
 async def example():
 	await u.start()
+	await asyncio.sleep(0.2) # allow monitor to attach
 	try:
 		res = await u.rpc("example.hello","Fred")
 		print(res)
