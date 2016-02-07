@@ -1,3 +1,9 @@
+dabroker (0.1.7.1) smurf; urgency=medium
+
+  * etcdtree module renamed
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 07 Feb 2016 03:02:33 +0100
+
 dabroker (0.1.7) smurf; urgency=medium
 
   * Update for aioamqp 0.6

@@ -11,9 +11,8 @@ Build-Depends: debhelper (>= 7),
   python3-werkzeug,
   python3-six (>= 1.7),
   python3-pytest-asyncio,
-  python3-etctree (>> 0.4.1),
+  python3-etcd-tree (>> 0.9),
   python3-aioamqp (>> 0.6.0),
-  python3-etctree,
   python3-blinker,
 Standards-Version: 3.9.1
 X-Python3-Version: >= 3.5
