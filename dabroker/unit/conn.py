@@ -88,7 +88,7 @@ class Connection(object):
 			ch.queue = await ch.channel.queue_declare(cfg['queues'][name]+q, auto_delete=True, passive=False, exclusive=exclusive)
 			await ch.channel.basic_qos(prefetch_count=1,prefetch_size=0,connection_global=False)
 			logging.debug("Chan %s: read %s", ch.channel,cfg['queues'][name]+q)
-			await ch.channel.basic_consume(cfg['queues'][name]+q, callback=callback)
+			await ch.channel.basic_consume(queue_name=cfg['queues'][name]+q, callback=callback)
 			if route_key is not None:
 				logging.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges'][name], route_key, ch.queue['queue'])
 				await ch.channel.queue_bind(ch.queue['queue'], cfg['exchanges'][name], routing_key=route_key)
@@ -104,7 +104,7 @@ class Connection(object):
 		await self._setup_one("rpc",'topic')
 		await self._setup_one("reply",'direct', self._on_reply, u.uuid, u.uuid)
 
-	async def _on_alert(self, body,envelope,properties):
+	async def _on_alert(self, channel,body,envelope,properties):
 		logger.debug("read alert message %s",envelope.delivery_tag)
 		try:
 			msg = self.codec.decode(body)
@@ -139,7 +139,7 @@ class Connection(object):
 			logger.debug("ack message %s",envelope.delivery_tag)
 			await self.alert.channel.basic_client_ack(envelope.delivery_tag)
 
-	async def _on_rpc(self, rpc, body,envelope,properties):
+	async def _on_rpc(self, rpc, channel,body,envelope,properties):
 		logger.debug("read rpc message %s",envelope.delivery_tag)
 		try:
 			msg = self.codec.decode(body)
@@ -169,7 +169,7 @@ class Connection(object):
 			logger.debug("ack message %s",envelope.delivery_tag)
 			await rpc.channel.basic_client_ack(envelope.delivery_tag)
 
-	async def _on_reply(self, body,envelope,properties):
+	async def _on_reply(self, channel,body,envelope,properties):
 		logger.debug("read reply message %s",envelope.delivery_tag)
 		try:
 			msg = self.codec.decode(body)
@@ -233,7 +233,7 @@ class Connection(object):
 		logging.debug("Chan %s: read %s", rpc.channel,rpc.queue['queue'])
 		callback=functools.partial(self._on_rpc,rpc)
 		callback._is_coroutine = True
-		await rpc.channel.basic_consume(rpc.queue['queue'], callback=callback, consumer_tag=rpc.uuid)
+		await rpc.channel.basic_consume(queue_name=rpc.queue['queue'], callback=callback, consumer_tag=rpc.uuid)
 
 	async def unregister_rpc(self,rpc):
 		ch = self.rpc

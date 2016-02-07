@@ -20,7 +20,7 @@ import logging
 import sys
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
-u=Unit("test.client", load_cfg("test.cfg"))
+u=Unit("test.client", load_cfg("test.cfg")['config'])
 
 async def example():
 	await u.start()
