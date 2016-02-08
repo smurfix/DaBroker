@@ -187,15 +187,19 @@ async def test_alert_stop(unit1, unit2, loop):
 
 @pytest.mark.run_loop
 async def test_reg(unit1, unit2, loop):
+	rx = 0
 	def recv(**d):
+		nonlocal rx
 		if d['uuid'] == unit1.uuid:
 			assert d['app'] == unit1.app
+			rx += 1
 		elif d['uuid'] == unit2.uuid:
 			assert d['app'] == unit2.app
-		else:
-			assert False,d
+			rx += 1
+		# There may be others.
 	res = await unit2.alert("dabroker.ping", callback=recv, timeout=0.2, call_conv=CC_DICT)
-	assert res == 2
+	assert res >= 2
+	assert rx == 2
 
 	res = await unit2.rpc("dabroker.ping."+unit1.uuid)
 	assert res['app'] == unit1.app
