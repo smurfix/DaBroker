@@ -1,3 +1,10 @@
+dabroker (0.1.8.0) smurf; urgency=medium
+
+  * add argument vector to startup message
+  * Add stop message (shutting down)
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Mon, 08 Feb 2016 11:06:33 +0100
+
 dabroker (0.1.7.1) smurf; urgency=medium
 
   * etcdtree module renamed
