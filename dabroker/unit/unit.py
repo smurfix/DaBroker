@@ -63,17 +63,17 @@ class Unit(object):
 
 		self.register_alert("dabroker.ping",self._alert_ping)
 
-	async def start(self):
+	async def start(self, *args):
 		self.uuid = uuidstr()
 		self.config = self._get_config(self._cfg)
 
 		self.register_rpc("dabroker.ping."+self.uuid, self._reply_ping)
 
 		await self._create_conn()
-		await self.alert('dabroker.start', uuid=self.uuid, app=self.app)
+		await self.alert('dabroker.start', uuid=self.uuid, app=self.app, args=args)
 	
-	async def stop(self):
-		self.rpc_endpoints.pop("dabroker.ping."+self.uuid, None)
+	async def stop(self, rc=0):
+		await self.alert('dabroker.stop', uuid=self.uuid, exitcode=rc)
 
 		c,self.conn = self.conn,None
 		if c:

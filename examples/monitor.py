@@ -42,7 +42,7 @@ class mon:
 		self.channel = await u.conn.amqp.channel()
 		await self.channel.exchange_declare(self.name, self.typ, auto_delete=False, passive=False)
 		self.queue_name = 'mon_'+self.name+'_'+self.u.uuid
-		self.queue = await self.channel.queue_declare(self.queue_name, auto_delete=True, passive=False, exclusive=False)
+		self.queue = await self.channel.queue_declare(self.queue_name, auto_delete=True, passive=False, exclusive=True)
 		await self.channel.basic_qos(prefetch_count=1,prefetch_size=0,connection_global=False)
 		await self.channel.queue_bind(self.queue_name, self.name, routing_key='#')
 		await self.channel.basic_consume(queue_name=self.queue_name, callback=self.callback)
@@ -51,12 +51,15 @@ class mon:
 		if properties.content_type == 'application/json':
 			body = json.loads(body.decode('utf-8'))
 
-		if self.name == 'alert' and \
-				envelope.routing_key == 'dabroker.start':
-			c = channels['reply']
-			await jobs.put(BindMe(c, c.queue_name, c.name, routing_key=body['uuid']))
+		if self.name == 'alert':
+			if envelope.routing_key == 'dabroker.start':
+				c = channels['reply']
+				await jobs.put(BindMe(c, c.queue_name, c.name, routing_key=body['uuid']))
+			elif envelope.routing_key == 'dabroker.stop':
+				c = channels['reply']
+				loop.call_later(10,jobs.put_nowait,UnBindMe(c, c.queue_name, c.name, routing_key=body['uuid']))
 
-		m = {'_body':body, 'prop':{}, 'env':{}}
+		m = {'body':body, 'prop':{}, 'env':{}}
 		for p in dir(properties):
 			if p.startswith('_'):
 				continue
@@ -79,6 +82,14 @@ class BindMe:
 		self.k = k
 	async def run(self):
 		await self.c.channel.queue_bind(*self.a,**self.k)
+
+class UnBindMe:
+	def __init__(self,c,*a,**k):
+		self.c = c
+		self.a = a
+		self.k = k
+	async def run(self):
+		await self.c.channel.queue_unbind(*self.a,**self.k)
 
 ##################### main loop
 

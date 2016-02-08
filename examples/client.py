@@ -23,13 +23,16 @@ logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 u=Unit("test.client", load_cfg("test.cfg")['config'])
 
 async def example():
-	await u.start()
+	rc = 0
+	await u.start(*sys.argv)
 	await asyncio.sleep(0.2) # allow monitor to attach
 	try:
-		res = await u.rpc("example.hello","Fred")
+		res = await u.rpc("example.hello","Fred" if len(sys.argv) < 2 else sys.argv[1])
 		print(res)
+	except Exception:
+		rc = 2
 	finally:
-		await u.stop()
+		await u.stop(rc)
 
 def main():
 	loop = asyncio.get_event_loop()
