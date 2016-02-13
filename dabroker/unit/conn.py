@@ -78,7 +78,7 @@ class Connection(object):
 		logger.debug("setup RPC for %s",name)
 		ch.channel = await self.amqp.channel()
 		ch.exchange = cfg['exchanges'][name]
-		logging.debug("Chan %s: exchange %s", ch.channel,cfg['exchanges'][name])
+		logger.debug("Chan %s: exchange %s", ch.channel,cfg['exchanges'][name])
 		if exclusive is None:
 			exclusive = (q is not None)
 		await ch.channel.exchange_declare(cfg['exchanges'][name], typ, auto_delete=False, passive=False)
@@ -87,10 +87,10 @@ class Connection(object):
 			assert callback is not None
 			ch.queue = await ch.channel.queue_declare(cfg['queues'][name]+q, auto_delete=True, passive=False, exclusive=exclusive)
 			await ch.channel.basic_qos(prefetch_count=1,prefetch_size=0,connection_global=False)
-			logging.debug("Chan %s: read %s", ch.channel,cfg['queues'][name]+q)
+			logger.debug("Chan %s: read %s", ch.channel,cfg['queues'][name]+q)
 			await ch.channel.basic_consume(queue_name=cfg['queues'][name]+q, callback=callback)
 			if route_key is not None:
-				logging.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges'][name], route_key, ch.queue['queue'])
+				logger.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges'][name], route_key, ch.queue['queue'])
 				await ch.channel.queue_bind(ch.queue['queue'], cfg['exchanges'][name], routing_key=route_key)
 		else:
 			assert callback is None
@@ -225,12 +225,12 @@ class Connection(object):
 		assert rpc.queue is None
 		rpc.channel = await self.amqp.channel()
 		rpc.queue = await rpc.channel.queue_declare(cfg['queues']['rpc']+rpc.name.replace('.','_'), auto_delete=True, passive=False)
-		logging.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges']['rpc'], rpc.name, rpc.queue['queue'])
+		logger.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges']['rpc'], rpc.name, rpc.queue['queue'])
 		await rpc.channel.queue_bind(rpc.queue['queue'], cfg['exchanges']['rpc'], routing_key=rpc.name)
 		self.rpcs[rpc.uuid] = rpc
 
 		await rpc.channel.basic_qos(prefetch_count=1,prefetch_size=0,connection_global=False)
-		logging.debug("Chan %s: read %s", rpc.channel,rpc.queue['queue'])
+		logger.debug("Chan %s: read %s", rpc.channel,rpc.queue['queue'])
 		callback=functools.partial(self._on_rpc,rpc)
 		callback._is_coroutine = True
 		await rpc.channel.basic_consume(queue_name=rpc.queue['queue'], callback=callback, consumer_tag=rpc.uuid)
@@ -243,15 +243,15 @@ class Connection(object):
 		else:
 			del self.rpcs[rpc.uuid]
 		assert rpc.queue is not None
-		logging.debug("Chan %s: unbind %s %s %s", ch.channel,cfg['exchanges']['rpc'], rpc.name, rpc.queue['queue'])
+		logger.debug("Chan %s: unbind %s %s %s", ch.channel,cfg['exchanges']['rpc'], rpc.name, rpc.queue['queue'])
 		await rpc.channel.queue_unbind(rpc.queue['queue'], cfg['exchanges']['rpc'], routing_key=rpc.name)
-		logging.debug("Chan %s: noread %s", rpc.channel,rpc.queue['queue'])
+		logger.debug("Chan %s: noread %s", rpc.channel,rpc.queue['queue'])
 		await rpc.channel.basic_cancel(consumer_tag=rpc.uuid)
 
 	async def register_alert(self,rpc):
 		ch = self.alert
 		cfg = self.unit().config['amqp']
-		logging.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges']['alert'], rpc.name, ch.exchange)
+		logger.debug("Chan %s: bind %s %s %s", ch.channel,cfg['exchanges']['alert'], rpc.name, ch.exchange)
 		await ch.channel.queue_bind(ch.queue['queue'], ch.exchange, routing_key=rpc.name)
 		self.alerts[rpc.name] = rpc
 
@@ -262,7 +262,7 @@ class Connection(object):
 			del self.alerts[rpc.name]
 		ch = self.alert
 		cfg = self.unit().config['amqp']
-		logging.debug("Chan %s: unbind %s %s %s", ch.channel,cfg['exchanges']['alert'], rpc.name, ch.exchange)
+		logger.debug("Chan %s: unbind %s %s %s", ch.channel,cfg['exchanges']['alert'], rpc.name, ch.exchange)
 		await ch.channel.queue_unbind(ch.queue['queue'], ch.exchange, routing_key=rpc.name)
 
 	async def close(self):

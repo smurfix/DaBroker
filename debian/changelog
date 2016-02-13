@@ -1,3 +1,9 @@
+dabroker (0.1.8.1) smurf; urgency=medium
+
+  * Use "logger", not "logging"
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sat, 13 Feb 2016 05:47:16 +0100
+
 dabroker (0.1.8.0) smurf; urgency=medium
 
   * add argument vector to startup message
