@@ -123,6 +123,7 @@ class Connection(object):
 				try:
 					reply.data = await rpc.run(*a,**k)
 				except Exception as exc:
+					logger.exception("error on alert %s: %s", envelope.delivery_tag, body)
 					reply.set_error(exc, rpc.name,"reply")
 				reply,props = reply.dump(self)
 				if reply == "":
@@ -131,12 +132,16 @@ class Connection(object):
 					reply = self.codec.encode(reply)
 				await self.reply.channel.publish(reply, self.reply.exchange, reply_to, properties=props)
 			else:
-				await rpc.run(*a,**k)
+				try:
+					await rpc.run(*a,**k)
+				except Exception as exc:
+					logger.exception("error on alert %s: %s", envelope.delivery_tag, body)
+
 		except Exception as exc:
-			logger.exception("problem with message %s: %s", envelope.delivery_tag, body)
+			logger.exception("problem with rpc %s: %s", envelope.delivery_tag, body)
 			await self.alert.channel.basic_reject(envelope.delivery_tag)
 		else:
-			logger.debug("ack message %s",envelope.delivery_tag)
+			logger.debug("ack rpc %s",envelope.delivery_tag)
 			await self.alert.channel.basic_client_ack(envelope.delivery_tag)
 
 	async def _on_rpc(self, rpc, channel,body,envelope,properties):
@@ -155,6 +160,7 @@ class Connection(object):
 					a=(msg,); k={}
 				reply.data = await rpc.run(*a,**k)
 			except Exception as exc:
+				logger.exception("error on rpc %s: %s", envelope.delivery_tag, body)
 				reply.set_error(exc, rpc.name,"reply")
 			reply,props = reply.dump(self)
 			if reply == "":
@@ -163,10 +169,10 @@ class Connection(object):
 				reply = self.codec.encode(reply)
 			await rpc.channel.publish(reply, self.reply.exchange, msg.reply_to, properties=props)
 		except Exception as exc:
-			logger.exception("problem with message %s: %s", envelope.delivery_tag, body)
+			logger.exception("problem with rpc %s: %s", envelope.delivery_tag, body)
 			await rpc.channel.basic_reject(envelope.delivery_tag)
 		else:
-			logger.debug("ack message %s",envelope.delivery_tag)
+			logger.debug("ack rpc %s",envelope.delivery_tag)
 			await rpc.channel.basic_client_ack(envelope.delivery_tag)
 
 	async def _on_reply(self, channel,body,envelope,properties):
