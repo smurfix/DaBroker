@@ -26,10 +26,6 @@ logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
 u=Unit("dabroker.monitor", load_cfg("test.cfg")['config'])
 
-@u.register_rpc("example.hello", call_conv=CC_DATA)
-def hello(name="Joe"):
-	return "Hello %s!" % name
-
 channels = {'alert':'topic', 'rpc':'topic', 'reply':'direct'}
 
 class mon:
