@@ -247,21 +247,22 @@ class Unit(object):
 	## cleanup, less interesting (hopefully)
 
 	def __del__(self):
-		self._kill()
+		self._kill(deleting,True)
 
-	def _kill(self):
-		self._kill_conn()
+	def _kill(self, deleting=False):
+		self._kill_conn(deleting=deleting)
 		c,self.cfgtree = self.cfgtree,None
 		if c is not None:
 			c._kill()
 
-	def _kill_conn(self):
+	def _kill_conn(self, deleting=False):
 		c,self.conn = self.conn,None
 		if c: # pragma: no cover
 			try:
 				c._kill()
 			except Exception:
-				logger.exception("closing connection")
+				if not deleting:
+					logger.exception("closing connection")
 
 	async def _create_conn(self):
 		from .conn import Connection
