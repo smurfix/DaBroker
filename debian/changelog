@@ -1,3 +1,9 @@
+dabroker (0.1.8.5) smurf; urgency=medium
+
+  * Typo
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Tue, 19 Apr 2016 14:45:32 +0200
+
 dabroker (0.1.8.4) smurf; urgency=medium
 
   * Don't shout when hitting errors in shutdown

@@ -247,7 +247,7 @@ class Unit(object):
 	## cleanup, less interesting (hopefully)
 
 	def __del__(self):
-		self._kill(deleting,True)
+		self._kill(deleting=True)
 
 	def _kill(self, deleting=False):
 		self._kill_conn(deleting=deleting)
