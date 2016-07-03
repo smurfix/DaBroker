@@ -53,20 +53,21 @@ class Unit(object):
 	conn = None # AMQP receiver
 	uuid = None # my UUID
 
-	def __init__(self, app, cfg, loop=None):
+	def __init__(self, app, cfg, loop=None, add_ping_aler={},add_ping={}):
 		self._loop = loop or asyncio.get_event_loop()
 		self.app = app
 		self._cfg = cfg
 
 		self.rpc_endpoints = {}
 		self.alert_endpoints = {}
-
-		self.register_alert("dabroker.ping",self._alert_ping)
+		self.add_ping = add_ping
+		self.add_ping_alert = add_ping_alert
 
 	async def start(self, *args):
 		self.uuid = uuidstr()
 		self.config = self._get_config(self._cfg)
 
+		self.register_alert("dabroker.ping",self._alert_ping)
 		self.register_rpc("dabroker.ping."+self.uuid, self._reply_ping)
 
 		await self._create_conn()
@@ -225,6 +226,7 @@ class Unit(object):
 		return dict(
 			app=self.app,
 			uuid=self.uuid,
+			**self.add_ping_alert,
 			)
 
 	def _reply_ping(self,msg):
@@ -233,6 +235,7 @@ class Unit(object):
 			uuid=self.uuid,
 			rpc=list(self.rpc_endpoints.keys()),
 			alert=list(self.alert_endpoints.keys()),
+			**self.add_ping,
 			)
 		
 	def _get_config(self, cfg):

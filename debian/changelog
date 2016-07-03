@@ -1,3 +1,10 @@
+dabroker (0.1.9.0) smurf; urgency=medium
+
+  * Add add_ping[_alert] arguments to Unit setup
+    This aids with debugging
+
+ -- Matthias Urlichs <matthias@urlichs.de>  Sun, 03 Jul 2016 17:43:58 +0200
+
 dabroker (0.1.8.5) smurf; urgency=medium
 
   * Typo

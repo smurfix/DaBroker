@@ -20,7 +20,7 @@ import logging
 import sys
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
-u=Unit("test.client.list_servers", load_cfg("test.cfg"))
+u=Unit("test.client.list_servers", load_cfg("test.cfg")['config'])
 
 def cb(data):
 	print(data)
