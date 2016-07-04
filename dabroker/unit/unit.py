@@ -53,7 +53,7 @@ class Unit(object):
 	conn = None # AMQP receiver
 	uuid = None # my UUID
 
-	def __init__(self, app, cfg, loop=None, add_ping_aler={},add_ping={}):
+	def __init__(self, app, cfg, loop=None, add_ping_alert={},add_ping={}):
 		self._loop = loop or asyncio.get_event_loop()
 		self.app = app
 		self._cfg = cfg
